@@ -1,0 +1,38 @@
+# --- Normalize text files (good diffs, consistent line endings)
+*                   text=auto
+*.sh                text eol=lf
+*.py                text eol=lf
+*.ts                text eol=lf
+*.js                text eol=lf
+*.c                 text eol=lf
+*.cpp               text eol=lf
+*.h                 text eol=lf
+*.md                text eol=lf
+*.yml               text eol=lf
+*.yaml              text eol=lf
+*.json              text eol=lf
+*.toml              text eol=lf
+*.xml               text eol=lf
+*.svg               text eol=lf    # keep as text (diff-friendly)
+
+# --- LFS for big/binary stuff (scoped to your reference-materials tree)
+# Mechanical/CAD exports and models
+reference-materials/**/**/*.{step,stp,iges,igs,stl,wrl} filter=lfs diff=lfs merge=lfs -text
+# Common archives
+reference-materials/**/**/*.{zip,7z,rar}                filter=lfs diff=lfs merge=lfs -text
+# Manuals and office docs
+reference-materials/**/**/*.{pdf,doc,docx,xls,xlsx,ppt,pptx} filter=lfs diff=lfs merge=lfs -text
+# Raster images (keep SVG as text above)
+reference-materials/**/**/*.{png,jpg,jpeg,tif,tiff,bmp,webp}  filter=lfs diff=lfs merge=lfs -text
+# Firmware binaries & build artifacts that you must version
+reference-materials/**/firmware/**/*.{bin,hex,elf,map,uf2}    filter=lfs diff=lfs merge=lfs -text
+
+# --- Optional: Gerbers/drills (often text; track only if they’re large or always zipped)
+# If you export zipped Gerbers, capture the zips via the archive rule above.
+# To force raw Gerbers to LFS, uncomment:
+# reference-materials/**/pcb/**/*.{gbr,ger,gtl,gbl,gts,gbs,gtp,gbp,gto,gbo,xln,drl} filter=lfs diff=lfs merge=lfs -text
+
+# --- KiCad/Altium project files
+# Many KiCad files are text and diffable; keep them out of LFS unless they’re huge.
+# Altium binary files can get large—track if you store full projects here:
+# reference-materials/**/pcb/**/*.{SchDoc,PcbDoc,PrjPcb,SchLib,PcbLib,OutJob} filter=lfs diff=lfs merge=lfs -text
