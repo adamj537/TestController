@@ -1,96 +1,122 @@
-#include "nvs_flash.h"
+/* Basic console example (esp_console_repl API)
 
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
-#include "esp_console.h"
+   This example code is in the Public Domain (or CC0 licensed, at your option.)
+
+   Unless required by applicable law or agreed to in writing, this
+   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
+   CONDITIONS OF ANY KIND, either express or implied.
+*/
+
+#include <stdio.h>
+#include <string.h>
+#include "esp_system.h"
 #include "esp_log.h"
-// #include "usb/usb_host.h"
+#include "esp_console.h"
+#include "esp_vfs_dev.h"
+#include "esp_vfs_fat.h"
+#include "nvs.h"
+#include "nvs_flash.h"
+// #include "cmd_system.h"
+// #include "cmd_wifi.h"
+// #include "cmd_nvs.h"
 
-#define LOG_TAG "REPL"
-// static int cmd_usb_power(int argc, char **argv)
-// {
-//     if (argc < 2) {
-//         ESP_LOGI(LOG_TAG, "Usage: usb_power <on|off>");
-//         return 1;
-//     }
-//     bool enable = (strcmp(argv[1], "on") == 0);
-//     esp_err_t err = usb_host_lib_set_root_port_power(enable);
-//     if (err == ESP_OK) {
-//         ESP_LOGI(LOG_TAG, "USB root port power %s", enable ? "enabled" : "disabled");
-//     } else {
-//         ESP_LOGE(LOG_TAG, "Failed to set USB root port power: %s", esp_err_to_name(err));
-//     }
-//     return 0;
-// }
+/*
+ * We warn if a secondary serial console is enabled. A secondary serial console is always output-only and
+ * hence not very useful for interactive console applications. If you encounter this warning, consider disabling
+ * the secondary serial console in menuconfig unless you know what you are doing.
+ */
+#if SOC_USB_SERIAL_JTAG_SUPPORTED
+#if !CONFIG_ESP_CONSOLE_SECONDARY_NONE
+#warning "A secondary serial console is not useful when using the console component. Please disable it in menuconfig."
+#endif
+#endif
 
-// static void register_usb_shell_commands(void)
-// {
-//     const esp_console_cmd_t cmd = {
-//         .command = "usb_power",
-//         .help = "Enable or disable USB root port power. Usage: usb_power <on|off>",
-//         .hint = NULL,
-//         .func = &cmd_usb_power,
-//         .argtable = NULL,
-//         .func_w_context = NULL,
-//         .context = NULL
-//     };
-//     esp_console_cmd_register(&cmd);
-// }
-#include <cstdio>
+static const char* TAG = "example";
+#define PROMPT_STR CONFIG_IDF_TARGET
 
+/* Console command history can be stored to and loaded from a file.
+ * The easiest way to do this is to use FATFS filesystem on top of
+ * wear_levelling library.
+ */
+#if CONFIG_CONSOLE_STORE_HISTORY
 
+#define MOUNT_PATH "/data"
+#define HISTORY_PATH MOUNT_PATH "/history.txt"
+
+static void initialize_filesystem(void)
+{
+    static wl_handle_t wl_handle;
+    const esp_vfs_fat_mount_config_t mount_config = {
+            .max_files = 4,
+            .format_if_mount_failed = true
+    };
+    esp_err_t err = esp_vfs_fat_spiflash_mount_rw_wl(MOUNT_PATH, "storage", &mount_config, &wl_handle);
+    if (err != ESP_OK) {
+        ESP_LOGE(TAG, "Failed to mount FATFS (%s)", esp_err_to_name(err));
+        return;
+    }
+}
+#endif // CONFIG_STORE_HISTORY
+
+static void initialize_nvs(void)
+{
+    esp_err_t err = nvs_flash_init();
+    if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
+        ESP_ERROR_CHECK( nvs_flash_erase() );
+        err = nvs_flash_init();
+    }
+    ESP_ERROR_CHECK(err);
+}
 
 extern "C" void app_main(void)
 {
-    // Initialize NVS (required for console/history)
-    esp_err_t nvs_err = nvs_flash_init();
-    if (nvs_err == ESP_ERR_NVS_NO_FREE_PAGES || nvs_err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK(nvs_flash_erase());
-        nvs_err = nvs_flash_init();
-    }
-    ESP_ERROR_CHECK(nvs_err);
-    // Set log level to INFO for all tags
-    esp_log_level_set("*", ESP_LOG_INFO);
-
-    // Minimal REPL only, all other features commented out
-    ESP_LOGI(LOG_TAG, "Starting minimal REPL...");
-
-    esp_console_config_t console_config = ESP_CONSOLE_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_console_init(&console_config));
-    ESP_LOGI(LOG_TAG, "called console init...");
-
-    esp_console_register_help_command();
-
-    esp_console_dev_uart_config_t uart_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
-    ESP_LOGI(LOG_TAG, "Trying REPL setup with defaults...");
-
-    esp_console_repl_config_t repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
-    repl_config.prompt = "esp> ";
-    repl_config.task_stack_size = 12288; // Try larger stack size
-    repl_config.max_cmdline_length = 256;
-    ESP_LOGI(LOG_TAG, "Trying REPL setup with stack size 12288...");
-
     esp_console_repl_t *repl = NULL;
-    esp_err_t err = esp_console_new_repl_uart(&uart_config, &repl_config, &repl);
-    ESP_LOGI(LOG_TAG, "esp_console_new_repl_uart returned: %s", esp_err_to_name(err));
-    if (err != ESP_OK) {
-        ESP_LOGE("REPL", "esp_console_new_repl_uart failed: %s", esp_err_to_name(err));
-        return;
-    }
-    if (repl == NULL) {
-        ESP_LOGE("REPL", "REPL pointer is NULL after creation.");
-        return;
-    }
-    esp_err_t start_err = esp_console_start_repl(repl);
-    ESP_LOGI(LOG_TAG, "esp_console_start_repl returned: %s", esp_err_to_name(start_err));
-    if (start_err != ESP_OK) {
-        ESP_LOGE("REPL", "esp_console_start_repl failed: %s", esp_err_to_name(start_err));
-        return;
-    }
-    ESP_LOGI("REPL", "REPL started successfully. You should see the shell prompt.");
+    esp_console_repl_config_t repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
+    /* Prompt to be printed before each line.
+     * This can be customized, made dynamic, etc.
+     */
+    repl_config.prompt = PROMPT_STR ">";
+    repl_config.max_cmdline_length = 256;
 
-    // Main loop
-    while (true) {
-        vTaskDelay(1000 / portTICK_PERIOD_MS);
-    }
+    initialize_nvs();
+
+#if CONFIG_CONSOLE_STORE_HISTORY
+    initialize_filesystem();
+    repl_config.history_save_path = HISTORY_PATH;
+    ESP_LOGI(TAG, "Command history enabled");
+#else
+    ESP_LOGI(TAG, "Command history disabled");
+#endif
+
+    /* Register commands */
+    esp_console_register_help_command();
+//     register_system_common();
+// #if SOC_LIGHT_SLEEP_SUPPORTED
+//     register_system_light_sleep();
+// #endif
+// #if SOC_DEEP_SLEEP_SUPPORTED
+//     register_system_deep_sleep();
+// #endif
+// #if (CONFIG_ESP_WIFI_ENABLED || CONFIG_ESP_HOST_WIFI_ENABLED)
+//     register_wifi();
+// #endif
+//     register_nvs();
+
+#if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)
+    esp_console_dev_uart_config_t hw_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_console_new_repl_uart(&hw_config, &repl_config, &repl));
+
+#elif defined(CONFIG_ESP_CONSOLE_USB_CDC)
+    esp_console_dev_usb_cdc_config_t hw_config = ESP_CONSOLE_DEV_CDC_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_console_new_repl_usb_cdc(&hw_config, &repl_config, &repl));
+
+#elif defined(CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG)
+    esp_console_dev_usb_serial_jtag_config_t hw_config = ESP_CONSOLE_DEV_USB_SERIAL_JTAG_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_console_new_repl_usb_serial_jtag(&hw_config, &repl_config, &repl));
+
+#else
+#error Unsupported console type
+#endif
+
+    ESP_ERROR_CHECK(esp_console_start_repl(repl));
 }
