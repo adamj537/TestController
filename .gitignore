@@ -6,3 +6,8 @@
 
 # Python virtual environment
 venv/
+# Build and IDE files
+.pio/
+.vscode/
+build/
+sdkconfig
