@@ -6,8 +6,10 @@
 
 # Python virtual environment
 venv/
+.venv/
 # Build and IDE files
 .pio/
 .vscode/
 build/
 sdkconfig
+sdkconfig.esp32-Devkit.old

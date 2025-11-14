@@ -1,3 +1,80 @@
+#include <stdio.h>
+#include <string.h>
+#include "esp_system.h"
+#include "esp_log.h"
+#include "esp_console.h"
+#include "esp_vfs_dev.h"
+#include "esp_vfs_fat.h"
+#include "nvs.h"
+#include "nvs_flash.h"
+#include "usb/usb_host.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+
+static const char* TAG = "example";
+#define PROMPT_STR CONFIG_IDF_TARGET
+
+// USB power shell command handler
+// USB host stack state
+static bool usb_host_enabled = false;
+
+static int usb_power_cmd(int argc, char **argv)
+{
+    if (argc != 2) {
+        ESP_LOGI(TAG, "Usage: usb_power <on|off>");
+        return 1;
+    }
+    if (strcmp(argv[1], "on") == 0) {
+        if (!usb_host_enabled) {
+            ESP_LOGI(TAG, "Enabling USB host...");
+            usb_host_config_t host_config = {
+                .skip_phy_setup = false,
+                .root_port_unpowered = false,
+                .intr_flags = ESP_INTR_FLAG_LEVEL1,
+                .enum_filter_cb = NULL,
+                .fifo_settings_custom = {0, 0, 0},
+            };
+            esp_err_t err = usb_host_install(&host_config);
+            if (err == ESP_OK) {
+                usb_host_enabled = true;
+                ESP_LOGI(TAG, "USB host enabled");
+            } else {
+                ESP_LOGE(TAG, "Failed to enable USB host: %s", esp_err_to_name(err));
+                return 1;
+            }
+        } else {
+            ESP_LOGI(TAG, "USB host already enabled");
+        }
+    } else if (strcmp(argv[1], "off") == 0) {
+        if (usb_host_enabled) {
+            ESP_LOGI(TAG, "Disabling USB host...");
+            esp_err_t err = usb_host_uninstall();
+            if (err == ESP_OK) {
+                usb_host_enabled = false;
+                ESP_LOGI(TAG, "USB host disabled");
+            } else {
+                ESP_LOGE(TAG, "Failed to disable USB host: %s", esp_err_to_name(err));
+                return 1;
+            }
+        } else {
+            ESP_LOGI(TAG, "USB host already disabled");
+        }
+    } else {
+        ESP_LOGI(TAG, "Invalid argument: %s", argv[1]);
+        return 1;
+    }
+    return 0;
+}
+
+static const esp_console_cmd_t usb_power = {
+    .command = "usb_power",
+    .help = "Control USB power: usb_power <on|off>",
+    .hint = NULL,
+    .func = &usb_power_cmd,
+    .argtable = NULL,
+    .func_w_context = NULL,
+    .context = NULL
+};
 /* Basic console example (esp_console_repl API)
 
    This example code is in the Public Domain (or CC0 licensed, at your option.)
@@ -31,7 +108,7 @@
 #endif
 #endif
 
-static const char* TAG = "example";
+#include "esp_console.h"
 #define PROMPT_STR CONFIG_IDF_TARGET
 
 /* Console command history can be stored to and loaded from a file.
@@ -88,19 +165,10 @@ extern "C" void app_main(void)
     ESP_LOGI(TAG, "Command history disabled");
 #endif
 
+
     /* Register commands */
     esp_console_register_help_command();
-//     register_system_common();
-// #if SOC_LIGHT_SLEEP_SUPPORTED
-//     register_system_light_sleep();
-// #endif
-// #if SOC_DEEP_SLEEP_SUPPORTED
-//     register_system_deep_sleep();
-// #endif
-// #if (CONFIG_ESP_WIFI_ENABLED || CONFIG_ESP_HOST_WIFI_ENABLED)
-//     register_wifi();
-// #endif
-//     register_nvs();
+    ESP_ERROR_CHECK(esp_console_cmd_register(&usb_power));
 
 #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)
     esp_console_dev_uart_config_t hw_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
