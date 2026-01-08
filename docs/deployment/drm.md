@@ -1,6 +1,7 @@
 # Deployment Readiness Matrix (DRM)
+# Module: Embedded Tester Client (ESP32)
 
-Last Updated: YYYY-MM-DD
+Last Updated: 2026-01-08
 
 ## Status Legend
 
@@ -16,37 +17,128 @@ Last Updated: YYYY-MM-DD
 
 ---
 
-## 3.1 Firmware Build
+## FW-1 Firmware Source & Build System
 
-- Summary:
-- Status: Incomplete
-- Repo References: src/
-- Acceptance Items: CAC-10
-- Objective: Track readiness of firmware build and release artifacts.
+- Summary: ESP32-DevKit tester client firmware with PlatformIO build system
+- Status: Draft
+- Repo References: embedded/tester-client/src/, embedded/tester-client/platformio.ini
+- Objective: Complete buildable firmware with PlatformIO
 - AI Context:
     files:
-      - "src/*.c"
-      - "src/*.h"
+      - "embedded/tester-client/src/**/*.cpp"
+      - "embedded/tester-client/src/**/*.h"
+      - "embedded/tester-client/platformio.ini"
     description: |
-      Summarize build status and identify missing release documentation.
+      Review source organization, build configuration, dependencies
     required_outputs:
       - "Summary"
       - "Status recommendation"
     forbidden_outputs:
       - "Automatic code changes"
 
-## 3.2 Test Coverage
+## FW-2 API Reference Documentation
 
-- Summary:
+- Summary: Test controller public API for coordinator integration
 - Status: Incomplete
-- Repo References: test/
-- Acceptance Items: CAC-11
-- Objective: Track test coverage and readiness for deployment.
+- Repo References: embedded/tester-client/docs/api.md
+- Objective: Documented API for HMI coordinator integration
 - AI Context:
     files:
-      - "test/*.py"
+      - "embedded/tester-client/docs/api.md"
+      - "embedded/tester-client/src/**/*.h"
     description: |
-      Review test coverage and identify gaps.
+      Public functions, serial command interface, response formats
+    required_outputs:
+      - "Summary"
+      - "Status recommendation"
+    forbidden_outputs:
+      - "Automatic code changes"
+
+## FW-3 Command Set Specification
+
+- Summary: Serial/USB CDC command protocol for coordinator communication
+- Status: Incomplete
+- Repo References: embedded/tester-client/docs/command_spec.md
+- Objective: Complete command protocol specification
+- AI Context:
+    files:
+      - "embedded/tester-client/docs/command_spec.md"
+    description: |
+      Command format, parameters, responses, error codes for serial interface
+    required_outputs:
+      - "Summary"
+      - "Status recommendation"
+    forbidden_outputs:
+      - "Automatic code changes"
+
+## FW-4 State Machine Documentation
+
+- Summary: Test controller state machine (TC states)
+- Status: Draft
+- Repo References: embedded/tester-client/docs/state_machine.md, claude-context/11_state_tc.md
+- Objective: Complete state machine documentation
+- AI Context:
+    files:
+      - "embedded/tester-client/docs/state_machine.md"
+      - "claude-context/11_state_tc.md"
+    description: |
+      TC states, transitions, event handling
+    required_outputs:
+      - "Summary"
+      - "Status recommendation"
+    forbidden_outputs:
+      - "Automatic code changes"
+
+## FW-5 Error Codes & Handling
+
+- Summary: Error code definitions for test controller
+- Status: Draft
+- Repo References: embedded/tester-client/docs/error_codes.md, claude-context/06_error_matrix.md
+- Objective: Standardized error reporting
+- AI Context:
+    files:
+      - "embedded/tester-client/docs/error_codes.md"
+      - "claude-context/06_error_matrix.md"
+    description: |
+      Error code definitions, recovery procedures
+    required_outputs:
+      - "Summary"
+      - "Status recommendation"
+    forbidden_outputs:
+      - "Automatic code changes"
+
+## FW-6 Memory Layout & Configuration
+
+- Summary: Flash/RAM usage, ESP32 partition scheme
+- Status: Incomplete
+- Repo References: embedded/tester-client/docs/memory_layout.md
+- Objective: Memory requirements documentation
+
+## FW-7 Test Coverage & Results
+
+- Summary: Unit tests for tester firmware
+- Status: Incomplete
+- Repo References: embedded/tester-client/test/
+- Objective: Test coverage for critical firmware functions
+
+## FW-8 Integration Guide
+
+- Summary: Integration instructions for tester firmware with hardware and coordinator
+- Status: Incomplete
+- Repo References: embedded/tester-client/docs/integration.md
+- Objective: Step-by-step integration guide
+
+## MQTT-1 MQTT/Sparkplug B Integration
+
+- Summary: MQTT Sparkplug B topics (SensitMfg/G3-MB-Tester-{serial})
+- Status: Draft
+- Repo References: claude-context/04_mqtt_contract.md
+- Objective: Sparkplug B compliance for remote monitoring
+- AI Context:
+    files:
+      - "claude-context/04_mqtt_contract.md"
+    description: |
+      MQTT topic structure, Sparkplug B payload format, NBIRTH/NDEATH, DDATA, DCMD
     required_outputs:
       - "Summary"
       - "Status recommendation"
