@@ -13,3 +13,6 @@ venv/
 build/
 sdkconfig
 sdkconfig.esp32-Devkit.old
+
+# Log files
+*.log
