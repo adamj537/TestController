@@ -16,3 +16,7 @@ sdkconfig.esp32-Devkit.old
 
 # Log files
 *.log
+
+# Auto-generated version files
+version.txt
+src/version.h

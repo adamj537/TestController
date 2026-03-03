@@ -6,8 +6,8 @@
 #include "cmd_i2c.h"
 
 static i2c_master_bus_handle_t s_bus = NULL;
-static int s_sda = 13;
-static int s_scl = 14;
+static int s_sda = 15;  /* TCC carrier: SDA on GPIO15 */
+static int s_scl = 16;  /* TCC carrier: SCL on GPIO16 */
 
 static int do_i2c_init(int argc, char **argv)
 {
@@ -154,7 +154,7 @@ static int do_i2c(int argc, char **argv)
 {
     if (argc < 2) {
         printf("I2C master commands:\n");
-        printf("  i2c init [sda] [scl]              init bus (default GPIO13/14)\n");
+        printf("  i2c init [sda] [scl]              init bus (default GPIO15/16)\n");
         printf("  i2c scan                          scan 0x00-0x7f\n");
         printf("  i2c read  <addr> <reg> <n>        read N bytes from register\n");
         printf("  i2c write <addr> <reg> <b0> ...   write bytes to register\n");

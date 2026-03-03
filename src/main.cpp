@@ -2,6 +2,7 @@
 #include "nvs_flash.h"
 #include "esp_console.h"
 #include "esp_log.h"
+#include "version.h"
 
 extern "C" {
 #include "cmd_gpio.h"
@@ -26,11 +27,15 @@ extern "C" void app_main(void)
 {
     initialize_nvs();
 
-    ESP_LOGI(TAG, "G3 TC bringup shell starting");
+    ESP_LOGI(TAG, "G3 TC bringup shell  fw=%s", FW_VERSION_FULL);
 
     esp_console_repl_t *repl = NULL;
     esp_console_repl_config_t repl_cfg = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
-    repl_cfg.prompt = "g3-tc>";
+
+    /* Version in prompt — visible after every command response */
+    static char prompt_buf[40];
+    snprintf(prompt_buf, sizeof(prompt_buf), "g3-tc|" FW_VERSION_STRING ">");
+    repl_cfg.prompt = prompt_buf;
     repl_cfg.max_cmdline_length = 256;
 
     esp_console_register_help_command();
@@ -38,8 +43,6 @@ extern "C" void app_main(void)
     register_pwm_commands();
     register_adc_commands();
     register_i2c_commands();
-
-    ESP_LOGI(TAG, "Commands registered: gpio, pwm, adc, i2c");
 
 #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)
     esp_console_dev_uart_config_t hw_cfg = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
