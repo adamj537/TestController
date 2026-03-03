@@ -6,8 +6,9 @@
 #include "cmd_i2c.h"
 
 static i2c_master_bus_handle_t s_bus = NULL;
-static int s_sda = 15;  /* TCC carrier: SDA on GPIO15 */
-static int s_scl = 16;  /* TCC carrier: SCL on GPIO16 */
+static int s_sda = 15;      /* TCC carrier: SDA on GPIO15 */
+static int s_scl = 16;      /* TCC carrier: SCL on GPIO16 */
+static int s_speed = 400000; /* default 400kHz; override via i2c init [sda] [scl] [hz] */
 
 static int do_i2c_init(int argc, char **argv)
 {
@@ -18,6 +19,9 @@ static int do_i2c_init(int argc, char **argv)
     if (argc >= 3) {
         s_sda = atoi(argv[1]);
         s_scl = atoi(argv[2]);
+    }
+    if (argc >= 4) {
+        s_speed = atoi(argv[3]);
     }
 
     i2c_master_bus_config_t cfg = {
@@ -34,7 +38,7 @@ static int do_i2c_init(int argc, char **argv)
         s_bus = NULL;
         return 1;
     }
-    printf("I2C ready: SDA=GPIO%d  SCL=GPIO%d  400kHz\n", s_sda, s_scl);
+    printf("I2C ready: SDA=GPIO%d  SCL=GPIO%d  %dkHz\n", s_sda, s_scl, s_speed / 1000);
     return 0;
 }
 
@@ -49,10 +53,24 @@ static int do_i2c_scan(int argc, char **argv)
     printf("Scanning I2C (SDA=GPIO%d SCL=GPIO%d)...\n", s_sda, s_scl);
     printf("     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f\n");
 
+    i2c_device_config_t probe_cfg = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address = 0,
+        .scl_speed_hz = (uint32_t)s_speed,
+    };
+
     int found = 0;
     for (int addr = 0; addr < 128; addr++) {
         if (addr % 16 == 0) printf("%02x: ", addr);
-        if (i2c_master_probe(s_bus, (uint16_t)addr, 20) == ESP_OK) {
+        probe_cfg.device_address = (uint16_t)addr;
+        i2c_master_dev_handle_t dev;
+        bool ack = false;
+        if (i2c_master_bus_add_device(s_bus, &probe_cfg, &dev) == ESP_OK) {
+            uint8_t dummy;
+            ack = (i2c_master_receive(dev, &dummy, 1, 20) == ESP_OK);
+            i2c_master_bus_rm_device(dev);
+        }
+        if (ack) {
             printf("%02x ", addr);
             found++;
         } else {
@@ -81,7 +99,7 @@ static int do_i2c_read(int argc, char **argv)
     i2c_device_config_t dev_cfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = addr,
-        .scl_speed_hz = 400000,
+        .scl_speed_hz = (uint32_t)s_speed,
     };
     i2c_master_dev_handle_t dev;
     esp_err_t err = i2c_master_bus_add_device(s_bus, &dev_cfg, &dev);
@@ -127,7 +145,7 @@ static int do_i2c_write(int argc, char **argv)
     i2c_device_config_t dev_cfg = {
         .dev_addr_length = I2C_ADDR_BIT_LEN_7,
         .device_address = addr,
-        .scl_speed_hz = 400000,
+        .scl_speed_hz = (uint32_t)s_speed,
     };
     i2c_master_dev_handle_t dev;
     esp_err_t err = i2c_master_bus_add_device(s_bus, &dev_cfg, &dev);
@@ -154,7 +172,7 @@ static int do_i2c(int argc, char **argv)
 {
     if (argc < 2) {
         printf("I2C master commands:\n");
-        printf("  i2c init [sda] [scl]              init bus (default GPIO15/16)\n");
+        printf("  i2c init [sda] [scl] [hz]         init bus (default GPIO15/16 400000Hz)\n");
         printf("  i2c scan                          scan 0x00-0x7f\n");
         printf("  i2c read  <addr> <reg> <n>        read N bytes from register\n");
         printf("  i2c write <addr> <reg> <b0> ...   write bytes to register\n");
