@@ -3,6 +3,7 @@
 #include <string.h>
 #include "esp_console.h"
 #include "driver/i2c_master.h"
+#include "driver/gpio.h"
 #include "cmd_i2c.h"
 
 static i2c_master_bus_handle_t s_bus = NULL;
@@ -23,6 +24,14 @@ static int do_i2c_init(int argc, char **argv)
     if (argc >= 4) {
         s_speed = atoi(argv[3]);
     }
+
+    /* Reset pins to default state before handing to I2C driver.
+     * gpio_config() (used by the gpio shell commands) modifies the IO_MUX
+     * routing and can leave it in a state that i2c_new_master_bus() doesn't
+     * fully undo, causing the I2C peripheral to lose contact with the pad.
+     * gpio_reset_pin() clears all peripheral routing and restores defaults. */
+    gpio_reset_pin((gpio_num_t)s_sda);
+    gpio_reset_pin((gpio_num_t)s_scl);
 
     i2c_master_bus_config_t cfg = {
         .clk_source = I2C_CLK_SRC_DEFAULT,
@@ -53,24 +62,10 @@ static int do_i2c_scan(int argc, char **argv)
     printf("Scanning I2C (SDA=GPIO%d SCL=GPIO%d)...\n", s_sda, s_scl);
     printf("     0  1  2  3  4  5  6  7  8  9  a  b  c  d  e  f\n");
 
-    i2c_device_config_t probe_cfg = {
-        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
-        .device_address = 0,
-        .scl_speed_hz = (uint32_t)s_speed,
-    };
-
     int found = 0;
     for (int addr = 0; addr < 128; addr++) {
         if (addr % 16 == 0) printf("%02x: ", addr);
-        probe_cfg.device_address = (uint16_t)addr;
-        i2c_master_dev_handle_t dev;
-        bool ack = false;
-        if (i2c_master_bus_add_device(s_bus, &probe_cfg, &dev) == ESP_OK) {
-            uint8_t dummy;
-            ack = (i2c_master_receive(dev, &dummy, 1, 20) == ESP_OK);
-            i2c_master_bus_rm_device(dev);
-        }
-        if (ack) {
+        if (i2c_master_probe(s_bus, (uint16_t)addr, 20) == ESP_OK) {
             printf("%02x ", addr);
             found++;
         } else {
