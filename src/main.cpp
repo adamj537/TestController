@@ -2,6 +2,7 @@
 #include "nvs_flash.h"
 #include "esp_console.h"
 #include "esp_log.h"
+#include "esp_ota_ops.h"
 #include "version.h"
 
 extern "C" {
@@ -9,6 +10,9 @@ extern "C" {
 #include "cmd_pwm.h"
 #include "cmd_adc.h"
 #include "cmd_i2c.h"
+#include "cmd_wifi.h"
+#include "cmd_ota.h"
+#include "net_console.h"
 }
 
 static const char *TAG = "g3-tc";
@@ -23,9 +27,22 @@ static void initialize_nvs(void)
     ESP_ERROR_CHECK(err);
 }
 
+/* Confirm OTA image is valid to prevent rollback after successful boot */
+static void ota_rollback_guard(void)
+{
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    esp_ota_img_states_t   state;
+    if (esp_ota_get_state_partition(running, &state) == ESP_OK &&
+        state == ESP_OTA_IMG_PENDING_VERIFY) {
+        esp_ota_mark_app_valid_cancel_rollback();
+        ESP_LOGI(TAG, "OTA: partition '%s' marked valid", running->label);
+    }
+}
+
 extern "C" void app_main(void)
 {
     initialize_nvs();
+    ota_rollback_guard();
 
     ESP_LOGI(TAG, "G3 TC bringup shell  fw=%s", FW_VERSION_FULL);
 
@@ -43,6 +60,16 @@ extern "C" void app_main(void)
     register_pwm_commands();
     register_adc_commands();
     register_i2c_commands();
+    register_wifi_commands();
+    register_ota_commands();
+
+    /* WiFi init — sets up netif/event loop and auto-connects if NVS creds exist.
+     * Must happen before net_console_start() which needs the TCP/IP stack. */
+    wifi_init();
+
+    /* TCP console server — listens on port 4242, accepts when WiFi is up.
+     * All stdout/stderr is tee'd to the connected client via __wrap__write_r. */
+    net_console_start(4242);
 
 #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)
     esp_console_dev_uart_config_t hw_cfg = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
