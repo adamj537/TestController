@@ -214,6 +214,90 @@ See `help` in the bringup shell for usage of the remaining command groups.
 
 Follow the pattern in `cmd_vdac.c` for commands that touch hardware peripherals.
 
+## State machine
+
+The test cycle is driven by a state machine in `tc_statemachine.c`, controlled
+via the `sm` shell command or the `start` DCMD over MQTT.
+
+### States
+
+```
+Idle → Precheck → Testing → Pass/Fail → Idle
+```
+
+| State | Description |
+|---|---|
+| **Idle** | Waiting for `sm start` or DCMD `start` |
+| **Precheck** | Runs `selftest quick` (8 checks: I²C, rails, WiFi) |
+| **Testing** | Runs `selftest fixture` (18 checks: full VDUT sweep + I²C + WiFi + OTA) |
+| **Pass** | All fixture checks passed — holds 3 s for operator visibility |
+| **Fail** | One or more checks failed — holds 3 s, publishes failing check ID |
+
+### Sequence
+
+1. `sm start` → transition to **Precheck**, run quick selftest
+2. Quick selftest passes → read DUT UID96 via SWD (`identify_dut()`) → transition to **Testing**, run fixture selftest
+3. Fixture selftest completes → transition to **Pass** or **Fail**
+4. Publish `type=result` DDATA with outcome, duration, DUT serial, failing check ID
+5. Hold 3 s → transition back to **Idle**
+
+### MQTT integration
+
+Each state transition publishes a `type=state` DDATA.  Selftest results publish
+as `type=selftest` DDATA.  The final result publishes as `type=result` DDATA
+(QoS 1) containing:
+
+- `outcome`: `"pass"` or `"fail"`
+- `failed_step`: check ID of first failure (null on pass)
+- `duration_ms`: total cycle time from start
+- `dut_serial_full`: STM32 UID96 (24-char hex, read via SWD)
+- `dut_serial_ref`: CRC32-derived short reference (XXXX-XXXX)
+- `recipe_id` / `recipe_version`: test recipe identification
+
+### Shell commands
+
+```
+sm status    # print current state
+sm start     # begin test cycle (must be in Idle)
+sm abort     # abort and return to Idle
+```
+
+## PSRAM configuration
+
+The Freenove ESP32-S3 WROOM N16R8 has 8 MB PSRAM (APS6408L) embedded in the
+module.  PSRAM is enabled (`CONFIG_SPIRAM=y`) in **Quad SPI mode** and uses
+**deferred init** — the `SPIRAM_BOOT_HW_INIT` option is disabled because early
+boot PSRAM init causes `RTCWDT_RTC_RST` on this board (investigated 2026-03-11).
+
+Instead, `esp_psram_init()` and `esp_psram_extram_add_to_heap_allocator()` are
+called from `app_main()`.  After init, ~8 MB of PSRAM is available via
+`heap_caps_malloc(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)`.
+
+!!! warning "HW-010: PSRAM mode must be Quad, not Octal"
+    The APS6408L supports both Quad and Octal modes, but **Octal mode reserves
+    GPIOs 33–37** for MSPI data lines (SPIIO4–7 + SPIDQS).  GPIO 37 is used by
+    the TCC for SWD SWCLK.  Running in Octal mode causes PSRAM read corruption
+    when SWD operates, dropping the WiFi/MQTT connection (NDEATH).
+
+    Quad mode frees GPIOs 33–37 at the cost of halved bandwidth (160 vs
+    320 Mbit/s at 40 MHz) — negligible for this workload.  A future TCC board
+    revision should move SWCLK off GPIO 33–37 so Octal can be restored.
+
+**OTA limitation:** PSRAM-layout builds move the DROM segment to `0x3c0d0020`,
+which causes OTA image verification to crash (`Interrupt wdt timeout on CPU1`)
+due to MMU mapping conflicts.  Use UART flash (`pio run -t upload --upload-port
+/dev/ttyACM0`) instead — this preserves NVS (WiFi credentials).
+
+| Setting | Value |
+|---|---|
+| `CONFIG_SPIRAM` | `y` |
+| `CONFIG_SPIRAM_MODE_QUAD` | `y` (see HW-010 above) |
+| `CONFIG_SPIRAM_SPEED_40M` | `y` |
+| `CONFIG_SPIRAM_BOOT_HW_INIT` | `n` (deferred to app_main) |
+| `CONFIG_SPIRAM_USE_CAPS_ALLOC` | `y` |
+| `CONFIG_ESPTOOLPY_FLASHMODE` | `qio` |
+| `CONFIG_ESPTOOLPY_FLASHSIZE` | `16MB` |
+
 ## WDT configuration
 
 WDT is configured via `sdkconfig.esp32-Devkit` (Kconfig), not build flags:
@@ -233,6 +317,11 @@ task may still log a WDT warning if they exceed 5 s; this is non-fatal.
 
 The TC can program DUT firmware over SWD without a JTAG probe.  GPIO37 drives
 SWCLK and GPIO38 drives SWDIO, routed TCC → TIE J15 → DUT CN6.
+
+!!! note "GPIO 37 and PSRAM mode (HW-010)"
+    GPIO 37 is SPIDQS when OPI PSRAM is active.  PSRAM must run in Quad mode
+    (see [PSRAM configuration](#psram-configuration)) for SWD to work without
+    corrupting PSRAM reads.
 
 ### Commands
 

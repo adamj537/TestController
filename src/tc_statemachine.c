@@ -130,6 +130,9 @@ void tc_sm_selftest_done(bool passed, uint32_t duration_ms)
     if (s_state == TC_SM_PRECHECK) {
         if (passed) {
             /* Precheck OK — attempt DUT serial identification before Testing */
+            /* HW-010 fix: switched PSRAM from OPI to Quad mode, freeing
+             * GPIO 37 (SPIDQS) for SWD SWCLK.  Next TCC rev should move
+             * SWCLK off GPIO 33–37 so OPI can be restored if needed. */
             identify_dut();
 
             transition(TC_SM_TESTING);
@@ -154,6 +157,8 @@ void tc_sm_selftest_done(bool passed, uint32_t duration_ms)
 
         if (passed) {
             transition(TC_SM_PASS);
+            ESP_LOGI(TAG, "publishing result DDATA  outcome=pass  duration=%lums",
+                     (unsigned long)total_ms);
             tc_mqtt_publish_result("pass", NULL, total_ms,
                                    serial_full, serial_ref,
                                    "fixture-selftest", "0.0.0");
@@ -161,11 +166,15 @@ void tc_sm_selftest_done(bool passed, uint32_t duration_ms)
             /* Use actual failing check ID from the selftest run, not a generic label */
             const char *failed = selftest_first_failed_check();
             transition(TC_SM_FAIL);
+            ESP_LOGI(TAG, "publishing result DDATA  outcome=fail  failed=%s  duration=%lums",
+                     failed ? failed : "(null)", (unsigned long)total_ms);
             tc_mqtt_publish_result("fail", failed ? failed : "fixture_selftest", total_ms,
                                    serial_full, serial_ref,
                                    "fixture-selftest", "0.0.0");
         }
 
+        /* Allow MQTT outbound queue to flush before hold period */
+        vTaskDelay(pdMS_TO_TICKS(500));
         vTaskDelay(pdMS_TO_TICKS(3000));
         transition(TC_SM_IDLE);
     } else {

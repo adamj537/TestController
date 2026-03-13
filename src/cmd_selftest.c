@@ -808,7 +808,7 @@ void selftest_run_sm(const char *mode)
     if (!arg) return;
     arg->mode  = (strcmp(mode, "quick") == 0) ? "quick" : "fixture";
     arg->is_sm = true;
-    xTaskCreate(selftest_task, "selftest_sm", 8192, arg, 5, NULL);
+    xTaskCreate(selftest_task, "selftest_sm", 12288, arg, 5, NULL);
 }
 
 /* ── Diagnostic task — single named test primitive ────────────────────────── */
