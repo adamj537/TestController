@@ -22,6 +22,8 @@
 #include "cmd_selftest.h"
 #include "tc_mqtt.h"
 #include "tc_statemachine.h"
+#include "driver/uart.h"
+#include "esp_timer.h"
 
 /* ── TCC carrier device map ───────────────────────────────────────────────── */
 
@@ -660,6 +662,244 @@ static void run_dut_heartbeat(void)
     st_record_mv("dut_heartbeat", hb_ok, max_mv);
 }
 
+/* ── DUT UART command/response transport ──────────────────────────────────── *
+ * UART1 on GPIO43 (TX→DUT) / GPIO44 (RX←DUT), 115200 8N1, no flow control.  *
+ * Driver is opened once per recipe run (in run_dut_enter_test) and closed     *
+ * in run_dut_exit_test.  Individual steps check s_uart_open before use.       */
+
+#define DUT_UART_PORT    UART_NUM_1
+#define DUT_UART_TX_GPIO 43
+#define DUT_UART_RX_GPIO 44
+#define DUT_UART_BUF_SZ  512
+#define DUT_UART_BAUD    115200
+
+static bool s_uart_open = false;
+
+static bool dut_uart_open(void)
+{
+    if (s_uart_open) return true;
+    uart_config_t cfg = {
+        .baud_rate = DUT_UART_BAUD,
+        .data_bits = UART_DATA_8_BITS,
+        .parity    = UART_PARITY_DISABLE,
+        .stop_bits = UART_STOP_BITS_1,
+        .flow_ctrl = UART_HW_FLOWCTRL_DISABLE,
+    };
+    if (uart_driver_install(DUT_UART_PORT, DUT_UART_BUF_SZ, DUT_UART_BUF_SZ,
+                            0, NULL, 0) != ESP_OK) return false;
+    if (uart_param_config(DUT_UART_PORT, &cfg) != ESP_OK ||
+        uart_set_pin(DUT_UART_PORT, DUT_UART_TX_GPIO, DUT_UART_RX_GPIO,
+                     UART_PIN_NO_CHANGE, UART_PIN_NO_CHANGE) != ESP_OK) {
+        uart_driver_delete(DUT_UART_PORT);
+        return false;
+    }
+    s_uart_open = true;
+    return true;
+}
+
+static void dut_uart_close(void)
+{
+    if (!s_uart_open) return;
+    uart_driver_delete(DUT_UART_PORT);
+    s_uart_open = false;
+}
+
+/* Send cmd\r\n, read one response line into buf (stripped of \r\n).
+ * Returns true if the response starts with "OK". */
+static bool dut_cmd(const char *cmd, char *buf, size_t buf_len, int timeout_ms)
+{
+    if (!s_uart_open || !buf || buf_len == 0) return false;
+    buf[0] = '\0';
+
+    uart_flush_input(DUT_UART_PORT);
+    uart_write_bytes(DUT_UART_PORT, cmd, strlen(cmd));
+    uart_write_bytes(DUT_UART_PORT, "\r\n", 2);
+    uart_wait_tx_done(DUT_UART_PORT, pdMS_TO_TICKS(200));
+
+    size_t  pos      = 0;
+    int64_t deadline = esp_timer_get_time() + (int64_t)timeout_ms * 1000;
+    while (esp_timer_get_time() < deadline && pos < buf_len - 1) {
+        uint8_t ch = 0;
+        if (uart_read_bytes(DUT_UART_PORT, &ch, 1, pdMS_TO_TICKS(10)) == 1) {
+            if (ch == '\n') break;
+            if (ch != '\r') buf[pos++] = (char)ch;
+        }
+    }
+    buf[pos] = '\0';
+    return (strncmp(buf, "OK", 2) == 0);
+}
+
+/* ── DUT UART recipe steps ────────────────────────────────────────────────── */
+
+static void run_dut_enter_test(void)
+{
+    char resp[128] = {0};
+    if (!dut_uart_open()) {
+        report(false, "DUT: UART driver init failed");
+        st_record("dut_enter_test", false);
+        return;
+    }
+    /* Allow DUT time to reach its command-ready state after power-on */
+    vTaskDelay(pdMS_TO_TICKS(500));
+    bool ok = dut_cmd("ENTER_TEST", resp, sizeof(resp), 1000);
+    report(ok, "DUT: ENTER_TEST  %s", resp);
+    st_record("dut_enter_test", ok);
+    if (!ok) dut_uart_close();   /* leave closed so subsequent steps skip cleanly */
+}
+
+static void run_dut_version(void)
+{
+    char resp[128] = {0};
+    if (!s_uart_open) {
+        report(false, "DUT: VERSION  (UART not open — ENTER_TEST failed?)");
+        st_record("dut_version", false);
+        return;
+    }
+    bool ok = dut_cmd("VERSION", resp, sizeof(resp), 500);
+    report(ok, "DUT: VERSION  %s", resp);
+    st_record("dut_version", ok);
+}
+
+static void run_dut_hw_rev(void)
+{
+    char resp[128] = {0};
+    if (!s_uart_open) {
+        report(false, "DUT: HW_REV  (UART not open)");
+        st_record("dut_hw_rev", false);
+        return;
+    }
+    bool ok = dut_cmd("HW_REV", resp, sizeof(resp), 500);
+    report(ok, "DUT: HW_REV  %s", resp);
+    st_record("dut_hw_rev", ok);
+}
+
+/* UC_ADC_READ VREF — expect 2.5 V ± 4 % (2400–2600 mV) */
+static void run_dut_vref(void)
+{
+    char resp[128] = {0};
+    if (!s_uart_open) {
+        report(false, "DUT: UC_ADC VREF  (UART not open)");
+        st_record("dut_uc_adc_vref", false);
+        return;
+    }
+    bool ok = dut_cmd("UC_ADC_READ VREF", resp, sizeof(resp), 500);
+    int mv = 0;
+    if (ok) sscanf(resp, "OK UC_ADC_READ VREF %d", &mv);
+    bool in_range = ok && mv >= 2400 && mv <= 2600;
+    report(in_range, "DUT: UC_ADC VREF  %d mV  (exp 2400–2600 mV)", mv);
+    st_record_mv("dut_uc_adc_vref", in_range, mv);
+}
+
+/* UC_ADC_READ 3V_RAIL — expect 3.0 V ± 5 % (2850–3150 mV) */
+static void run_dut_3v_rail(void)
+{
+    char resp[128] = {0};
+    if (!s_uart_open) {
+        report(false, "DUT: UC_ADC 3V_RAIL  (UART not open)");
+        st_record("dut_uc_adc_3v_rail", false);
+        return;
+    }
+    bool ok = dut_cmd("UC_ADC_READ 3V_RAIL", resp, sizeof(resp), 500);
+    int mv = 0;
+    if (ok) sscanf(resp, "OK UC_ADC_READ 3V_RAIL %d", &mv);
+    bool in_range = ok && mv >= 2850 && mv <= 3150;
+    report(in_range, "DUT: UC_ADC 3V_RAIL  %d mV  (exp 2850–3150 mV)", mv);
+    st_record_mv("dut_uc_adc_3v_rail", in_range, mv);
+}
+
+/* FLASH_TEST — expect "OK FLASH_TEST PASS ..." */
+static void run_dut_flash_test(void)
+{
+    char resp[128] = {0};
+    if (!s_uart_open) {
+        report(false, "DUT: FLASH_TEST  (UART not open)");
+        st_record("dut_flash_test", false);
+        return;
+    }
+    bool ok   = dut_cmd("FLASH_TEST", resp, sizeof(resp), 2000);
+    bool pass = ok && strstr(resp, "PASS") != NULL;
+    report(pass, "DUT: FLASH_TEST  %s", resp);
+    st_record("dut_flash_test", pass);
+}
+
+/* RTC_READ — expect battery voltage 1550–3600 mV */
+static void run_dut_rtc_read(void)
+{
+    char resp[128] = {0};
+    if (!s_uart_open) {
+        report(false, "DUT: RTC_READ  (UART not open)");
+        st_record("dut_rtc_read", false);
+        return;
+    }
+    bool ok = dut_cmd("RTC_READ", resp, sizeof(resp), 500);
+    int mv = 0;
+    if (ok) sscanf(resp, "OK RTC_READ %d", &mv);
+    bool in_range = ok && mv >= 1550 && mv <= 3600;
+    report(in_range, "DUT: RTC_READ  %d mV  (exp 1550–3600 mV)", mv);
+    st_record_mv("dut_rtc_read", in_range, mv);
+}
+
+static void run_dut_exit_test(void)
+{
+    if (!s_uart_open) return;   /* ENTER_TEST failed earlier — skip silently */
+    char resp[128] = {0};
+    bool ok = dut_cmd("EXIT_TEST", resp, sizeof(resp), 500);
+    report(ok, "DUT: EXIT_TEST  %s", resp);
+    st_record("dut_exit_test", ok);
+    dut_uart_close();
+}
+
+/* ── Recipe table and runner ──────────────────────────────────────────────── *
+ * Each step has: id (used in MQTT + logs), function pointer, enabled flag.    *
+ * Disabled steps print [SKIP] and are excluded from pass/fail counts and      *
+ * from the MQTT selftest payload.                                             *
+ *                                                                             *
+ * Enable/disable steps here as hardware becomes available.                    *
+ * DUT pogo-dependent steps are disabled until all pogos are loaded.           */
+
+typedef struct {
+    const char *id;
+    void        (*fn)(void);
+    bool         enabled;
+} recipe_step_t;
+
+static recipe_step_t s_fixture_recipe[] = {
+    /* ── TCC/TIE carrier checks — no DUT pogos required ──────── */
+    { "i2c",                 run_i2c,            true  },
+    { "adc",                 run_adc,            true  },
+    { "wifi",                run_wifi,           true  },
+    { "ota",                 run_ota,            true  },
+    { "vdut",                run_vdut,           true  },
+    { "mux_scan",            run_mux_scan,       true  },
+    /* ── DUT pogo-dependent — enable as pogos are loaded ─────── */
+    { "dut_heartbeat",       run_dut_heartbeat,  false },  /* DUT PA9 pogo */
+    { "dut_enter_test",      run_dut_enter_test, false },  /* UART TX/RX pogos */
+    { "dut_version",         run_dut_version,    false },
+    { "dut_hw_rev",          run_dut_hw_rev,     false },
+    { "dut_uc_adc_vref",     run_dut_vref,       false },
+    { "dut_uc_adc_3v_rail",  run_dut_3v_rail,    false },
+    { "dut_flash_test",      run_dut_flash_test, false },
+    { "dut_rtc_read",        run_dut_rtc_read,   false },
+    { "dut_exit_test",       run_dut_exit_test,  false },
+};
+
+#define RECIPE_LEN  (sizeof(s_fixture_recipe) / sizeof(s_fixture_recipe[0]))
+
+static void run_fixture_recipe(void)
+{
+    s_uart_open = false;   /* ensure clean UART state at recipe start */
+    for (size_t i = 0; i < RECIPE_LEN; i++) {
+        recipe_step_t *step = &s_fixture_recipe[i];
+        if (!step->enabled) {
+            printf("[SKIP] %s\n", step->id);
+            continue;
+        }
+        step->fn();
+    }
+    /* Safety: ensure UART is closed even if dut_exit_test was skipped or failed */
+    if (s_uart_open) dut_uart_close();
+}
+
 /* ── Command dispatcher ───────────────────────────────────────────────────── */
 
 static int do_selftest(int argc, char **argv)
@@ -670,14 +910,8 @@ static int do_selftest(int argc, char **argv)
     bool run_all = (argc < 2 || strcmp(argv[1], "all") == 0);
 
     if (run_all) {
-        printf("=== G3-TC Bringup Selftest ===\n");
-        run_i2c();
-        run_adc();
-        run_wifi();
-        run_ota();
-        run_vdut();
-        run_mux_scan();
-        run_dut_heartbeat();
+        printf("=== G3-TC Fixture Recipe ===\n");
+        run_fixture_recipe();
     } else if (strcmp(argv[1], "i2c")       == 0) { run_i2c();          }
     else if  (strcmp(argv[1], "adc")       == 0) { run_adc();          }
     else if  (strcmp(argv[1], "wifi")      == 0) { run_wifi();         }
@@ -769,12 +1003,8 @@ static void selftest_task(void *pvarg)
         run_i2c();
         run_wifi();
     } else {
-        /* fixture: full suite */
-        run_i2c();
-        run_adc();
-        run_wifi();
-        run_ota();
-        run_vdut();
+        /* fixture: execute recipe (same table as interactive 'selftest all') */
+        run_fixture_recipe();
     }
 
     bool passed = (s_pass == s_total && s_total > 0);
