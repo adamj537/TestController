@@ -1,0 +1,331 @@
+# TC Firmware — Developer Notes
+
+<!--
+  Transcluded into: docs/developer/firmware/tc-firmware.md
+-->
+
+## Architecture
+
+TC firmware uses a **hybrid pattern**:
+
+- `embedded/tester-client/` — G3-specific code (recipes, DUT interface, bringup shell)
+- `embedded/tester-client/common/` — `tc-firmware-common` submodule (HAL, BSP, shared utilities)
+
+## Build environments
+
+| Environment | Target | Use |
+|---|---|---|
+| `esp32-Devkit` | ESP32-S3 hardware | Production build, OTA |
+| `native` | Linux/WSL | Unit testing |
+
+```bash
+pio run -e esp32-Devkit          # build for hardware
+pio test -e native               # run unit tests (76 passing as of FW-1)
+```
+
+## FW-1 status
+
+Phases 1–5 complete.  PR #12 open on `INTenX/G3-MB-Embedded-Tester-Client`.
+Hardware bringup complete (TCP console, selftest, vdac characterization).
+
+## Bringup shell commands
+
+The bringup shell is an ESP console REPL, exposed on UART and TCP port 4242.
+
+### selftest
+
+```
+selftest [all|i2c|adc|wifi|ota|temp|vdut|mux|heartbeat|char]
+```
+
+Runs onboard health checks.  Without a subcommand, `all` is assumed.
+`selftest all` produces **20 pass/fail results** and takes ~8 s
+(dominated by the VDUT 3-point sweep).
+
+| Group | What it tests |
+|---|---|
+| `i2c` | Bus init, INA219 × 2 probe, ADC128D818 probe, 3.3 V rail, 5 V rail, temp sensor |
+| `adc` | Internal ESP32 ADC on GPIO1 |
+| `wifi` | WiFi STA connection and RSSI |
+| `ota` | Running partition label and OTA image state |
+| `temp` | ADC128D818 CH7 internal temperature diode (°C, ±2°C per SNAS483F Table 16 Eq 2/3) |
+| `vdut` | 3-point VDUT1/VDUT2 sweep — see below |
+| `mux` | TIE analog mux scan — all 4 × 16 channels via ADC128D818 CH0–CH3 |
+| `heartbeat` | DUT PA9 1 Hz toggle → TIE MUX U12 Ch2 → ADC128 CH2, sampled 2.5 s |
+| `char` | Full 0–100 % characterization sweep — see below (not in `all`, takes ~33 s) |
+
+The I²C group uses a **two-pass probe** to work around the TCC v1 SDA/SCL swap
+errata (see TCC board developer notes):
+
+1. Default orientation (SDA=15, SCL=16) — probe INA219s at 0x40 and 0x41
+2. Swapped orientation (SDA=16, SCL=15) — probe ADC128D818 at 0x1D, read CH4/CH5, read CH7 temp
+3. Restore default orientation
+
+#### selftest vdut — 3-point VDUT sweep
+
+Exercises both VDUT regulators with a 3-point duty cycle sweep.  INA219 V_BUS
+is the primary (and only) voltage measurement — ADC128 CH6/CH7 are no longer
+read here; those channels are reserved for DUT_VIN and ISO_POWER_IN monitoring
+on the next board spin.
+
+**Sequence per measurement point:**
+
+1. Set duty on both channels (LEDC + IOMUX re-route)
+2. Wait `VDAC_STEP_SETTLE_MS` (1500 ms) for regulator to settle
+3. Read INA219 #0/#1: V_BUS, current, power (normal bus throughout — no swap)
+
+**Pass criteria:**
+
+| Criterion | Detail |
+|---|---|
+| Absolute range | INA219 V_BUS within per-point window (see table) |
+| Monotonic | V(10%) > V(50%) > V(90%) — confirms regulator responds to PWM |
+
+| Duty | V_BUS window | Typical value (no load) |
+|---|---|---|
+| 10 % | 8000–12000 mV | ~9940 mV |
+| 50 % | 5000–9000 mV | ~7010 mV |
+| 90 % | 1000–5000 mV | ~3060 mV |
+
+**Why INA219 V_BUS over ADC128:** INA219 V_BUS accuracy is ±0.5% max at room
+temp, ±1% over −25–85 °C (SBOS448G Table 7.5).  The ADC128 CH6/CH7 divider
+used 5%-tolerance resistors (C15401, loaded vs 1% design intent), producing a
+~±4% error floor that cannot be recovered without a board respin.  INA219 V_BUS
+is also the more meaningful measurement — it reads at IN−, the DUT connector
+side of the shunt (0.1 mV drop at 1 mA, negligible).
+
+**INA219 configuration:** PGA=/1 (±40 mV FSR, config `0x219F`, CAL `0xA000` =
+40960) → `Current_LSB = 10 µA`, `Power_LSB = 200 µW`.
+
+**API promoted for selftest use** (from `cmd_vdac.h`):
+
+- `vdac_set_duty(ch_idx, duty_pct)` — set LEDC duty; re-asserts IOMUX
+- `vdac_set_enable(ch_idx, enable)` — drive ENA GPIO
+- `adc128_ensure_running()` — arm Mode-1 conversions (call after every bus reinit)
+- `adc128_read_mon(ch, &mv)` — read CH6/CH7 with 4× divider applied
+- `i2c_write_reg16(addr, reg, val)` — 3-byte big-endian write for INA219 CAL/config
+
+#### selftest char — full characterization sweep
+
+Sweeps both VDUT regulators 0–100 % in 5 % steps (~33 s total) and prints a
+table of ADC128D818 CH6/CH7 voltages plus all four INA219 data registers per
+point.  Not included in `selftest all`.
+
+**Output columns:**
+
+| Column | Source | Units |
+|---|---|---|
+| duty | LEDC setpoint | % |
+| VBus0 / VBus1 | INA219 #0/#1 register 0x02 (BD >> 3 × 4) | mV |
+| Vsht0 / Vsht1 | INA219 #0/#1 register 0x01 × 10 | µV |
+| I0 / I1 | INA219 #0/#1 current register × 10 µA | µA |
+| P0 / P1 | INA219 #0/#1 power register × 200 µW | µW |
+
+ADC128 CH6/CH7 (formerly VDUT1Mon/VDUT2Mon) are no longer read here — reserved
+for DUT_VIN and ISO_POWER_IN on the next board spin.
+
+**Typical no-load output (excerpt):**
+
+```
+duty  VBus0  Vsht0   I0      P0     VBus1  Vsht1   I1      P1
+  %    mV     µV      µA     µW      mV     µV      µA     µW
+   0  10764    +110   +1100   11800  10692    +100   +1000   10800
+  50   7032     +70    +600    5000   7000     +60    +600    4200
+ 100   2152      +0      +0       0   2228      +0      +0       0
+```
+
+### vdac — VDUT regulator DAC control
+
+Controls the two DUT supply regulators (VDUT1 via U1, VDUT2 via U7) using LEDC
+PWM → RC filter → MP2315SGJ-Z feedback injection.
+
+```
+vdac char                         # sweep 0–100 % and print duty-vs-voltage table
+vdac set <1|2|both> <duty_pct>   # enable and set duty cycle (0–100)
+vdac off                          # disable both channels
+```
+
+**Characterization sweep** (`vdac char`):
+
+- Initializes both channels at 0 % duty
+- Enables both regulators
+- Switches to swapped I²C bus for ADC128D818
+- Waits 2 s for regulator to settle from initial state
+- Steps 0 % → 100 % in 5 % increments; waits 1500 ms per step for regulator
+  control loop to settle
+- Reads VDUT1Mon (CH6) and VDUT2Mon (CH7) from ADC128D818 at each step
+- Disables both channels and restores I²C bus on completion
+
+**Set command** (`vdac set`):
+
+- Asserts ENA GPIO for selected channel(s)
+- Calls `ledc_channel_config()` to set duty and re-assert IOMUX
+
+#### GPIO 19/20 USB IOMUX — design constraint
+
+GPIO 19 and 20 are the ESP32-S3 USB D-/D+ pads.  The USB peripheral retains
+IOMUX priority.  `ledc_set_duty()` + `ledc_update_duty()` do **not** drive
+these pads after a USB reset.  The workaround is to call `ledc_channel_config()`
+on every duty update, which re-routes IOMUX to LEDC on each call.  The
+"GPIO not usable" log message is non-fatal.
+
+```c
+/* Correct: re-assert IOMUX on every duty change */
+ledc_channel_config(&ch_cfg);   /* sets duty AND re-routes IOMUX */
+
+/* Wrong: IOMUX not re-asserted, GPIO19/20 may not drive */
+ledc_set_duty(mode, ch, duty);
+ledc_update_duty(mode, ch);
+```
+
+#### Regulator settling time
+
+The RC filter (1 kΩ, 0.1 µF, τ = 100 µs) settles in < 1 ms.  The actual
+bottleneck is the MP2315SGJ-Z control loop combined with the 47 µF output
+capacitor: measured settling time for a step change is **~750 ms**.  The
+firmware uses:
+
+- `VDAC_STEP_SETTLE_MS = 1500 ms` (sweep steps)
+- `VDAC_INIT_SETTLE_MS = 2000 ms` (initial enable)
+
+### i2c — I²C bus management
+
+```
+i2c scan                          # scan for devices on current bus
+i2c probe <addr>                  # probe single address
+i2c read <addr> <reg> <len>       # read register(s)
+i2c write <addr> <reg> <bytes…>   # write register
+i2c reinit <sda_gpio> <scl_gpio>  # reinitialize bus with new pin assignment
+```
+
+Use `i2c reinit 16 15` to reach the ADC128D818 (swapped bus).
+Use `i2c reinit 15 16` to restore the default orientation for INA219s.
+
+### gpio, pwm, adc, wifi, ota
+
+See `help` in the bringup shell for usage of the remaining command groups.
+
+## How to add a new bringup command
+
+1. Create `src/cmd_<name>.c` and `src/cmd_<name>.h`
+2. Implement a static `do_<name>()` dispatcher and `register_<name>_commands()`
+3. Add `#include "cmd_<name>.h"` and `register_<name>_commands()` to `src/main.cpp`
+4. Add `src/cmd_<name>.c` to `CMakeLists.txt` (or PlatformIO will pick it up automatically)
+
+Follow the pattern in `cmd_vdac.c` for commands that touch hardware peripherals.
+
+## WDT configuration
+
+WDT is configured via `sdkconfig.esp32-Devkit` (Kconfig), not build flags:
+
+| Timer | Setting | Value |
+|---|---|---|
+| Task WDT | `CONFIG_ESP_TASK_WDT_TIMEOUT_S` | 5 s |
+| Task WDT panic | `CONFIG_ESP_TASK_WDT_PANIC` | disabled (logs only) |
+| Int WDT | `CONFIG_ESP_INT_WDT_TIMEOUT_MS` | 300 ms |
+
+Long-running commands (`selftest all`, `vdac char`) take up to ~10 s and are
+protected against the task WDT because they run via `xTaskCreate` — each
+spawned task feeds its own idle tick.  Shell commands that block on the console
+task may still log a WDT warning if they exceed 5 s; this is non-fatal.
+
+## SWD bit-bang — DUT firmware flashing
+
+The TC can program DUT firmware over SWD without a JTAG probe.  GPIO37 drives
+SWCLK and GPIO38 drives SWDIO, routed TCC → TIE J15 → DUT CN6.
+
+### Commands
+
+```
+swd flash <url> [nopwrcycle] [--store]  # download, flash DUT, optionally cache
+swd flash local [nopwrcycle]            # flash DUT from cached dut_fw partition
+swd probe [half_us] [nojtagtoswd]       # diagnostic: print IDCODE, CTRL/STAT, ACK
+swd cs                                  # power-up DP + AHB-AP and print CTRL/STAT fields
+```
+
+### Typical flash workflow
+
+#### First board (network available)
+
+```bash
+# 1. Serve the DUT binary from WSL
+cd ~/G3-MB-Tester/embedded/dut-firmware
+python3 -m http.server 8080 --directory .pio/build/g3-dut/ &
+
+# 2. On the TC TCP console (10.0.0.244:4242) — flash AND cache the image
+swd flash http://10.0.0.246:8080/firmware.bin --store
+# Expected: [PASS] swd flash complete <N> bytes at 0x08000000
+# Also: "Stored N bytes to dut_fw partition"
+
+kill $(lsof -ti:8080)   # clean up server
+```
+
+#### Subsequent boards (no network needed)
+
+```
+swd flash local
+# Loads image from dut_fw partition — no HTTP required
+```
+
+#### Remote update via MQTT DCMD
+
+```json
+{"cmd": "ota", "url": "http://host/firmware.bin", "target": "dut_firmware"}
+```
+
+Stores the binary in the `dut_fw` partition without flashing the DUT or rebooting
+the TC.  Once stored, use `swd flash local` to program individual boards.
+
+To update TC firmware instead (default when `target` is absent):
+
+```json
+{"cmd": "ota", "url": "http://host/tc-firmware.bin"}
+```
+
+### `swd flash` sequence
+
+1. Download binary from URL into heap buffer
+2. Power-cycle DUT (de-assert / re-assert VDUT)
+3. Send JTAG-to-SWD switching sequence (0xFF × 8, 0x9E 0xE7, 0xFF × 8, idle 4)
+4. Read DP IDCODE — confirms target is alive (STM32L476: `0x2BA01477`)
+5. Power-up DP: write CTRL/STAT `0x50000F00` (CDBGPWRUPREQ | CSYSPWRUPREQ |
+   MASKLANE=0xF), poll until CDBGPWRUPACK | CSYSPWRUPACK both asserted
+6. Init AHB-AP: write CSW `0xA2000052` (DbgSwEnable | MasterDebug | HPROT |
+   AddrInc=single | Size=word)
+7. Halt CPU via DHCSR write (`0xA05F0003`)
+8. Unlock STM32L476 flash: write KEYR `0x45670123` then `0xCDEF89AB`
+9. Erase pages: write PECR PER+PNB for each 2 kB page, poll BSY
+10. Program: write words via AHB-AP, poll EOP after each page
+11. Lock flash, resume CPU
+
+### 38-clock write framing (key implementation detail)
+
+ARM ADIv5 SWD requires **38 clocks** in the write data phase, not 37.  The
+off-by-one error causes the 32-bit write data to arrive at the target shifted
+1 bit to the right — silently, because parity can still match by coincidence
+(`WDATAERR=0`) but the register value is wrong.
+
+The correct write frame after the 8-bit request byte:
+1. **TRN** (1 clock, host→target): host tristates, clock rises — target begins
+   driving ACK here.  This bit is **discarded** (not read).
+2. **ACK** (3 clocks): read 3 bits from target.  Because ACK[0] was consumed
+   by the TRN clock, the raw value is `{ACK[1], ACK[2], pull-up}`.
+   Correction: raw 4 → OK (1), raw 5 → WAIT (2), raw 6 → FAULT (4).
+3. **TRN** (1 clock, target→host): host takes back SWDIO.
+4. **WDATA** (32 clocks) + **WPARITY** (1 clock): host writes data MSB→LSB.
+5. **idle** (≥ 8 clocks): line idle before next request.
+
+The read path (`swd_dp_read`) is unaffected — 37 clocks works there because
+the target drives ACK starting at TRN (consistent with the read frame).
+
+### Target notes — STM32L476
+
+| Item | Value |
+|---|---|
+| IDCODE | `0x2BA01477` |
+| TARGETID (DP bank 2) | `0x00000043` |
+| Flash base | `0x08000000` |
+| Flash page size | 2 kB |
+| KEYR unlock sequence | `0x45670123`, `0xCDEF89AB` |
+| DHCSR address | `0xE000EDF0` |
+| Halt value | `0xA05F0003` (DBGKEY | C_DEBUGEN | C_HALT) |

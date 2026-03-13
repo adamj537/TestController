@@ -1,0 +1,256 @@
+#include <stdio.h>
+#include <string.h>
+#include "esp_console.h"
+#include "driver/ledc.h"
+#include "driver/gpio.h"
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
+#include "cmd_i2c.h"
+#include "cmd_vdac.h"
+
+/* ── TCC carrier v1 pin assignments ──────────────────────────────────────── */
+
+#define VDUT1_PWM_GPIO   1   /* LEDC → RC filter → U1 (MP2315SGJ-Z) feedback */
+#define VDUT2_PWM_GPIO   2   /* LEDC → RC filter → U7 (MP2315SGJ-Z) feedback */
+#define VDUT1_ENA_GPIO  46   /* active-high enable for U1 */
+#define VDUT2_ENA_GPIO  47   /* active-high enable for U7 */
+
+/* ── ADC128D818 — lives on swapped bus (SDA=GPIO16, SCL=GPIO15) ─────────── */
+
+#define ADDR_ADC128D818    0x1D
+#define ADC128_REG_CONFIG    0x00   /* bit0=START, bit7=INIT(resets all regs, self-clearing) */
+#define ADC128_REG_CONV_RATE 0x07   /* 0=low-power (~728ms/scan), 1=high-rate (~12ms/ch) */
+#define ADC128_REG_ADV_CFG   0x0B   /* bit0=ext-VREF-en, bits[2:1]=mode: 0x02=Mode1(all 8 voltage) */
+#define ADC128_REG_CH_BASE 0x20   /* CH0=0x20 … CH7=0x27, 2 bytes, left-justified 12-bit */
+#define ADC128_VREF_MV     2560
+#define ADC128_FULL        4096
+
+/* CH6 = VDUT1Mon, CH7 = VDUT2Mon.
+ * Divider: 30K top (R7/R8) + 10K bottom (R1/R2)  → V_rail = V_adc × 4 */
+#define ADC128_MON_NUM  4
+#define ADC128_MON_DEN  1
+
+/* ── LEDC — Timer 1 (Timer 0 is reserved by cmd_pwm) ────────────────────── */
+
+#define VDAC_LEDC_MODE      LEDC_LOW_SPEED_MODE
+#define VDAC_LEDC_TIMER     LEDC_TIMER_1
+#define VDAC_LEDC_DUTY_RES  LEDC_TIMER_12_BIT   /* 0–4095 */
+#define VDAC_LEDC_FREQ_HZ   10000               /* 10 kHz carrier */
+#define VDAC_CH1            LEDC_CHANNEL_0      /* GPIO19 → VDUT1 */
+#define VDAC_CH2            LEDC_CHANNEL_1      /* GPIO20 → VDUT2 */
+
+/* Regulator settling time after a duty step change.
+ * RC filter τ = 1kΩ × 0.1µF = 100µs (negligible).
+ * Measured from char sweep: output takes ~750ms to settle a step change
+ * through the MP2315SGJ-Z control loop + 47µF output capacitor. */
+#define VDAC_STEP_SETTLE_MS   1500
+/* Initial settle after enabling: allow regulator to ramp from 0 to setpoint. */
+#define VDAC_INIT_SETTLE_MS   2000
+
+/* ── Internal state ──────────────────────────────────────────────────────── */
+
+static bool s_timer_ready = false;
+static bool s_enabled[2]  = {false, false};
+
+/* ── LEDC helpers ────────────────────────────────────────────────────────── */
+
+static bool vdac_ledc_init(void)
+{
+    ledc_timer_config_t timer_cfg = {
+        .speed_mode      = VDAC_LEDC_MODE,
+        .duty_resolution = VDAC_LEDC_DUTY_RES,
+        .timer_num       = VDAC_LEDC_TIMER,
+        .freq_hz         = VDAC_LEDC_FREQ_HZ,
+        .clk_cfg         = LEDC_AUTO_CLK,
+        .deconfigure     = false,
+    };
+    if (ledc_timer_config(&timer_cfg) != ESP_OK) return false;
+    s_timer_ready = true;
+    return true;
+}
+
+/* ledc_channel_config re-routes the IOMUX to LEDC on each call. */
+bool vdac_set_duty(int ch_idx, int duty_pct)
+{
+    if (!s_timer_ready && !vdac_ledc_init()) return false;
+    ledc_channel_t ch = (ch_idx == 0) ? VDAC_CH1 : VDAC_CH2;
+    int gpio          = (ch_idx == 0) ? VDUT1_PWM_GPIO : VDUT2_PWM_GPIO;
+    uint32_t duty     = (uint32_t)(duty_pct * 4095) / 100;
+    ledc_channel_config_t ch_cfg = {
+        .gpio_num   = gpio,
+        .speed_mode = VDAC_LEDC_MODE,
+        .channel    = ch,
+        .intr_type  = LEDC_INTR_DISABLE,
+        .timer_sel  = VDAC_LEDC_TIMER,
+        .duty       = duty,
+        .hpoint     = 0,
+        .flags      = {.output_invert = 0},
+    };
+    return ledc_channel_config(&ch_cfg) == ESP_OK;
+}
+
+bool vdac_set_enable(int ch_idx, bool enable)
+{
+    int gpio = (ch_idx == 0) ? VDUT1_ENA_GPIO : VDUT2_ENA_GPIO;
+    if (gpio_set_direction((gpio_num_t)gpio, GPIO_MODE_OUTPUT) != ESP_OK) return false;
+    gpio_set_level((gpio_num_t)gpio, enable ? 1 : 0);
+    s_enabled[ch_idx] = enable;
+    return true;
+}
+
+/* ── ADC128 helpers ──────────────────────────────────────────────────────── */
+
+/* Caller must have already switched to swapped bus (SDA=GPIO16, SCL=GPIO15). */
+bool adc128_ensure_running(void)
+{
+    return i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x02) &&  /* Mode 1: IN7 as voltage (bits[2:1]=01 → 0x02) */
+           i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONV_RATE, 0x01) &&  /* high rate ~12ms/ch */
+           i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONFIG,    0x01);
+}
+
+bool adc128_read_mon(uint8_t ch, int *rail_mv_out)
+{
+    uint8_t buf[2];
+    if (!i2c_read_reg(ADDR_ADC128D818, ADC128_REG_CH_BASE + ch, buf, 2)) return false;
+    int count       = ((buf[0] << 8) | buf[1]) >> 4;
+    int adc_mv      = count * ADC128_VREF_MV / ADC128_FULL;
+    *rail_mv_out    = adc_mv * ADC128_MON_NUM / ADC128_MON_DEN;
+    return true;
+}
+
+/* ── vdac char ───────────────────────────────────────────────────────────── */
+
+static int do_vdac_char(int argc, char **argv)
+{
+    (void)argc; (void)argv;
+
+    /* 1. LEDC — both channels at 0 % */
+    if (!vdac_set_duty(0, 0) || !vdac_set_duty(1, 0)) {
+        printf("LEDC init failed\n"); return 1;
+    }
+
+    /* 2. Enable both regulator channels */
+    if (!vdac_set_enable(0, true) || !vdac_set_enable(1, true)) {
+        printf("Enable GPIO config failed\n"); return 1;
+    }
+
+    /* 3. Switch to swapped bus for ADC128 (TCC v1 errata) */
+    if (!i2c_reinit(16, 15)) {
+        printf("I2C reinit (swapped) failed\n");
+        vdac_set_enable(0, false); vdac_set_enable(1, false);
+        return 1;
+    }
+    if (!adc128_ensure_running()) {
+        printf("ADC128 init failed\n");
+        i2c_reinit(15, 16);
+        vdac_set_enable(0, false); vdac_set_enable(1, false);
+        return 1;
+    }
+
+    /* Allow regulator to ramp from any previous state to 0%-duty setpoint */
+    printf("Settling %d ms...\n", VDAC_INIT_SETTLE_MS);
+    vTaskDelay(pdMS_TO_TICKS(VDAC_INIT_SETTLE_MS));
+
+    /* 4. Sweep 0 % → 100 % in 5 % steps */
+    printf("VDAC Characterization  (LEDC %d kHz, %d ms/step)\n",
+           VDAC_LEDC_FREQ_HZ / 1000, VDAC_STEP_SETTLE_MS);
+    printf("duty%%  VDUT1_mV  VDUT2_mV\n");
+    printf("-----  --------  --------\n");
+
+    for (int pct = 0; pct <= 100; pct += 5) {
+        vdac_set_duty(0, pct);
+        vdac_set_duty(1, pct);
+        vTaskDelay(pdMS_TO_TICKS(VDAC_STEP_SETTLE_MS));
+
+        int v1 = -1, v2 = -1;
+        bool ok1 = adc128_read_mon(6, &v1);
+        bool ok2 = adc128_read_mon(7, &v2);
+
+        if (ok1 && ok2)
+            printf("  %3d    %5d     %5d\n", pct, v1, v2);
+        else
+            printf("  %3d    %-8s  %-8s\n", pct,
+                   ok1 ? "ok" : "ERR", ok2 ? "ok" : "ERR");
+    }
+
+    /* 5. Clean up */
+    vdac_set_duty(0, 0);
+    vdac_set_duty(1, 0);
+    vdac_set_enable(0, false);
+    vdac_set_enable(1, false);
+    i2c_reinit(15, 16);
+
+    return 0;
+}
+
+/* ── vdac set ────────────────────────────────────────────────────────────── */
+
+static int do_vdac_set(int argc, char **argv)
+{
+    if (argc < 3) {
+        printf("Usage: vdac set <1|2|both> <duty_pct 0-100>\n");
+        return 1;
+    }
+    int duty = atoi(argv[2]);
+    if (duty < 0 || duty > 100) { printf("duty_pct must be 0-100\n"); return 1; }
+
+    bool do1 = (strcmp(argv[1], "1")    == 0 || strcmp(argv[1], "both") == 0);
+    bool do2 = (strcmp(argv[1], "2")    == 0 || strcmp(argv[1], "both") == 0);
+    if (!do1 && !do2) { printf("channel must be 1, 2, or both\n"); return 1; }
+
+    if (do1) {
+        vdac_set_enable(0, true);
+        vdac_set_duty(0, duty);
+        printf("VDUT1: ENA=GPIO%d  PWM=GPIO%d  duty=%d%%\n",
+               VDUT1_ENA_GPIO, VDUT1_PWM_GPIO, duty);
+    }
+    if (do2) {
+        vdac_set_enable(1, true);
+        vdac_set_duty(1, duty);
+        printf("VDUT2: ENA=GPIO%d  PWM=GPIO%d  duty=%d%%\n",
+               VDUT2_ENA_GPIO, VDUT2_PWM_GPIO, duty);
+    }
+    return 0;
+}
+
+/* ── vdac off ────────────────────────────────────────────────────────────── */
+
+static int do_vdac_off(int argc, char **argv)
+{
+    (void)argc; (void)argv;
+    vdac_set_duty(0, 0);
+    vdac_set_duty(1, 0);
+    vdac_set_enable(0, false);
+    vdac_set_enable(1, false);
+    printf("VDUT1 + VDUT2 disabled\n");
+    return 0;
+}
+
+/* ── Command dispatcher ──────────────────────────────────────────────────── */
+
+static int do_vdac(int argc, char **argv)
+{
+    if (argc < 2) {
+        printf("VDUT regulator DAC control:\n");
+        printf("  vdac char              sweep 0-100%% and print voltage table\n");
+        printf("  vdac set <1|2|both> <duty_pct>  enable and set duty cycle\n");
+        printf("  vdac off               disable both channels\n");
+        return 1;
+    }
+    if (strcmp(argv[1], "char") == 0) return do_vdac_char(argc - 1, argv + 1);
+    if (strcmp(argv[1], "set")  == 0) return do_vdac_set(argc - 1, argv + 1);
+    if (strcmp(argv[1], "off")  == 0) return do_vdac_off(argc - 1, argv + 1);
+    printf("Unknown subcommand '%s'\n", argv[1]);
+    return 1;
+}
+
+void register_vdac_commands(void)
+{
+    const esp_console_cmd_t cmd = {
+        .command = "vdac",
+        .help    = "VDUT DAC: vdac <char|set|off>",
+        .hint    = NULL,
+        .func    = &do_vdac,
+    };
+    ESP_ERROR_CHECK(esp_console_cmd_register(&cmd));
+}

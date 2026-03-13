@@ -1,187 +1,109 @@
 #include <stdio.h>
-#include <string.h>
-#include "esp_system.h"
-#include "esp_log.h"
-#include "esp_console.h"
-#include "esp_vfs_dev.h"
-#include "esp_vfs_fat.h"
-#include "nvs.h"
 #include "nvs_flash.h"
-#include "usb/usb_host.h"
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
+#include "esp_console.h"
+#include "esp_log.h"
+#include "esp_ota_ops.h"
+#include "version.h"
 
-static const char* TAG = "example";
-#define PROMPT_STR CONFIG_IDF_TARGET
-
-// USB power shell command handler
-// USB host stack state
-static bool usb_host_enabled = false;
-
-static int usb_power_cmd(int argc, char **argv)
-{
-    if (argc != 2) {
-        ESP_LOGI(TAG, "Usage: usb_power <on|off>");
-        return 1;
-    }
-    if (strcmp(argv[1], "on") == 0) {
-        if (!usb_host_enabled) {
-            ESP_LOGI(TAG, "Enabling USB host...");
-            usb_host_config_t host_config = {
-                .skip_phy_setup = false,
-                .root_port_unpowered = false,
-                .intr_flags = ESP_INTR_FLAG_LEVEL1,
-                .enum_filter_cb = NULL,
-                .fifo_settings_custom = {0, 0, 0},
-            };
-            esp_err_t err = usb_host_install(&host_config);
-            if (err == ESP_OK) {
-                usb_host_enabled = true;
-                ESP_LOGI(TAG, "USB host enabled");
-            } else {
-                ESP_LOGE(TAG, "Failed to enable USB host: %s", esp_err_to_name(err));
-                return 1;
-            }
-        } else {
-            ESP_LOGI(TAG, "USB host already enabled");
-        }
-    } else if (strcmp(argv[1], "off") == 0) {
-        if (usb_host_enabled) {
-            ESP_LOGI(TAG, "Disabling USB host...");
-            esp_err_t err = usb_host_uninstall();
-            if (err == ESP_OK) {
-                usb_host_enabled = false;
-                ESP_LOGI(TAG, "USB host disabled");
-            } else {
-                ESP_LOGE(TAG, "Failed to disable USB host: %s", esp_err_to_name(err));
-                return 1;
-            }
-        } else {
-            ESP_LOGI(TAG, "USB host already disabled");
-        }
-    } else {
-        ESP_LOGI(TAG, "Invalid argument: %s", argv[1]);
-        return 1;
-    }
-    return 0;
+extern "C" {
+#include "cmd_gpio.h"
+#include "cmd_pwm.h"
+#include "cmd_adc.h"
+#include "cmd_i2c.h"
+#include "cmd_wifi.h"
+#include "cmd_ota.h"
+#include "cmd_selftest.h"
+#include "cmd_vdac.h"
+#include "cmd_uart.h"
+#include "cmd_swd.h"
+#include "cmd_mqtt.h"
+#include "cmd_statemachine.h"
+#include "tc_mqtt.h"
+#include "tc_statemachine.h"
+#include "net_console.h"
 }
 
-static const esp_console_cmd_t usb_power = {
-    .command = "usb_power",
-    .help = "Control USB power: usb_power <on|off>",
-    .hint = NULL,
-    .func = &usb_power_cmd,
-    .argtable = NULL,
-    .func_w_context = NULL,
-    .context = NULL
-};
-/* Basic console example (esp_console_repl API)
-
-   This example code is in the Public Domain (or CC0 licensed, at your option.)
-
-   Unless required by applicable law or agreed to in writing, this
-   software is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR
-   CONDITIONS OF ANY KIND, either express or implied.
-*/
-
-#include <stdio.h>
-#include <string.h>
-#include "esp_system.h"
-#include "esp_log.h"
-#include "esp_console.h"
-#include "esp_vfs_dev.h"
-#include "esp_vfs_fat.h"
-#include "nvs.h"
-#include "nvs_flash.h"
-// #include "cmd_system.h"
-// #include "cmd_wifi.h"
-// #include "cmd_nvs.h"
-
-/*
- * We warn if a secondary serial console is enabled. A secondary serial console is always output-only and
- * hence not very useful for interactive console applications. If you encounter this warning, consider disabling
- * the secondary serial console in menuconfig unless you know what you are doing.
- */
-#if SOC_USB_SERIAL_JTAG_SUPPORTED
-#if !CONFIG_ESP_CONSOLE_SECONDARY_NONE
-#warning "A secondary serial console is not useful when using the console component. Please disable it in menuconfig."
-#endif
-#endif
-
-#include "esp_console.h"
-#define PROMPT_STR CONFIG_IDF_TARGET
-
-/* Console command history can be stored to and loaded from a file.
- * The easiest way to do this is to use FATFS filesystem on top of
- * wear_levelling library.
- */
-#if CONFIG_CONSOLE_STORE_HISTORY
-
-#define MOUNT_PATH "/data"
-#define HISTORY_PATH MOUNT_PATH "/history.txt"
-
-static void initialize_filesystem(void)
-{
-    static wl_handle_t wl_handle;
-    const esp_vfs_fat_mount_config_t mount_config = {
-            .max_files = 4,
-            .format_if_mount_failed = true
-    };
-    esp_err_t err = esp_vfs_fat_spiflash_mount_rw_wl(MOUNT_PATH, "storage", &mount_config, &wl_handle);
-    if (err != ESP_OK) {
-        ESP_LOGE(TAG, "Failed to mount FATFS (%s)", esp_err_to_name(err));
-        return;
-    }
-}
-#endif // CONFIG_STORE_HISTORY
+static const char *TAG = "g3-tc";
 
 static void initialize_nvs(void)
 {
     esp_err_t err = nvs_flash_init();
     if (err == ESP_ERR_NVS_NO_FREE_PAGES || err == ESP_ERR_NVS_NEW_VERSION_FOUND) {
-        ESP_ERROR_CHECK( nvs_flash_erase() );
+        ESP_ERROR_CHECK(nvs_flash_erase());
         err = nvs_flash_init();
     }
     ESP_ERROR_CHECK(err);
 }
 
+/* Confirm OTA image is valid to prevent rollback after successful boot */
+static void ota_rollback_guard(void)
+{
+    const esp_partition_t *running = esp_ota_get_running_partition();
+    esp_ota_img_states_t   state;
+    if (esp_ota_get_state_partition(running, &state) == ESP_OK &&
+        state == ESP_OTA_IMG_PENDING_VERIFY) {
+        esp_ota_mark_app_valid_cancel_rollback();
+        ESP_LOGI(TAG, "OTA: partition '%s' marked valid", running->label);
+    }
+}
+
 extern "C" void app_main(void)
 {
-    esp_console_repl_t *repl = NULL;
-    esp_console_repl_config_t repl_config = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
-    /* Prompt to be printed before each line.
-     * This can be customized, made dynamic, etc.
-     */
-    repl_config.prompt = PROMPT_STR ">";
-    repl_config.max_cmdline_length = 256;
-
     initialize_nvs();
+    ota_rollback_guard();
+    tc_sm_init();
+    tc_mqtt_init();
 
-#if CONFIG_CONSOLE_STORE_HISTORY
-    initialize_filesystem();
-    repl_config.history_save_path = HISTORY_PATH;
-    ESP_LOGI(TAG, "Command history enabled");
-#else
-    ESP_LOGI(TAG, "Command history disabled");
-#endif
+    ESP_LOGI(TAG, "G3 TC bringup shell  fw=%s", FW_VERSION_FULL);
 
+    esp_console_repl_t *repl = NULL;
+    esp_console_repl_config_t repl_cfg = ESP_CONSOLE_REPL_CONFIG_DEFAULT();
 
-    /* Register commands */
+    /* Version in prompt — visible after every command response */
+    static char prompt_buf[40];
+    snprintf(prompt_buf, sizeof(prompt_buf), "g3-tc|" FW_VERSION_STRING ">");
+    repl_cfg.prompt = prompt_buf;
+    repl_cfg.max_cmdline_length = 256;
+
     esp_console_register_help_command();
-    ESP_ERROR_CHECK(esp_console_cmd_register(&usb_power));
+    register_gpio_commands();
+    register_pwm_commands();
+    register_adc_commands();
+    register_i2c_commands();
+    register_wifi_commands();
+    register_ota_commands();
+    register_selftest_commands();
+    register_vdac_commands();
+    register_uart_commands();
+    register_swd_commands();
+    register_mqtt_commands();
+    register_statemachine_commands();
+
+    /* WiFi init — sets up netif/event loop and auto-connects if NVS creds exist.
+     * Must happen before net_console_start() which needs the TCP/IP stack. */
+    wifi_init();
+
+    /* MQTT client — deferred until WiFi has an IP (registers GOT_IP handler).
+     * No-op if broker URL not yet configured in NVS. */
+    tc_mqtt_start();
+
+    /* Configure INA219s at boot so current readings are valid immediately
+     * without requiring a selftest run first. */
+    selftest_ina219_init();
+
+    /* TCP console server — listens on port 4242, accepts when WiFi is up.
+     * All stdout/stderr is tee'd to the connected client via __wrap__write_r. */
+    net_console_start(4242);
 
 #if defined(CONFIG_ESP_CONSOLE_UART_DEFAULT) || defined(CONFIG_ESP_CONSOLE_UART_CUSTOM)
-    esp_console_dev_uart_config_t hw_config = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_console_new_repl_uart(&hw_config, &repl_config, &repl));
-
+    esp_console_dev_uart_config_t hw_cfg = ESP_CONSOLE_DEV_UART_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_console_new_repl_uart(&hw_cfg, &repl_cfg, &repl));
 #elif defined(CONFIG_ESP_CONSOLE_USB_CDC)
-    esp_console_dev_usb_cdc_config_t hw_config = ESP_CONSOLE_DEV_CDC_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_console_new_repl_usb_cdc(&hw_config, &repl_config, &repl));
-
+    esp_console_dev_usb_cdc_config_t hw_cfg = ESP_CONSOLE_DEV_CDC_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_console_new_repl_usb_cdc(&hw_cfg, &repl_cfg, &repl));
 #elif defined(CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG)
-    esp_console_dev_usb_serial_jtag_config_t hw_config = ESP_CONSOLE_DEV_USB_SERIAL_JTAG_CONFIG_DEFAULT();
-    ESP_ERROR_CHECK(esp_console_new_repl_usb_serial_jtag(&hw_config, &repl_config, &repl));
-
+    esp_console_dev_usb_serial_jtag_config_t hw_cfg = ESP_CONSOLE_DEV_USB_SERIAL_JTAG_CONFIG_DEFAULT();
+    ESP_ERROR_CHECK(esp_console_new_repl_usb_serial_jtag(&hw_cfg, &repl_cfg, &repl));
 #else
 #error Unsupported console type
 #endif
