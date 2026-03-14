@@ -2,6 +2,7 @@
 #include "tc_mqtt.h"
 #include "cmd_selftest.h"
 #include "cmd_swd.h"
+#include "display_strings.h"
 
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -145,7 +146,7 @@ void tc_sm_selftest_done(bool passed, uint32_t duration_ms)
             transition(TC_SM_FAIL);
             tc_mqtt_publish_result("fail", "precheck", total_ms,
                                    NULL, NULL, NULL, NULL);
-            vTaskDelay(pdMS_TO_TICKS(3000));
+            vTaskDelay(pdMS_TO_TICKS(DISP_HOLD_FAIL_MS));
             transition(TC_SM_IDLE);
         }
     } else if (s_state == TC_SM_TESTING) {
@@ -173,9 +174,9 @@ void tc_sm_selftest_done(bool passed, uint32_t duration_ms)
                                    "fixture-selftest", "0.0.0");
         }
 
-        /* Allow MQTT outbound queue to flush before hold period */
+        /* Allow MQTT outbound queue to flush, then hold display per approved strings */
         vTaskDelay(pdMS_TO_TICKS(500));
-        vTaskDelay(pdMS_TO_TICKS(3000));
+        vTaskDelay(pdMS_TO_TICKS(passed ? DISP_HOLD_PASS_MS : DISP_HOLD_FAIL_MS));
         transition(TC_SM_IDLE);
     } else {
         /* Unexpected — could happen if abort raced the selftest completion */
