@@ -579,7 +579,7 @@ static int flash_program_dword(uint32_t addr, uint32_t lo, uint32_t hi)
 
 /* ── swd flash: HTTP download + SWD flash ─────────────────────────────────── */
 
-#define SWD_FLASH_MAX_SIZE (1024 * 1024)  /* 1 MB cap — uses PSRAM when available */
+#define SWD_FLASH_MAX_SIZE (64 * 1024)  /* 64 KB cap — fits internal heap at runtime; G3 DUT fw ~11 KB */
 
 /* dut_fw partition header — 8 bytes at offset 0 of the "dut_fw" data partition.
  * Firmware binary follows immediately after the header. */

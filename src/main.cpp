@@ -3,6 +3,7 @@
 #include "esp_console.h"
 #include "esp_log.h"
 #include "esp_ota_ops.h"
+#include "esp_psram.h"
 #include "version.h"
 
 extern "C" {
@@ -49,6 +50,10 @@ static void ota_rollback_guard(void)
 
 extern "C" void app_main(void)
 {
+    /* Initialize PSRAM (Quad SPI) so heap_caps_malloc(MALLOC_CAP_SPIRAM) works.
+     * CONFIG_SPIRAM_BOOT_HW_INIT is only for OPI PSRAM; Quad mode needs this call. */
+    esp_psram_init();
+
     initialize_nvs();
     ota_rollback_guard();
     tc_sm_init();
