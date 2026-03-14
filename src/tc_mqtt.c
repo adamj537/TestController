@@ -260,7 +260,12 @@ static void handle_dcmd(const char *payload, int len)
     }
 
     if (strcmp(cmd, "start") == 0) {
-        ESP_LOGI(TAG, "DCMD: start");
+        /* Optional firmware_url — if present, flash_dut step runs before Testing */
+        char firmware_url[256] = {};
+        json_get_str(buf, "firmware_url", firmware_url, sizeof(firmware_url));
+        tc_sm_set_firmware_url(firmware_url[0] ? firmware_url : NULL);
+        ESP_LOGI(TAG, "DCMD: start  firmware_url=%s",
+                 firmware_url[0] ? firmware_url : "(none)");
         tc_sm_cmd_start();
         return;
     }

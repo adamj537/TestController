@@ -1,12 +1,36 @@
 #pragma once
 
 #include <stddef.h>
+#include <stdbool.h>
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
 void register_swd_commands(void);
+
+/* Error codes returned by swd_flash_dut_url(), matching PRD-test-execution-system §flash_dut. */
+typedef enum {
+    SWD_FLASH_OK = 0,
+    SWD_FLASH_ERR_DOWNLOAD,     /* HTTP GET failed, timed out, or buffer overflow */
+    SWD_FLASH_ERR_SWD_CONNECT,  /* Could not establish SWD connection (DUT absent/unpowered) */
+    SWD_FLASH_ERR_ERASE,        /* Flash erase failed */
+    SWD_FLASH_ERR_PROGRAM,      /* Flash program failed */
+    SWD_FLASH_ERR_VERIFY,       /* Read-back mismatch after programming */
+    SWD_FLASH_ERR_TIMEOUT,      /* Total operation exceeded timeout_s */
+} swd_flash_err_t;
+
+/* Human-readable string for DDATA error_code field (e.g. "DOWNLOAD_FAIL"). */
+const char *swd_flash_err_str(swd_flash_err_t err);
+
+/* Download firmware from url and program DUT via SWD. Synchronous — blocks
+ * until complete. verify and timeout_s are accepted for API compatibility
+ * (verify read-back not yet implemented; HTTP timeout is fixed at 15 s).
+ * fw_size_out receives bytes programmed, or 0 on failure (may be NULL).
+ * Returns SWD_FLASH_OK on success. */
+swd_flash_err_t swd_flash_dut_url(const char *url, bool verify,
+                                   uint32_t timeout_s, uint32_t *fw_size_out);
 
 /* Connect SWD, read STM32 UID96 (0x1FFF7590), format as 24-char uppercase hex.
  * out must be at least 25 bytes.  Returns length written (24) or 0 on failure.

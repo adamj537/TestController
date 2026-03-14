@@ -32,6 +32,10 @@
  * reliable across 5 consecutive erase+program+readback cycles. */
 static int s_swd_half_us = 0;    /* default: max speed (GPIO-limited) */
 
+/* Tracked across do_swd_flash() invocations for swd_flash_dut_url() API. */
+static swd_flash_err_t s_last_flash_err = SWD_FLASH_OK;
+static uint32_t        s_last_fw_size   = 0;
+
 /* ── HEF4051 mux helpers — PB-A latch control ────────────────────────────── */
 
 /* Assert PB-A via U8 mux throughout the SWD flash operation.
@@ -631,6 +635,8 @@ static int do_swd_flash(int argc, char **argv)
     }
 
     /* ── 1. Acquire firmware binary ── */
+    s_last_flash_err = SWD_FLASH_ERR_DOWNLOAD;   /* phase: download / local load */
+    s_last_fw_size   = 0;
     fw_dl_t dl = { .cap = SWD_FLASH_MAX_SIZE };
     /* Prefer PSRAM to avoid exhausting internal heap on large DUT firmware */
     dl.buf = (uint8_t *)heap_caps_malloc(dl.cap, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
@@ -737,6 +743,7 @@ static int do_swd_flash(int argc, char **argv)
     }
 
     /* ── 3. Connect SWD ── */
+    s_last_flash_err = SWD_FLASH_ERR_SWD_CONNECT;  /* phase: SWD connection + AHB init */
     swclk_init();
     swdio_init();
 
@@ -875,6 +882,7 @@ static int do_swd_flash(int argc, char **argv)
     printf("Flash unlocked\n");
 
     /* ── 6. Erase required pages ── */
+    s_last_flash_err = SWD_FLASH_ERR_ERASE;   /* phase: erase */
     uint32_t fw_len_pad = (dl.len + 7) & ~(uint32_t)7;   /* round up to 8-byte boundary */
     uint32_t pages = (fw_len_pad + STM32L4_PAGE_SIZE - 1) / STM32L4_PAGE_SIZE;
     printf("Erasing %u pages (%u KB) ...\n", (unsigned)pages, (unsigned)(pages * 2));
@@ -889,6 +897,7 @@ static int do_swd_flash(int argc, char **argv)
     printf("Erase done\n");
 
     /* ── 7. Program double-words ── */
+    s_last_flash_err = SWD_FLASH_ERR_PROGRAM;  /* phase: program */
     /* Pad firmware buffer to 8-byte boundary with 0xFF (erased flash value) */
     while (dl.len < fw_len_pad) dl.buf[dl.len++] = 0xFF;
 
@@ -925,10 +934,43 @@ static int do_swd_flash(int argc, char **argv)
     vTaskDelay(pdMS_TO_TICKS(200));
     mux_pba_release();
 
+    s_last_flash_err = SWD_FLASH_OK;
+    s_last_fw_size   = fw_len_pad;
     free(dl.buf);
     printf("[PASS] swd flash complete  %u bytes at 0x%08" PRIX32 "\n",
            (unsigned)fw_len_pad, STM32L4_FLASH_START);
     return 0;
+}
+
+/* ── swd_flash_dut_url — programmatic API for state machine ──────────────── */
+
+const char *swd_flash_err_str(swd_flash_err_t err)
+{
+    switch (err) {
+        case SWD_FLASH_OK:              return "OK";
+        case SWD_FLASH_ERR_DOWNLOAD:    return "DOWNLOAD_FAIL";
+        case SWD_FLASH_ERR_SWD_CONNECT: return "SWD_CONNECT_FAIL";
+        case SWD_FLASH_ERR_ERASE:       return "ERASE_FAIL";
+        case SWD_FLASH_ERR_PROGRAM:     return "PROGRAM_FAIL";
+        case SWD_FLASH_ERR_VERIFY:      return "VERIFY_FAIL";
+        case SWD_FLASH_ERR_TIMEOUT:     return "TIMEOUT";
+        default:                        return "UNKNOWN";
+    }
+}
+
+swd_flash_err_t swd_flash_dut_url(const char *url, bool verify,
+                                   uint32_t timeout_s, uint32_t *fw_size_out)
+{
+    /* verify read-back and timeout_s not yet implemented in do_swd_flash();
+     * accepted here for API completeness per PRD flash_dut spec. */
+    (void)verify;
+    (void)timeout_s;
+
+    char *argv[] = { "swd", (char *)url };
+    do_swd_flash(2, argv);
+
+    if (fw_size_out) *fw_size_out = s_last_fw_size;
+    return s_last_flash_err;
 }
 
 /* ── swd probe command ────────────────────────────────────────────────────── */
