@@ -21,6 +21,7 @@ extern "C" {
 #include "cmd_statemachine.h"
 #include "tc_mqtt.h"
 #include "tc_statemachine.h"
+#include "tc_hmi.h"
 #include "net_console.h"
 }
 
@@ -57,6 +58,7 @@ extern "C" void app_main(void)
     initialize_nvs();
     ota_rollback_guard();
     tc_sm_init();
+    tc_hmi_init();    /* GPIO + LCD setup before MQTT/WiFi tasks start */
     tc_mqtt_init();
 
     ESP_LOGI(TAG, "G3 TC bringup shell  fw=%s", FW_VERSION_FULL);
@@ -91,6 +93,9 @@ extern "C" void app_main(void)
     /* MQTT client — deferred until WiFi has an IP (registers GOT_IP handler).
      * No-op if broker URL not yet configured in NVS. */
     tc_mqtt_start();
+
+    /* HMI task — starts after MQTT is running so button publishes can be delivered */
+    tc_hmi_start();
 
     /* Configure INA219s at boot so current readings are valid immediately
      * without requiring a selftest run first. */

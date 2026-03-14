@@ -235,6 +235,21 @@ bool i2c_reinit(int sda, int scl)
     return true;
 }
 
+bool i2c_write_raw(uint8_t addr, const uint8_t *buf, int len)
+{
+    if (s_bus == NULL || !buf || len <= 0) return false;
+    i2c_device_config_t dev_cfg = {
+        .dev_addr_length = I2C_ADDR_BIT_LEN_7,
+        .device_address  = addr,
+        .scl_speed_hz    = (uint32_t)s_speed,
+    };
+    i2c_master_dev_handle_t dev;
+    if (i2c_master_bus_add_device(s_bus, &dev_cfg, &dev) != ESP_OK) return false;
+    esp_err_t err = i2c_master_transmit(dev, buf, (size_t)len, 200);
+    i2c_master_bus_rm_device(dev);
+    return err == ESP_OK;
+}
+
 bool i2c_write_reg(uint8_t addr, uint8_t reg, uint8_t val)
 {
     if (s_bus == NULL) return false;

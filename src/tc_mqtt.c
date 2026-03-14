@@ -320,6 +320,34 @@ do_rebirth:
     publish_nbirth();
 }
 
+/* ── HMI button dispatch ─────────────────────────────────────────────────── */
+
+static void handle_hmi_button(const char *payload, int len)
+{
+    char buf[64];
+    int copy = len < (int)(sizeof(buf) - 1) ? len : (int)(sizeof(buf) - 1);
+    memcpy(buf, payload, copy);
+    buf[copy] = '\0';
+
+    char button[16] = {};
+    if (!json_get_str(buf, "button", button, sizeof(button))) {
+        ESP_LOGW(TAG, "hmi/button: missing 'button' field — %s", buf);
+        return;
+    }
+
+    ESP_LOGI(TAG, "hmi/button: %s", button);
+
+    if (strcmp(button, "start") == 0) {
+        tc_sm_cmd_start();
+    } else if (strcmp(button, "abort") == 0) {
+        tc_sm_cmd_abort();
+    } else if (strcmp(button, "estop") == 0) {
+        tc_sm_cmd_estop();
+    } else {
+        ESP_LOGW(TAG, "hmi/button: unknown button '%s'", button);
+    }
+}
+
 /* ── MQTT event handler ───────────────────────────────────────────────────── */
 
 static void mqtt_event_handler(void *arg, esp_event_base_t base,
@@ -340,18 +368,30 @@ static void mqtt_event_handler(void *arg, esp_event_base_t base,
                      "spBv1.0/SensitMfg/DCMD/%s/CH%u", s_serial, (unsigned)s_channel);
             int sub = esp_mqtt_client_subscribe(s_client, dcmd_topic, 1);
             ESP_LOGI(TAG, "DCMD subscribe → %s  msg_id=%d", dcmd_topic, sub);
+
+            /* Subscribe to local HMI button topic (plain MQTT, not Sparkplug) */
+            char hmi_btn_topic[TOPIC_LEN];
+            snprintf(hmi_btn_topic, sizeof(hmi_btn_topic),
+                     "fixture/%s/hmi/button", s_serial);
+            int hmi_sub = esp_mqtt_client_subscribe(s_client, hmi_btn_topic, 0);
+            ESP_LOGI(TAG, "HMI subscribe → %s  msg_id=%d", hmi_btn_topic, hmi_sub);
+
+            tc_sm_set_broker_connected(true);
             break;
         }
         case MQTT_EVENT_DISCONNECTED:
             s_connected = false;
+            tc_sm_set_broker_connected(false);
             ESP_LOGI(TAG, "disconnected");
             break;
         case MQTT_EVENT_DATA:
             if (event->data && event->data_len > 0) {
-                /* Only handle DCMD topics */
-                if (event->topic_len > 0 &&
-                    memmem(event->topic, event->topic_len, "/DCMD/", 6)) {
-                    handle_dcmd(event->data, event->data_len);
+                if (event->topic_len > 0) {
+                    if (memmem(event->topic, event->topic_len, "/DCMD/", 6)) {
+                        handle_dcmd(event->data, event->data_len);
+                    } else if (memmem(event->topic, event->topic_len, "/hmi/button", 11)) {
+                        handle_hmi_button(event->data, event->data_len);
+                    }
                 }
             }
             break;
@@ -658,4 +698,35 @@ void tc_mqtt_publish_result(const char *outcome,
             ESP_LOGW(TAG, "result DDATA publish failed  rc=%d", rc);
         }
     }
+}
+
+/* ── HMI MQTT (plain topics, local fixture bus only) ─────────────────────── */
+
+void tc_mqtt_publish_hmi_button(const char *button)
+{
+    if (!s_client || !s_connected || !button) return;
+
+    char topic[TOPIC_LEN];
+    snprintf(topic, sizeof(topic), "fixture/%s/hmi/button", s_serial);
+
+    char payload[64];
+    int n = snprintf(payload, sizeof(payload), "{\"button\":\"%s\"}", button);
+
+    int rc = esp_mqtt_client_publish(s_client, topic, payload, n, 0, false);
+    ESP_LOGI(TAG, "hmi/button → %s  button=%s  msg_id=%d", topic, button, rc);
+}
+
+void tc_mqtt_publish_hmi_selftest(const char *result)
+{
+    if (!s_client || !result) return;
+
+    char topic[TOPIC_LEN];
+    snprintf(topic, sizeof(topic), "fixture/%s/hmi/selftest", s_serial);
+
+    char payload[64];
+    int n = snprintf(payload, sizeof(payload), "{\"result\":\"%s\"}", result);
+
+    /* QoS 1 — selftest result should be delivered even if broker is catching up */
+    esp_mqtt_client_publish(s_client, topic, payload, n, 1, false);
+    ESP_LOGI(TAG, "hmi/selftest → %s  result=%s", topic, result);
 }

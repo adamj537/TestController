@@ -66,3 +66,13 @@ void tc_mqtt_publish_result(const char *outcome,
 void tc_mqtt_publish_selftest(const char *mode,
                                const tc_mqtt_check_t *checks,
                                int n_checks);
+
+/* ── HMI MQTT (plain topics, local fixture bus only) ─────────────────────── */
+
+/* Publish fixture/{serial}/hmi/button — called by HMI task on button press.
+ * button: "start" or "abort" */
+void tc_mqtt_publish_hmi_button(const char *button);
+
+/* Publish fixture/{serial}/hmi/selftest result — called during HMI startup.
+ * result: "PASS", "TIMEOUT", or "FAIL" */
+void tc_mqtt_publish_hmi_selftest(const char *result);

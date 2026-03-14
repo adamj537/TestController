@@ -1,5 +1,6 @@
 #include "tc_statemachine.h"
 #include "tc_mqtt.h"
+#include "tc_hmi.h"
 #include "cmd_selftest.h"
 #include "cmd_swd.h"
 #include "display_strings.h"
@@ -19,6 +20,7 @@ static const char *TAG = "tc_sm";
 static tc_sm_state_t s_state     = TC_SM_IDLE;
 static uint64_t      s_start_us  = 0;   /* time when start() was called */
 static bool          s_sm_owned  = false; /* true when SM spawned the running selftest */
+static bool          s_no_broker = false; /* connectivity overlay — overrides display */
 
 /* DUT serial captured during identify step */
 static char s_dut_serial_full[64];
@@ -27,17 +29,92 @@ static char s_dut_serial_ref[10];   /* XXXX-XXXX */
 /* Firmware URL for flash_dut step; empty string disables the step. */
 static char s_firmware_url[256];
 
-static const char *const s_state_names[] = {
-    "Idle", "Precheck", "FlashDut", "Testing", "Pass", "Fail"
+static const char *const s_state_names[TC_SM_STATE_COUNT] = {
+    "Idle", "Precheck", "FlashDut", "Testing", "Pass", "Fail",
+    "FlashFail", "SelftestFail", "Aborted", "EStop"
 };
 
 /* ── Internal helpers ─────────────────────────────────────────────────────── */
+
+/* Map SM state to HMI display + LED state and drive the local display.
+ * NO_BROKER overlay takes priority — shown regardless of SM state.
+ * Callers that need dynamic line 2 (e.g. DUT ref) call tc_hmi_on_status()
+ * directly after transition() to overwrite it. */
+static void publish_hmi_for_state(tc_sm_state_t state)
+{
+    /* NO_BROKER connectivity overlay */
+    if (s_no_broker) {
+        tc_hmi_on_status(DISP_L1_NO_BROKER, DISP_L2_NO_BROKER,
+                         false, false, true, false);  /* green slow blink */
+        return;
+    }
+
+    const char *l1          = "";
+    const char *l2          = DISP_L2_BLANK;
+    bool        green       = false;
+    bool        red         = false;
+    bool        green_blink = false;
+    bool        red_blink   = false;
+
+    switch (state) {
+        case TC_SM_IDLE:
+            l1 = DISP_L1_IDLE;
+            l2 = tc_mqtt_connected() ? DISP_L2_IDLE_CONN : DISP_L2_IDLE_SOLO;
+            green = true;
+            break;
+        case TC_SM_PRECHECK:
+            l1 = DISP_L1_PRECHECK;
+            green_blink = true;
+            break;
+        case TC_SM_FLASH_DUT:
+            l1 = DISP_L1_FLASH_DUT;
+            green_blink = true;
+            break;
+        case TC_SM_TESTING:
+            l1 = DISP_L1_TESTING;
+            green_blink = true;
+            break;
+        case TC_SM_PASS:
+            l1 = DISP_L1_PASS;
+            green = true;
+            break;
+        case TC_SM_FAIL:
+            l1 = DISP_L1_FAIL;
+            red = true;
+            break;
+        case TC_SM_FLASH_FAIL:
+            l1 = DISP_L1_FLASH_FAIL;
+            l2 = DISP_L2_FLASH_FAIL;
+            red_blink = true;
+            break;
+        case TC_SM_SELFTEST_FAIL:
+            l1 = DISP_L1_SELFTEST_FAIL;
+            l2 = DISP_L2_SELFTEST_FAIL;
+            red_blink = true;
+            break;
+        case TC_SM_ABORTED:
+            l1 = DISP_L1_ABORTED;
+            l2 = DISP_L2_ABORTED;
+            red = true;
+            break;
+        case TC_SM_E_STOP:
+            l1 = DISP_L1_ESTOP;
+            l2 = DISP_L2_ESTOP;
+            red = true;
+            break;
+        default:
+            break;
+    }
+
+    tc_hmi_on_status(l1, l2, green, red, green_blink, red_blink);
+}
 
 static void transition(tc_sm_state_t next)
 {
     ESP_LOGI(TAG, "%s → %s", s_state_names[s_state], s_state_names[next]);
     s_state = next;
     tc_mqtt_publish_state(s_state_names[next]);
+    publish_hmi_for_state(next);
 }
 
 static uint32_t elapsed_ms(void)
@@ -132,13 +209,18 @@ tc_sm_state_t tc_sm_state(void)
 
 const char *tc_sm_state_str(void)
 {
+    if (s_state >= TC_SM_STATE_COUNT) return "Unknown";
     return s_state_names[s_state];
 }
 
 void tc_sm_cmd_start(void)
 {
-    if (s_state != TC_SM_IDLE) {
-        ESP_LOGW(TAG, "start ignored — already in state=%s", s_state_names[s_state]);
+    /* Valid from IDLE, ABORTED, FLASH_FAIL, SELFTEST_FAIL */
+    if (s_state != TC_SM_IDLE       &&
+        s_state != TC_SM_ABORTED    &&
+        s_state != TC_SM_FLASH_FAIL &&
+        s_state != TC_SM_SELFTEST_FAIL) {
+        ESP_LOGW(TAG, "start ignored — state=%s", s_state_names[s_state]);
         return;
     }
 
@@ -148,23 +230,80 @@ void tc_sm_cmd_start(void)
     s_dut_serial_ref[0]  = '\0';
 
     transition(TC_SM_PRECHECK);
-    /* Quick selftest as precheck — rail voltages + WiFi */
     selftest_run_sm("quick");
 }
 
 void tc_sm_cmd_abort(void)
 {
-    if (s_state == TC_SM_IDLE) return;
+    if (s_state == TC_SM_IDLE || s_state == TC_SM_ABORTED) return;
+
+    /* From E_STOP: abort clears the E-STOP and returns to IDLE */
+    if (s_state == TC_SM_E_STOP) {
+        ESP_LOGI(TAG, "E-STOP cleared via abort");
+        s_sm_owned = false;
+        transition(TC_SM_IDLE);
+        return;
+    }
 
     ESP_LOGW(TAG, "abort from state=%s", s_state_names[s_state]);
     s_sm_owned = false;
 
     uint32_t ms = elapsed_ms();
-    transition(TC_SM_IDLE);
+    transition(TC_SM_ABORTED);
     tc_mqtt_publish_result("aborted", NULL, ms,
                            s_dut_serial_full[0] ? s_dut_serial_full : NULL,
                            s_dut_serial_ref[0]  ? s_dut_serial_ref  : NULL,
                            NULL, NULL);
+}
+
+void tc_sm_cmd_estop(void)
+{
+    if (s_state == TC_SM_E_STOP) return;
+
+    ESP_LOGE(TAG, "E-STOP raised from state=%s", s_state_names[s_state]);
+    s_sm_owned = false;
+
+    uint32_t ms = elapsed_ms();
+    transition(TC_SM_E_STOP);
+    tc_mqtt_publish_result("estop", NULL, ms,
+                           s_dut_serial_full[0] ? s_dut_serial_full : NULL,
+                           s_dut_serial_ref[0]  ? s_dut_serial_ref  : NULL,
+                           NULL, NULL);
+}
+
+void tc_sm_set_broker_connected(bool connected)
+{
+    if (s_no_broker == !connected) return;   /* no change */
+    s_no_broker = !connected;
+    /* Re-publish HMI for current state (overlay applies/clears) */
+    publish_hmi_for_state(s_state);
+    ESP_LOGI(TAG, "broker %s — HMI display updated", connected ? "connected" : "disconnected");
+}
+
+void tc_sm_selftest_fail_at_boot(void)
+{
+    ESP_LOGE(TAG, "fixture selftest failed at boot — entering SelftestFail");
+    transition(TC_SM_SELFTEST_FAIL);
+}
+
+void tc_sm_flash_dut_done(bool success)
+{
+    if (s_state != TC_SM_FLASH_DUT) {
+        ESP_LOGW(TAG, "flash_dut_done in unexpected state=%s", s_state_names[s_state]);
+        return;
+    }
+
+    if (success) {
+        transition(TC_SM_TESTING);
+        selftest_run_sm("fixture");
+    } else {
+        s_sm_owned = false;
+        transition(TC_SM_FLASH_FAIL);
+        tc_mqtt_publish_result("fail", "dut_flash", elapsed_ms(),
+                               s_dut_serial_full[0] ? s_dut_serial_full : NULL,
+                               s_dut_serial_ref[0]  ? s_dut_serial_ref  : NULL,
+                               NULL, NULL);
+    }
 }
 
 /* ── Called by selftest task ──────────────────────────────────────────────── *
