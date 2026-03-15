@@ -176,7 +176,7 @@ static void publish_nbirth(void)
         "\"Properties/RecipeId\":\"none\","
         "\"Properties/CalProfileVersion\":\"none\","
         "\"Properties/CalExpiry\":\"none\","
-        "\"State\":\"Idle\","
+        "\"State\":\"%s\","
         "\"Diagnostics/WiFiRSSI\":%ld,"
         "\"Diagnostics/FreeHeap\":%lu,"
         "\"Diagnostics/DroppedMessages\":0"
@@ -188,6 +188,7 @@ static void publish_nbirth(void)
         mac_str,
         serial_ref,
         (unsigned)s_channel,
+        tc_sm_state_str(),
         (long)rssi,
         (unsigned long)esp_get_free_heap_size());
 
@@ -201,6 +202,43 @@ static void publish_nbirth(void)
     /* Increment bdSeq for next session; persist */
     s_bd_seq++;
     nvs_save();
+}
+
+/* ── Alert DDATA helper ───────────────────────────────────────────────────── */
+
+static void publish_alert_ddata(const char *severity, const char *message)
+{
+    if (!s_connected || !s_client) return;
+
+    char ts[32];
+    get_iso8601(ts, sizeof(ts));
+
+    char payload[384];
+    int n = snprintf(payload, sizeof(payload),
+        "{"
+        "\"type\":\"alert\","
+        "\"seq\":%u,"
+        "\"timestamp\":\"%s\","
+        "\"fixture_serial\":\"%s\","
+        "\"channel\":%u,"
+        "\"severity\":\"%s\","
+        "\"message\":\"%s\","
+        "\"step_id\":null"
+        "}",
+        (unsigned)s_seq, ts, s_serial, (unsigned)s_channel,
+        severity, message);
+
+    if (n > 0 && n < (int)sizeof(payload)) {
+        char topic[TOPIC_LEN];
+        make_topic(topic, sizeof(topic), "DDATA");
+        /* QoS 0 for warning, QoS 1 for error (mqtt-contract.md R3.x) */
+        int qos = (strcmp(severity, "error") == 0) ? 1 : 0;
+        int rc = esp_mqtt_client_publish(s_client, topic, payload, n, qos, false);
+        if (rc >= 0) {
+            s_seq++;
+            ESP_LOGI(TAG, "alert DDATA → %s  severity=%s", topic, severity);
+        }
+    }
 }
 
 /* ── DCMD dispatch ────────────────────────────────────────────────────────── */
@@ -312,6 +350,11 @@ static void handle_dcmd(const char *payload, int len)
     }
 
     ESP_LOGW(TAG, "DCMD: unknown cmd '%s'", cmd);
+    {
+        char alert_msg[64];
+        snprintf(alert_msg, sizeof(alert_msg), "DCMD: unknown cmd '%s'", cmd);
+        publish_alert_ddata("warning", alert_msg);
+    }
     return;
 
 do_rebirth:
