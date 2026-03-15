@@ -333,15 +333,20 @@ static void handle_dcmd(const char *payload, int len)
 
     if (strcmp(cmd, "ota") == 0) {
         char url[256]    = {};
-        char target[32]  = {};  /* "tc_firmware" (default) or "dut_firmware" */
+        char fw_target[32]  = {};  /* "tc_firmware" | "dut_pfw" | "dut_prod" | legacy "dut_firmware" */
         if (!json_get_str(buf, "url", url, sizeof(url))) {
             ESP_LOGW(TAG, "DCMD: ota — missing 'url' field");
             return;
         }
-        json_get_str(buf, "target", target, sizeof(target));
-        if (strcmp(target, "dut_firmware") == 0) {
-            ESP_LOGI(TAG, "DCMD: ota  target=dut_firmware  url=%s", url);
-            dut_fw_store_from_url(url);
+        json_get_str(buf, "target", fw_target, sizeof(fw_target));
+        if (strcmp(fw_target, "dut_prod") == 0) {
+            ESP_LOGI(TAG, "DCMD: ota  target=dut_prod  url=%s", url);
+            dut_fw_store_from_url(url, SWD_FW_TARGET_PROD);
+        } else if (strcmp(fw_target, "dut_pfw")      == 0 ||
+                   strcmp(fw_target, "dut_firmware") == 0) {
+            /* "dut_firmware" is the legacy target name — treat as pfw */
+            ESP_LOGI(TAG, "DCMD: ota  target=dut_pfw  url=%s", url);
+            dut_fw_store_from_url(url, SWD_FW_TARGET_PFW);
         } else {
             ESP_LOGI(TAG, "DCMD: ota  target=tc_firmware  url=%s", url);
             ota_start_from_url(url);

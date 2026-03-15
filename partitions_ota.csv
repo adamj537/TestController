@@ -2,6 +2,10 @@
 # Board: Freenove ESP32-S3 WROOM N16R8 (16 MB flash)
 # factory = initial/fallback slot (flashed via USB)
 # ota_0 / ota_1 = OTA alternating slots (2 MB each, ~6x current firmware size)
+# dut_fw  = PFW (test-mode firmware with UART command handler)
+# prod_fw = agency-approved production firmware (programmed after tests pass)
+#           Both slots use dut_fw_hdr_t format {magic, size, version[16], _pad[8]}
+# Flash used: 8.125 MB of 16 MB. 7.875 MB remaining.
 #
 # Name,   Type, SubType,  Offset,   Size,  Flags
 nvs,      data, nvs,      0x9000,   0x6000,
@@ -11,3 +15,4 @@ factory,  app,  factory,  0x20000,  2M,
 ota_0,    app,  ota_0,    0x220000, 2M,
 ota_1,    app,  ota_1,    0x420000, 2M,
 dut_fw,   data, 0xff,     0x620000, 1M,
+prod_fw,  data, 0xff,     0x720000, 1M,

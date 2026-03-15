@@ -179,7 +179,8 @@ static void flash_dut_task(void *pvarg)
 {
     flash_dut_task_arg_t *arg = (flash_dut_task_arg_t *)pvarg;
     uint32_t fw_size = 0;
-    swd_flash_err_t err = swd_flash_dut_url(arg->url, arg->verify, arg->timeout_s, &fw_size);
+    swd_flash_err_t err = swd_flash_dut_url(arg->url, arg->verify, arg->timeout_s, &fw_size,
+                                             SWD_FW_TARGET_PFW);
     bool ok = (err == SWD_FLASH_OK);
     const char *err_str = swd_flash_err_str(err);
     free(arg);

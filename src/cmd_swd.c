@@ -583,14 +583,17 @@ static int flash_program_dword(uint32_t addr, uint32_t lo, uint32_t hi)
 
 /* ── swd flash: HTTP download + SWD flash ─────────────────────────────────── */
 
-#define SWD_FLASH_MAX_SIZE (64 * 1024)  /* 64 KB cap — fits internal heap at runtime; G3 DUT fw ~11 KB */
+#define SWD_FLASH_MAX_SIZE (1024 * 1024)  /* 1 MB — matches dut_fw partition; allocated from PSRAM */
 
-/* dut_fw partition header — 8 bytes at offset 0 of the "dut_fw" data partition.
- * Firmware binary follows immediately after the header. */
+/* dut_fw / prod_fw partition header — 32 bytes at offset 0.
+ * Firmware binary follows immediately after the header.
+ * Same format used for both dut_fw (PFW) and prod_fw partitions. */
 #define DUT_FW_PART_MAGIC  0xD07F0001UL
 typedef struct {
-    uint32_t magic;   /* DUT_FW_PART_MAGIC */
-    uint32_t size;    /* firmware size in bytes */
+    uint32_t magic;        /* DUT_FW_PART_MAGIC */
+    uint32_t size;         /* firmware size in bytes */
+    char     version[16];  /* null-terminated semver string, e.g. "v1.2.0" */
+    uint8_t  _pad[8];      /* reserved — pad to 32 bytes */
 } dut_fw_hdr_t;
 
 typedef struct {
@@ -626,13 +629,19 @@ static int do_swd_flash(int argc, char **argv)
         return 1;
     }
 
-    bool is_local   = (strcmp(argv[1], "local") == 0);
-    bool nopwrcycle = false;
-    bool store      = false;
+    bool is_local    = (strcmp(argv[1], "local") == 0);
+    bool nopwrcycle  = false;
+    bool store       = false;
+    bool target_prod = false;
     for (int i = 2; i < argc; i++) {
         if (strcmp(argv[i], "nopwrcycle") == 0) nopwrcycle = true;
         if (strcmp(argv[i], "--store")    == 0) store = true;
+        if (strcmp(argv[i], "--target") == 0 && i + 1 < argc) {
+            target_prod = (strcmp(argv[i + 1], "prod") == 0);
+            i++;
+        }
     }
+    const char *part_name = target_prod ? "prod_fw" : "dut_fw";
 
     /* ── 1. Acquire firmware binary ── */
     s_last_flash_err = SWD_FLASH_ERR_DOWNLOAD;   /* phase: download / local load */
@@ -648,21 +657,22 @@ static int do_swd_flash(int argc, char **argv)
     if (is_local) {
         /* Load from dut_fw partition */
         const esp_partition_t *part = esp_partition_find_first(
-                ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "dut_fw");
+                ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, part_name);
         if (!part) {
-            printf("dut_fw partition not found\n");
+            printf("%s partition not found\n", part_name);
             free(dl.buf); return 1;
         }
         dut_fw_hdr_t hdr;
         esp_err_t err = esp_partition_read(part, 0, &hdr, sizeof(hdr));
         if (err != ESP_OK || hdr.magic != DUT_FW_PART_MAGIC) {
-            printf("dut_fw partition invalid (magic=0x%08" PRIX32 ", err=%s)\n"
-                   "  Flash DUT from URL with --store first.\n",
-                   hdr.magic, esp_err_to_name(err));
+            printf("%s partition invalid (magic=0x%08" PRIX32 ", err=%s)\n"
+                   "  Flash DUT from URL with --store --target %s first.\n",
+                   part_name, hdr.magic, esp_err_to_name(err),
+                   target_prod ? "prod" : "pfw");
             free(dl.buf); return 1;
         }
         if (hdr.size == 0 || hdr.size > SWD_FLASH_MAX_SIZE) {
-            printf("dut_fw partition size invalid (%u bytes)\n", (unsigned)hdr.size);
+            printf("%s partition size invalid (%u bytes)\n", part_name, (unsigned)hdr.size);
             free(dl.buf); return 1;
         }
         err = esp_partition_read(part, sizeof(hdr), dl.buf, hdr.size);
@@ -698,23 +708,23 @@ static int do_swd_flash(int argc, char **argv)
         printf("Downloaded %u bytes (HTTP %d)\n", (unsigned)dl.len, http_status);
 
         if (store) {
-            const esp_partition_t *part = esp_partition_find_first(
-                    ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "dut_fw");
-            if (!part) {
-                printf("[WARN] dut_fw partition not found — skipping store\n");
+            const esp_partition_t *spart = esp_partition_find_first(
+                    ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, part_name);
+            if (!spart) {
+                printf("[WARN] %s partition not found — skipping store\n", part_name);
             } else {
                 /* Header + firmware must fit; erase in 4 KB sectors */
                 size_t erase_size = sizeof(dut_fw_hdr_t) + dl.len;
                 erase_size = (erase_size + 0xFFF) & ~0xFFF; /* round up to 4 KB */
-                esp_err_t e = esp_partition_erase_range(part, 0, erase_size);
+                esp_err_t e = esp_partition_erase_range(spart, 0, erase_size);
                 dut_fw_hdr_t hdr = { .magic = DUT_FW_PART_MAGIC,
                                      .size  = (uint32_t)dl.len };
-                if (e == ESP_OK) e = esp_partition_write(part, 0, &hdr, sizeof(hdr));
-                if (e == ESP_OK) e = esp_partition_write(part, sizeof(hdr), dl.buf, dl.len);
+                if (e == ESP_OK) e = esp_partition_write(spart, 0, &hdr, sizeof(hdr));
+                if (e == ESP_OK) e = esp_partition_write(spart, sizeof(hdr), dl.buf, dl.len);
                 if (e == ESP_OK) {
-                    printf("Stored %u bytes to dut_fw partition\n", (unsigned)dl.len);
+                    printf("Stored %u bytes to %s partition\n", (unsigned)dl.len, part_name);
                 } else {
-                    printf("[WARN] dut_fw store failed: %s\n", esp_err_to_name(e));
+                    printf("[WARN] %s store failed: %s\n", part_name, esp_err_to_name(e));
                 }
             }
         }
@@ -887,10 +897,15 @@ static int do_swd_flash(int argc, char **argv)
     uint32_t pages = (fw_len_pad + STM32L4_PAGE_SIZE - 1) / STM32L4_PAGE_SIZE;
     printf("Erasing %u pages (%u KB) ...\n", (unsigned)pages, (unsigned)(pages * 2));
 
-    /* All pages within Bank 1 (up to page 255, addresses 0x08000000–0x080FFFFF) */
+    /* STM32L476: Bank 1 = pages 0–255 (0x08000000–0x080FFFFF, 512 KB)
+     *            Bank 2 = pages 0–255 (0x08100000–0x081FFFFF, 512 KB)
+     * Images ≤ 512 KB stay in Bank 1.  Images > 512 KB spill into Bank 2. */
     for (uint32_t p = 0; p < pages; p++) {
-        if (flash_erase_page(p, false) != 0) {
-            printf("Erase page %u failed\n", (unsigned)p);
+        bool     bank2     = (p >= 256);
+        uint32_t bank_page = bank2 ? (p - 256) : p;
+        if (flash_erase_page(bank_page, bank2) != 0) {
+            printf("Erase page %u (bank%u pg%u) failed\n",
+                   (unsigned)p, bank2 ? 2u : 1u, (unsigned)bank_page);
             flash_lock(); free(dl.buf); return 1;
         }
     }
@@ -959,15 +974,31 @@ const char *swd_flash_err_str(swd_flash_err_t err)
 }
 
 swd_flash_err_t swd_flash_dut_url(const char *url, bool verify,
-                                   uint32_t timeout_s, uint32_t *fw_size_out)
+                                   uint32_t timeout_s, uint32_t *fw_size_out,
+                                   swd_fw_target_t target)
 {
     /* verify read-back and timeout_s not yet implemented in do_swd_flash();
      * accepted here for API completeness per PRD flash_dut spec. */
     (void)verify;
     (void)timeout_s;
 
-    char *argv[] = { "swd", (char *)url };
-    do_swd_flash(2, argv);
+    const char *target_str = (target == SWD_FW_TARGET_PROD) ? "prod" : "pfw";
+    char *argv[] = { "swd", (char *)url, "--target", (char *)target_str };
+    do_swd_flash(4, argv);
+
+    if (fw_size_out) *fw_size_out = s_last_fw_size;
+    return s_last_flash_err;
+}
+
+swd_flash_err_t swd_flash_dut_local(bool verify, uint32_t timeout_s,
+                                     uint32_t *fw_size_out, swd_fw_target_t target)
+{
+    (void)verify;
+    (void)timeout_s;
+
+    const char *target_str = (target == SWD_FW_TARGET_PROD) ? "prod" : "pfw";
+    char *argv[] = { "swd", "local", "--target", (char *)target_str };
+    do_swd_flash(4, argv);
 
     if (fw_size_out) *fw_size_out = s_last_fw_size;
     return s_last_flash_err;
@@ -1641,12 +1672,19 @@ static int do_swd(int argc, char **argv)
 
 /* ── DCMD-triggered DUT firmware store ────────────────────────────────────── */
 
+typedef struct {
+    const char *part_name;  /* literal string — no alloc needed */
+    char        url[];      /* flexible array — url bytes follow the struct */
+} dut_fw_store_arg_t;
+
 static void dut_fw_store_task(void *arg)
 {
-    char *url = (char *)arg;
+    dut_fw_store_arg_t *a = (dut_fw_store_arg_t *)arg;
+    const char *part_name = a->part_name;
+    const char *url       = a->url;
 
-    ESP_LOGI("swd", "DUT FW store: downloading %s", url);
-    printf("DUT FW store: downloading %s\n", url);
+    ESP_LOGI("swd", "DUT FW store [%s]: downloading %s", part_name, url);
+    printf("DUT FW store [%s]: downloading %s\n", part_name, url);
 
     fw_dl_t dl = { .cap = SWD_FLASH_MAX_SIZE };
     dl.buf = (uint8_t *)heap_caps_malloc(dl.cap, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
@@ -1669,20 +1707,20 @@ static void dut_fw_store_task(void *arg)
     esp_err_t err = esp_http_client_perform(client);
     int http_status = esp_http_client_get_status_code(client);
     esp_http_client_cleanup(client);
-    free(url);
+    free(a);   /* url pointer is now invalid — used before free above */
 
     if (err != ESP_OK || dl.overflow || dl.len == 0 || http_status != 200) {
-        ESP_LOGE("swd", "DUT FW store: download failed %s HTTP %d",
-                 esp_err_to_name(err), http_status);
+        ESP_LOGE("swd", "DUT FW store [%s]: download failed %s HTTP %d",
+                 part_name, esp_err_to_name(err), http_status);
         free(dl.buf);
         vTaskDelete(NULL);
         return;
     }
 
     const esp_partition_t *part = esp_partition_find_first(
-            ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, "dut_fw");
+            ESP_PARTITION_TYPE_DATA, ESP_PARTITION_SUBTYPE_ANY, part_name);
     if (!part) {
-        ESP_LOGE("swd", "DUT FW store: dut_fw partition not found");
+        ESP_LOGE("swd", "DUT FW store: %s partition not found", part_name);
         free(dl.buf);
         vTaskDelete(NULL);
         return;
@@ -1697,24 +1735,27 @@ static void dut_fw_store_task(void *arg)
     free(dl.buf);
 
     if (e == ESP_OK) {
-        ESP_LOGI("swd", "DUT FW store: saved %u bytes to dut_fw partition",
-                 (unsigned)dl.len);
-        printf("DUT FW store: OK  %u bytes\n", (unsigned)dl.len);
+        ESP_LOGI("swd", "DUT FW store: saved %u bytes to %s partition",
+                 (unsigned)dl.len, part_name);
+        printf("DUT FW store: OK  %u bytes → %s\n", (unsigned)dl.len, part_name);
     } else {
-        ESP_LOGE("swd", "DUT FW store: write failed: %s", esp_err_to_name(e));
+        ESP_LOGE("swd", "DUT FW store [%s]: write failed: %s", part_name, esp_err_to_name(e));
         printf("DUT FW store: FAILED %s\n", esp_err_to_name(e));
     }
     vTaskDelete(NULL);
 }
 
-void dut_fw_store_from_url(const char *url)
+void dut_fw_store_from_url(const char *url, swd_fw_target_t target)
 {
-    char *url_copy = strdup(url);
-    if (!url_copy) {
+    size_t url_len = strlen(url) + 1;
+    dut_fw_store_arg_t *a = malloc(sizeof(dut_fw_store_arg_t) + url_len);
+    if (!a) {
         ESP_LOGE("swd", "dut_fw_store_from_url: alloc failed");
         return;
     }
-    xTaskCreate(dut_fw_store_task, "dut_fw_store", 8192, url_copy, 5, NULL);
+    a->part_name = (target == SWD_FW_TARGET_PROD) ? "prod_fw" : "dut_fw";
+    memcpy(a->url, url, url_len);
+    xTaskCreate(dut_fw_store_task, "dut_fw_store", 8192, a, 5, NULL);
 }
 
 void register_swd_commands(void)
