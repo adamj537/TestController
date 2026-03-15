@@ -42,11 +42,11 @@
     "arduino",
     "espidf"
   ],
-  "name": "Freenove ESP32-S3 WROOM N16R8 (16MB Flash / 8MB PSRAM)",
+  "name": "Freenove ESP32-S3 WROOM N8R8 (8MB Flash / 8MB PSRAM, qio_opi)",
   "upload": {
-    "flash_size": "16MB",
+    "flash_size": "8MB",
     "maximum_ram_size": 327680,
-    "maximum_size": 16777216,
+    "maximum_size": 8388608,
     "require_upload_port": true,
     "speed": 921600
   },

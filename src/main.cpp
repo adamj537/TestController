@@ -3,7 +3,10 @@
 #include "esp_console.h"
 #include "esp_log.h"
 #include "esp_ota_ops.h"
+#ifdef CONFIG_SPIRAM
 #include "esp_psram.h"
+#include "esp_private/esp_psram_extram.h"
+#endif
 #include "version.h"
 
 extern "C" {
@@ -51,9 +54,26 @@ static void ota_rollback_guard(void)
 
 extern "C" void app_main(void)
 {
-    /* Initialize PSRAM (Quad SPI) so heap_caps_malloc(MALLOC_CAP_SPIRAM) works.
-     * CONFIG_SPIRAM_BOOT_HW_INIT is only for OPI PSRAM; Quad mode needs this call. */
-    esp_psram_init();
+#ifdef CONFIG_SPIRAM
+    {
+        esp_err_t psram_err = esp_psram_init();
+        if (psram_err != ESP_OK) {
+            ESP_LOGE(TAG, "esp_psram_init failed: %s", esp_err_to_name(psram_err));
+        } else {
+            /* Register PSRAM with the heap caps allocator (not done automatically
+             * unless CONFIG_SPIRAM_BOOT_HW_INIT is set, which requires bootloader
+             * PSRAM init and causes WDT crashes on this hardware configuration). */
+            esp_err_t heap_err = esp_psram_extram_add_to_heap_allocator();
+            if (heap_err != ESP_OK) {
+                ESP_LOGE(TAG, "PSRAM heap reg failed: %s", esp_err_to_name(heap_err));
+            } else {
+                ESP_LOGI(TAG, "PSRAM heap OK, total=%uKB free_spiram=%uKB",
+                         (unsigned)(esp_psram_get_size() / 1024),
+                         (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024));
+            }
+        }
+    }
+#endif
 
     initialize_nvs();
     ota_rollback_guard();

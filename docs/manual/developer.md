@@ -273,15 +273,11 @@ Instead, `esp_psram_init()` and `esp_psram_extram_add_to_heap_allocator()` are
 called from `app_main()`.  After init, ~8 MB of PSRAM is available via
 `heap_caps_malloc(MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT)`.
 
-!!! warning "HW-010: PSRAM mode must be Quad, not Octal"
-    The APS6408L supports both Quad and Octal modes, but **Octal mode reserves
-    GPIOs 33–37** for MSPI data lines (SPIIO4–7 + SPIDQS).  GPIO 37 is used by
-    the TCC for SWD SWCLK.  Running in Octal mode causes PSRAM read corruption
-    when SWD operates, dropping the WiFi/MQTT connection (NDEATH).
-
-    Quad mode frees GPIOs 33–37 at the cost of halved bandwidth (160 vs
-    320 Mbit/s at 40 MHz) — negligible for this workload.  A future TCC board
-    revision should move SWCLK off GPIO 33–37 so Octal can be restored.
+!!! note "HW-010: Resolved — SWCLK moved to GPIO 45, OPI PSRAM restored"
+    SWCLK was previously on GPIO 37 (SPIDQS), which conflicted with OPI PSRAM
+    when both were active.  SWCLK is now on **GPIO 45** — a free strapping pin
+    that the STM32's internal SWCLK pull-down holds LOW during ESP32-S3 reset,
+    eliminating the strapping risk.  OPI (Octal) PSRAM is active again.
 
 **OTA limitation:** PSRAM-layout builds move the DROM segment to `0x3c0d0020`,
 which causes OTA image verification to crash (`Interrupt wdt timeout on CPU1`)
@@ -291,12 +287,12 @@ due to MMU mapping conflicts.  Use UART flash (`pio run -t upload --upload-port
 | Setting | Value |
 |---|---|
 | `CONFIG_SPIRAM` | `y` |
-| `CONFIG_SPIRAM_MODE_QUAD` | `y` (see HW-010 above) |
+| `CONFIG_SPIRAM_MODE_OCT` | `y` |
 | `CONFIG_SPIRAM_SPEED_40M` | `y` |
 | `CONFIG_SPIRAM_BOOT_HW_INIT` | `n` (deferred to app_main) |
 | `CONFIG_SPIRAM_USE_CAPS_ALLOC` | `y` |
-| `CONFIG_ESPTOOLPY_FLASHMODE` | `qio` |
-| `CONFIG_ESPTOOLPY_FLASHSIZE` | `16MB` |
+| `CONFIG_ESPTOOLPY_FLASHMODE` | `dio` |
+| `CONFIG_ESPTOOLPY_FLASHSIZE` | `8MB` |
 
 ## WDT configuration
 
@@ -315,13 +311,8 @@ task may still log a WDT warning if they exceed 5 s; this is non-fatal.
 
 ## SWD bit-bang — DUT firmware flashing
 
-The TC can program DUT firmware over SWD without a JTAG probe.  GPIO37 drives
+The TC can program DUT firmware over SWD without a JTAG probe.  GPIO45 drives
 SWCLK and GPIO38 drives SWDIO, routed TCC → TIE J15 → DUT CN6.
-
-!!! note "GPIO 37 and PSRAM mode (HW-010)"
-    GPIO 37 is SPIDQS when OPI PSRAM is active.  PSRAM must run in Quad mode
-    (see [PSRAM configuration](#psram-configuration)) for SWD to work without
-    corrupting PSRAM reads.
 
 ### Commands
 

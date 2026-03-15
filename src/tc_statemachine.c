@@ -321,9 +321,8 @@ void tc_sm_selftest_done(bool passed, uint32_t duration_ms)
     if (s_state == TC_SM_PRECHECK) {
         if (passed) {
             /* Precheck OK — attempt DUT serial identification before Testing */
-            /* HW-010 fix: switched PSRAM from OPI to Quad mode, freeing
-             * GPIO 37 (SPIDQS) for SWD SWCLK.  Next TCC rev should move
-             * SWCLK off GPIO 33–37 so OPI can be restored if needed. */
+            /* HW-010 resolved: SWCLK moved to GPIO 45 (firmware).
+             * GPIO 37 (SPIDQS) is now free; OPI PSRAM is active. */
             identify_dut();
 
             if (s_firmware_url[0]) {

@@ -17,7 +17,7 @@
 #include "esp_log.h"
 
 /* SWD pin assignments — routed to DUT CN6 via TIE J15 */
-#define SWCLK_GPIO  37
+#define SWCLK_GPIO  45  /* GPIO45: free strapping pin; SWCLK pull-down from STM32 keeps it LOW at reset */
 #define SWDIO_GPIO  38
 
 /* HEF4051 mux (U8) GPIO assignments — power-button latch control */
@@ -648,7 +648,7 @@ static int do_swd_flash(int argc, char **argv)
     s_last_fw_size   = 0;
     fw_dl_t dl = { .cap = SWD_FLASH_MAX_SIZE };
     /* Prefer PSRAM to avoid exhausting internal heap on large DUT firmware */
-    dl.buf = (uint8_t *)heap_caps_malloc(dl.cap, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    dl.buf = (uint8_t *)heap_caps_malloc(dl.cap, MALLOC_CAP_SPIRAM);
     if (!dl.buf) {
         dl.buf = (uint8_t *)malloc(dl.cap);  /* fallback: internal heap */
     }
@@ -1291,7 +1291,7 @@ static int do_swd_cs(int argc, char **argv)
  * the decoder marks request bytes (8b), ACK (3b), data (32b+par).           */
 
 /* Direct register read for sub-us GPIO sampling on ESP32-S3.
- * SWCLK=GPIO37 and SWDIO=GPIO38 both live in GPIO_IN1 (GPIOs 32–63).
+ * SWCLK=GPIO45 and SWDIO=GPIO38 both live in GPIO_IN1 (GPIOs 32–63).
  * Bit offset within the register = GPIO# - 32. */
 #define GPIO_IN1_ADDR   0x60004040UL  /* GPIO_IN1_REG: input for GPIO32-49 on ESP32-S3 */
 #define SWCLK_BIT       (1UL << (SWCLK_GPIO - 32))
@@ -1687,7 +1687,7 @@ static void dut_fw_store_task(void *arg)
     printf("DUT FW store [%s]: downloading %s\n", part_name, url);
 
     fw_dl_t dl = { .cap = SWD_FLASH_MAX_SIZE };
-    dl.buf = (uint8_t *)heap_caps_malloc(dl.cap, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    dl.buf = (uint8_t *)heap_caps_malloc(dl.cap, MALLOC_CAP_SPIRAM);
     if (!dl.buf) dl.buf = (uint8_t *)malloc(dl.cap);
     if (!dl.buf) {
         ESP_LOGE("swd", "DUT FW store: malloc failed");
