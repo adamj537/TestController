@@ -7,27 +7,37 @@
  */
 
 #include "unity.h"
-#include "../app/Hardware.h"
-#include "../hal/hal_gpio.h"
-#include "../hal/hal_adc.h"
-#include "../hal/hal_dac.h"
+#include "../../app/Hardware.h"
+#include "../../hal/hal_gpio.h"
+#include "../../hal/hal_adc.h"
+#include "../../hal/hal_dac.h"
+#include "../../hal/hal_system.h"
 
 /* Include mock implementations directly for testing */
-#include "../hal/mock/hal_gpio_mock.c"
-#include "../hal/mock/hal_adc_mock.c"
-#include "../hal/mock/hal_dac_mock.c"
-#include "../hal/mock/hal_system_mock.c"
+#include "../../hal/mock/hal_gpio_mock.c"
+#include "../../hal/mock/hal_adc_mock.c"
+#include "../../hal/mock/hal_dac_mock.c"
+#include "../../hal/mock/hal_system_mock.c"
+
+/* Include BSP and Hardware implementations (uses HAL — mocks provide the HAL) */
+#include "../../bsp/bsp_g3_tc.c"
+#include "../../app/Hardware.cpp"
+
+/* Forward declaration for test-only reset (defined in Hardware.cpp under NATIVE_BUILD) */
+extern void Hardware_Mock_Reset(void);
 
 /* ==================== Setup / Teardown ==================== */
 
 void setUp(void) {
+    Hardware_Mock_Reset();
     HAL_GPIO_SystemInit();
     HAL_System_Init();
-    HAL_ADC_Init(HAL_ADC_RESOLUTION_12BIT);
+    HAL_ADC_Init(HAL_ADC_UNIT_INTERNAL, HAL_ADC_RESOLUTION_12BIT);
     HAL_DAC_Init(HAL_DAC_RESOLUTION_12BIT);
 }
 
 void tearDown(void) {
+    Hardware_Mock_Reset();
     HAL_GPIO_Mock_Reset();
     HAL_ADC_Mock_Reset();
     HAL_DAC_Mock_Reset();
@@ -75,7 +85,7 @@ void test_hardware_read_voltage_from_adc(void) {
     begin();
 
     /* Set mock ADC to return a known value */
-    HAL_ADC_Mock_SetChannelValue(0, 1650);  /* Channel 0 = voltage feedback */
+    HAL_ADC_Mock_SetChannelValue(HAL_ADC_UNIT_INTERNAL, 0, 1650);  /* Channel 0 = voltage feedback */
 
     int32_t voltage = readVoltage();
     TEST_ASSERT_EQUAL(1650, voltage);
@@ -85,7 +95,7 @@ void test_hardware_read_current_from_adc(void) {
     begin();
 
     /* Set mock ADC to return 500mA */
-    HAL_ADC_Mock_SetChannelValue(1, 500);  /* Channel 1 = current sense */
+    HAL_ADC_Mock_SetChannelValue(HAL_ADC_UNIT_INTERNAL, 1, 500);  /* Channel 1 = current sense */
 
     int32_t current = readCurrent();
     TEST_ASSERT_EQUAL(500, current);
@@ -105,7 +115,7 @@ void test_hardware_read_response_signal(void) {
     begin();
 
     /* Set mock ADC to return DUT response */
-    HAL_ADC_Mock_SetChannelValue(2, 1200);  /* Channel 2 = response */
+    HAL_ADC_Mock_SetChannelValue(HAL_ADC_UNIT_INTERNAL, 2, 1200);  /* Channel 2 = response */
 
     int32_t response = readResponseSignal();
     TEST_ASSERT_EQUAL(1200, response);

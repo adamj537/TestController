@@ -103,6 +103,12 @@ int HAL_UART_ReadUntil(HAL_UART_Port_t port, uint8_t* buffer,
     return count;
 }
 
+int HAL_UART_Deinit(HAL_UART_Port_t port) {
+    if (port >= 3) return -1;
+    uart_mock.port[port].initialized = false;
+    return 0;
+}
+
 int HAL_UART_FlushRx(HAL_UART_Port_t port) {
     if (port >= 3 || !uart_mock.port[port].initialized) return -1;
     uart_mock.port[port].rx_read_pos = uart_mock.port[port].rx_index;

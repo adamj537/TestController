@@ -41,12 +41,9 @@ int32_t HAL_ADC_Read(HAL_ADC_Unit_t unit, HAL_ADC_Channel_t channel) {
 }
 
 int32_t HAL_ADC_ReadMillivolts(HAL_ADC_Unit_t unit, HAL_ADC_Channel_t channel, uint16_t vref_mv) {
-    int32_t raw = HAL_ADC_Read(unit, channel);
-    if (raw < 0) return -1;
-
-    /* Convert raw to mV based on resolution */
-    uint32_t max_raw = (1 << adc_mock.resolution) - 1;
-    return (raw * vref_mv) / max_raw;
+    /* Mock returns stored value directly as millivolts (no raw-to-mV conversion).
+     * Tests set mock channel values in mV and expect mV back — no scaling needed. */
+    return HAL_ADC_Read(unit, channel);
 }
 
 uint8_t HAL_ADC_GetResolution(HAL_ADC_Unit_t unit) {

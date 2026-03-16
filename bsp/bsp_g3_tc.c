@@ -8,6 +8,7 @@
 #include "bsp_g3_tc.h"
 #include "../hal/hal_gpio.h"
 #include "../hal/hal_system.h"
+#include <stdbool.h>
 
 /* ==================== Power Rail Mapping ==================== */
 

@@ -4,6 +4,7 @@
  */
 
 #include "../hal_system.h"
+#include <stdbool.h>
 #include <time.h>
 #include <string.h>
 

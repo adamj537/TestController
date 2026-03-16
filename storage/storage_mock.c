@@ -13,12 +13,12 @@
 /* ==================== Mock Storage State ==================== */
 
 #define MOCK_STORAGE_ENTRIES 100
-#define MOCK_STORAGE_SIZE    (256 * 1024)  /* 256KB simulated storage */
+#define MOCK_STORAGE_SIZE    (1024 * 1024)  /* 1MB simulated storage (accommodate large Recipe_t structs) */
 
 typedef struct {
     char key[64];
     StorageDomain_t domain;
-    uint8_t value[1024];
+    uint8_t value[4096];  /* Sized to hold Recipe_t (~2KB) plus overhead */
     uint32_t size;
     bool valid;
 } StorageEntry_t;
@@ -35,7 +35,11 @@ static struct {
 int Storage_Init(void) {
     if (mock_storage.initialized) return 0;
 
-    memset(&mock_storage, 0, sizeof(mock_storage));
+    /* If re-initializing after Deinit, preserve existing entries (simulate NVS persistence).
+     * Only clear if never initialized (first call in a process lifetime). */
+    if (mock_storage.entry_count == 0 && mock_storage.used_bytes == 0) {
+        memset(&mock_storage, 0, sizeof(mock_storage));
+    }
     mock_storage.initialized = true;
     return 0;
 }
@@ -117,7 +121,7 @@ int32_t Storage_ListKeys(StorageDomain_t domain, const char** keys,
 int Storage_Write(StorageDomain_t domain, const char* key,
                   const uint8_t* data, size_t data_size,
                   bool backup_to_sd) {
-    if (!mock_storage.initialized || !key || !data || data_size > 1024) {
+    if (!mock_storage.initialized || !key || !data || data_size > 4096) {
         return -1;
     }
 

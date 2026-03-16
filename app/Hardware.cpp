@@ -54,8 +54,11 @@ int begin(void) {
     if (HAL_GPIO_Init(BSP_STATUS_LED_PORT, BSP_STATUS_LED_PIN, HAL_GPIO_MODE_OUTPUT) != 0) return -1;
     if (HAL_GPIO_Init(BSP_ERROR_LED_PORT, BSP_ERROR_LED_PIN, HAL_GPIO_MODE_OUTPUT) != 0) return -1;
 
-    /* Disable all branches initially */
-    if (deselectAllBranches() != 0) return -1;
+    /* Disable all branches initially (inline — can't call deselectAllBranches() before initialized=true) */
+    if (HAL_GPIO_WritePin(BSP_BRANCH_1_ENABLE_PORT, BSP_BRANCH_1_ENABLE_PIN, HAL_GPIO_PIN_RESET) != 0) return -1;
+    if (HAL_GPIO_WritePin(BSP_BRANCH_2_ENABLE_PORT, BSP_BRANCH_2_ENABLE_PIN, HAL_GPIO_PIN_RESET) != 0) return -1;
+    if (HAL_GPIO_WritePin(BSP_BRANCH_3_ENABLE_PORT, BSP_BRANCH_3_ENABLE_PIN, HAL_GPIO_PIN_RESET) != 0) return -1;
+    if (HAL_GPIO_WritePin(BSP_BRANCH_4_ENABLE_PORT, BSP_BRANCH_4_ENABLE_PIN, HAL_GPIO_PIN_RESET) != 0) return -1;
 
     /* Turn off status LEDs */
     if (HAL_GPIO_WritePin(BSP_STATUS_LED_PORT, BSP_STATUS_LED_PIN, HAL_GPIO_PIN_RESET) != 0) return -1;
@@ -200,6 +203,21 @@ int setErrorLed(bool on) {
     HAL_GPIO_PinState_t state = on ? HAL_GPIO_PIN_SET : HAL_GPIO_PIN_RESET;
     return HAL_GPIO_WritePin(BSP_ERROR_LED_PORT, BSP_ERROR_LED_PIN, state);
 }
+
+/* ==================== Test Helper ==================== */
+
+#ifdef NATIVE_BUILD
+/**
+ * @brief Reset hardware state for test isolation.
+ *
+ * Only compiled in native/mock builds. Allows each unit test to start
+ * with hardware_state.initialized = false without needing a real power cycle.
+ */
+void Hardware_Mock_Reset(void) {
+    hardware_state.initialized = false;
+    hardware_state.current_branch = 0;
+}
+#endif
 
 #ifdef __cplusplus
 }

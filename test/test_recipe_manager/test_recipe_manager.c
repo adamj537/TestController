@@ -6,11 +6,11 @@
  */
 
 #include "unity.h"
-#include "../recipes/recipe_manager.h"
-#include "../recipes/recipe.h"
-#include "../storage/storage.h"
-#include "../storage/storage_mock.c"
-#include "../recipes/recipe_manager_mock.c"
+#include "../../recipes/recipe_manager.h"
+#include "../../recipes/recipe.h"
+#include "../../storage/storage.h"
+#include "../../storage/storage_mock.c"
+#include "../../recipes/recipe_manager_mock.c"
 
 /* ==================== Setup / Teardown ==================== */
 

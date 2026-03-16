@@ -11,6 +11,13 @@
 #include <string.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdint.h>
+
+/* Forward declarations for HAL UART mock helper functions (defined in hal_uart_mock.c) */
+extern uint8_t* HAL_UART_Mock_GetTxBuffer(HAL_UART_Port_t port);
+extern uint16_t HAL_UART_Mock_GetTxLength(HAL_UART_Port_t port);
+extern void HAL_UART_Mock_SetRxBuffer(HAL_UART_Port_t port,
+                                       const uint8_t* data, size_t length);
 
 /* ==================== State Management ==================== */
 
@@ -28,7 +35,8 @@ int DUT_Interface_Init(void) {
     if (dut_state.initialized) return 0;
 
     /* Initialize UART for DUT communication */
-    if (HAL_UART_Init(HAL_UART_PORT_1, 115200) != 0) {
+    if (HAL_UART_Init(HAL_UART_PORT_1, 115200,
+                      HAL_UART_PARITY_NONE, HAL_UART_STOPBITS_1) != 0) {
         return -1;
     }
 
@@ -74,15 +82,15 @@ int DUT_Interface_Command(const char* command, DUT_Response_t* response,
     snprintf(cmd_with_crlf, sizeof(cmd_with_crlf), "%s\r\n", command);
 
     if (HAL_UART_Transmit(HAL_UART_PORT_1, (const uint8_t*)cmd_with_crlf,
-                         strlen(cmd_with_crlf), timeout_ms) != 0) {
+                         strlen(cmd_with_crlf), timeout_ms) < 0) {
         dut_state.last_error = DUT_ERROR_TIMEOUT;
         return -1;
     }
 
-    /* Wait for response (line-based) */
+    /* Wait for response (line-based — read until '\n') */
     char response_str[512];
-    int bytes = HAL_UART_ReceiveLine(HAL_UART_PORT_1, response_str,
-                                     sizeof(response_str) - 1, timeout_ms);
+    int bytes = HAL_UART_ReadUntil(HAL_UART_PORT_1, (uint8_t*)response_str,
+                                   sizeof(response_str) - 1, '\n', timeout_ms);
 
     if (bytes <= 0) {
         dut_state.last_error = DUT_ERROR_TIMEOUT;
@@ -90,6 +98,12 @@ int DUT_Interface_Command(const char* command, DUT_Response_t* response,
     }
 
     response_str[bytes] = '\0';
+
+    /* Strip trailing CR/LF before parsing */
+    int len = bytes;
+    while (len > 0 && (response_str[len - 1] == '\n' || response_str[len - 1] == '\r')) {
+        response_str[--len] = '\0';
+    }
 
     /* Parse response */
     if (DUT_Interface_ParseResponse(response_str, response) != 0) {
@@ -267,8 +281,10 @@ void DUT_Interface_SetDebugLogging(bool enable) {
 void DUT_Interface_Mock_InjectResponse(const char* response_str) {
     if (!response_str) return;
 
-    /* Set up UART mock to return this response */
-    HAL_UART_Mock_SetRxLineData(HAL_UART_PORT_1, response_str);
+    /* Set up UART mock to return this response (append '\n' so ReadUntil terminates) */
+    char line[512];
+    snprintf(line, sizeof(line), "%s\n", response_str);
+    HAL_UART_Mock_SetRxBuffer(HAL_UART_PORT_1, (const uint8_t*)line, strlen(line));
 }
 
 /**
@@ -289,11 +305,13 @@ void DUT_Interface_Mock_Reset(void) {
 uint32_t DUT_Interface_Mock_GetLastCommand(char* buffer, size_t buffer_size) {
     if (!buffer || buffer_size == 0) return 0;
 
-    /* Get from UART mock */
-    int size = HAL_UART_Mock_GetTxData(HAL_UART_PORT_1, (uint8_t*)buffer,
-                                       buffer_size - 1);
-    if (size > 0) {
-        buffer[size] = '\0';
-    }
-    return size;
+    /* Get from UART mock TX buffer */
+    uint16_t size = HAL_UART_Mock_GetTxLength(HAL_UART_PORT_1);
+    uint8_t* tx_buf = HAL_UART_Mock_GetTxBuffer(HAL_UART_PORT_1);
+    if (size == 0 || !tx_buf) return 0;
+
+    size_t to_copy = (size < buffer_size - 1) ? size : buffer_size - 1;
+    memcpy(buffer, tx_buf, to_copy);
+    buffer[to_copy] = '\0';
+    return (uint32_t)to_copy;
 }

@@ -105,9 +105,14 @@ int RecipeManager_LoadRecipe(const char* recipe_name) {
 
     if (size <= 0) return -1;  /* Recipe not found */
 
-    /* Simple mock: copy name and mark as loaded */
+    /* Restore full Recipe_t struct from storage */
     memset(&recipe_manager.current_recipe, 0, sizeof(Recipe_t));
-    strncpy(recipe_manager.current_recipe.name, recipe_name, RECIPE_NAME_MAX - 1);
+    if (size >= (int32_t)sizeof(Recipe_t)) {
+        memcpy(&recipe_manager.current_recipe, data, sizeof(Recipe_t));
+    } else {
+        /* Fallback: older/partial data — at minimum set name */
+        strncpy(recipe_manager.current_recipe.name, recipe_name, RECIPE_NAME_MAX - 1);
+    }
     recipe_manager.recipe_loaded = true;
 
     return 0;
@@ -146,10 +151,9 @@ int RecipeManager_GetCurrentMetadata(RecipeMetadata_t* metadata) {
 int RecipeManager_SaveRecipe(const Recipe_t* recipe, bool backup_to_sd) {
     if (!recipe_manager.initialized || !recipe) return -1;
 
-    /* In real implementation, would serialize to JSON */
-    /* For mock, just store the recipe name */
-    return Storage_WriteString(STORAGE_DOMAIN_RECIPES, recipe->name,
-                              recipe->name, backup_to_sd);
+    /* Store full Recipe_t struct as binary blob so all fields are persisted */
+    return Storage_Write(STORAGE_DOMAIN_RECIPES, recipe->name,
+                        (const uint8_t*)recipe, sizeof(Recipe_t), backup_to_sd);
 }
 
 int RecipeManager_UpdateRecipe(const Recipe_t* recipe) {
@@ -165,13 +169,9 @@ int RecipeManager_UpdateRecipe(const Recipe_t* recipe) {
 
 int RecipeManager_DeleteRecipe(const char* recipe_name) {
     if (!recipe_manager.initialized || !recipe_name) return -1;
-    if (recipe_manager.locked) return -1;
 
-    /* Cannot delete current recipe */
-    if (recipe_manager.recipe_loaded &&
-        strcmp(recipe_manager.current_recipe.name, recipe_name) == 0) {
-        return -1;
-    }
+    /* Cannot delete while test is running (recipe is locked) */
+    if (recipe_manager.locked) return -1;
 
     return Storage_Delete(STORAGE_DOMAIN_RECIPES, recipe_name);
 }

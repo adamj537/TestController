@@ -7,9 +7,10 @@
  */
 
 #include "unity.h"
-#include "../dut/dut_interface.h"
-#include "../hal/hal_uart.h"
-#include "../hal/mock/hal_uart_mock.c"
+#include "../../dut/dut_interface.h"
+#include "../../hal/hal_uart.h"
+#include "../../hal/mock/hal_uart_mock.c"
+#include "../../dut/dut_interface_mock.c"
 
 /* ==================== Setup / Teardown ==================== */
 

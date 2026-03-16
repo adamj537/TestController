@@ -6,8 +6,8 @@
  */
 
 #include "unity.h"
-#include "../hal/hal_gpio.h"
-#include "../hal/mock/hal_gpio_mock.c"  /* Include mock implementation directly */
+#include "../../hal/hal_gpio.h"
+#include "../../hal/mock/hal_gpio_mock.c"  /* Include mock implementation directly */
 
 /* ==================== Setup / Teardown ==================== */
 
@@ -27,7 +27,7 @@ void test_gpio_init_output_mode(void) {
 
     /* Verify mode was set */
     uint16_t mode = HAL_GPIO_Mock_GetPortMode(HAL_GPIO_PORT_C);
-    TEST_ASSERT_BIT_SET((1 << 9), mode);
+    TEST_ASSERT_BIT_HIGH(9, mode);
 }
 
 void test_gpio_init_input_mode(void) {
@@ -36,7 +36,7 @@ void test_gpio_init_input_mode(void) {
 
     /* Verify mode was cleared for input */
     uint16_t mode = HAL_GPIO_Mock_GetPortMode(HAL_GPIO_PORT_A);
-    TEST_ASSERT_BIT_CLEAR((1 << 5), mode);
+    TEST_ASSERT_BIT_LOW(5, mode);
 }
 
 void test_gpio_write_pin_set(void) {
@@ -99,8 +99,8 @@ void test_gpio_port_read(void) {
     HAL_GPIO_WritePin(HAL_GPIO_PORT_C, 13, HAL_GPIO_PIN_SET);
 
     uint32_t port_state = HAL_GPIO_ReadPort(HAL_GPIO_PORT_C);
-    TEST_ASSERT_BIT_SET((1 << 9), port_state);
-    TEST_ASSERT_BIT_SET((1 << 13), port_state);
+    TEST_ASSERT_BIT_HIGH(9, port_state);
+    TEST_ASSERT_BIT_HIGH(13, port_state);
 }
 
 void test_gpio_invalid_port(void) {
