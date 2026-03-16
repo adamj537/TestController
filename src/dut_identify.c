@@ -1,4 +1,5 @@
 #include "dut_identify.h"
+#include "tcc_pinmap.h"
 
 #include "driver/uart.h"
 #include "esp_log.h"
@@ -11,7 +12,7 @@
 static const char *TAG = "dut_id";
 
 #define MON_PORT     UART_NUM_1
-#define MON_RX_GPIO  44
+#define MON_RX_GPIO  TCC_DUT_UART_RX_GPIO
 #define MON_BUF_SZ   2048
 #define MIN_HEX_RUN  8    /* minimum hex chars to qualify as a UID token */
 

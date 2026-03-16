@@ -15,17 +15,19 @@
 #include "esp_heap_caps.h"
 #include "esp_partition.h"
 #include "esp_log.h"
+#include "tcc_pinmap.h"
 
-/* SWD pin assignments — routed to DUT CN6 via TIE J15 */
-#define SWCLK_GPIO  45  /* GPIO45: free strapping pin; SWCLK pull-down from STM32 keeps it LOW at reset */
-#define SWDIO_GPIO  38
+/* SWD pin assignments — sourced from tcc_pinmap.h (TCC board-level constants) */
+#define SWCLK_GPIO   TCC_SWD_SWCLK_GPIO
+#define SWDIO_GPIO   TCC_SWD_SWDIO_GPIO
 
-/* HEF4051 mux (U8) GPIO assignments — power-button latch control */
-#define MUX_A0_GPIO  17   /* address select A0 */
-#define MUX_A1_GPIO  18   /* address select A1 */
-#define MUX_A2_GPIO  21   /* address select A2 */
-#define MUX_EN_GPIO  35   /* /EN — active low */
-#define MUX_SIG_GPIO 36   /* SIG — active low for PB-A */
+/* HEF4051 mux (U8) GPIO assignments — power-button latch control
+ * Sourced from tcc_pinmap.h (TCC board-level constants) */
+#define MUX_A0_GPIO  TCC_PBMUX_A0_GPIO
+#define MUX_A1_GPIO  TCC_PBMUX_A1_GPIO
+#define MUX_A2_GPIO  TCC_PBMUX_A2_GPIO
+#define MUX_EN_GPIO  TCC_PBMUX_EN_GPIO
+#define MUX_SIG_GPIO TCC_PBMUX_SIG_GPIO
 
 /* Clock half-period µs — runtime-tunable via `swd speed <half_us>`.
  * Tested range: 0–10.  half_us=0 (GPIO-limited, ~2–4 MHz actual) verified

@@ -1,11 +1,14 @@
 /**
  * @file tie_pinmap.h
- * @brief TIE (Tester Interface Board) GPIO pin assignments
+ * @brief TIE (Tester Interface Board) GPIO pin assignments — G3 fixture layer
  *
- * Defines all GPIO numbers for signals routed from the ESP32-S3 through
- * the TCC J15 connector to the TIE board.  Only depends on ESP-IDF
- * driver/gpio.h — safe to include from any source file without pulling
- * in the HAL or BSP abstraction layers.
+ * Defines GPIO numbers for signals routed from the ESP32-S3 through the TCC
+ * J15 connector to the G3 TIE board.  Only depends on ESP-IDF driver/gpio.h —
+ * safe to include from any source file without pulling in the HAL or BSP
+ * abstraction layers.
+ *
+ * Board-level TCC constants (I2C, SWD) live in tcc_pinmap.h (common layer).
+ * This file adds G3-specific MUX channel assignments on top.
  *
  * Pin assignments confirmed during Phase 3 hardware bringup (2026-03):
  * address lines exercised and all 64 MUX channels read successfully with
@@ -15,28 +18,21 @@
 #ifndef TIE_PINMAP_H
 #define TIE_PINMAP_H
 
-#ifdef ESP_PLATFORM
-#include "driver/gpio.h"
-#endif
+/* TCC board-level constants (common layer) */
+#include "tcc_pinmap.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-/* ── TCC I2C bus ────────────────────────────────────────────────────────── *
- * TCC carrier I2C bus (I2C_NUM_0, 400 kHz).                                *
- *                                                                           *
- * Errata: TCC carrier v1 has SDA/SCL swapped between the INA219s and the   *
- * ADC128D818.  Normal orientation (GPIO15=SDA, GPIO16=SCL) reaches the     *
- * INA219s; swapped orientation (GPIO16=SDA, GPIO15=SCL) reaches ADC128.    *
- * Firmware uses i2c_reinit() to switch before each ADC128 transaction.     */
-#define BSP_I2C_SDA_GPIO         GPIO_NUM_15   /* TCC I2C SDA (INA219 orientation) */
-#define BSP_I2C_SCL_GPIO         GPIO_NUM_16   /* TCC I2C SCL (INA219 orientation) */
-#define BSP_I2C_ADC128_SDA_GPIO  GPIO_NUM_16   /* ADC128D818 SDA (swapped) */
-#define BSP_I2C_ADC128_SCL_GPIO  GPIO_NUM_15   /* ADC128D818 SCL (swapped) */
-#define BSP_I2C_SPEED_HZ         400000        /* 400 kHz fast mode */
+/* ── BSP_I2C_* aliases (backward-compat shims — prefer TCC_I2C_* in new code) */
+#define BSP_I2C_SDA_GPIO         TCC_I2C_SDA_GPIO
+#define BSP_I2C_SCL_GPIO         TCC_I2C_SCL_GPIO
+#define BSP_I2C_ADC128_SDA_GPIO  TCC_I2C_ADC128_SDA_GPIO
+#define BSP_I2C_ADC128_SCL_GPIO  TCC_I2C_ADC128_SCL_GPIO
+#define BSP_I2C_SPEED_HZ         TCC_I2C_SPEED_HZ
 
-/* ── TIE analog MUX address lines ─────────────────────────────────────────*
+/* ── TIE analog MUX address lines — G3-specific ────────────────────────────*
  * Four HEF4067BTT 16-channel analog MUXes route DUT signal pins to the     *
  * ADC128D818 CH0–CH3.  Each MUX selects 1-of-16 inputs via address bits    *
  * A0–A3.  /EN pins are hardwired to GND on the TIE (always enabled).       *
