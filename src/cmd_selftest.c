@@ -24,6 +24,7 @@
 #include "tc_statemachine.h"
 #include "driver/uart.h"
 #include "esp_timer.h"
+#include "tie_pinmap.h"
 
 /* ── TCC carrier device map ───────────────────────────────────────────────── */
 
@@ -534,10 +535,10 @@ static void run_char(void)
 #define TIE_MUX_CHANNELS 16
 
 static const int s_mux_gpio[TIE_MUX_COUNT][4] = {
-    {  3,  4,  5,  6 },   /* MUX0 (U3)  */
-    {  7,  8,  9, 10 },   /* MUX1 (U11) */
-    { 11, 12, 13, 14 },   /* MUX2 (U12) */
-    { 39, 40, 41, 42 },   /* MUX3 (U1)  */
+    { BSP_TIE_MUX0_A0, BSP_TIE_MUX0_A1, BSP_TIE_MUX0_A2, BSP_TIE_MUX0_A3 },  /* MUX0 (U3)  → ADC128 CH0 */
+    { BSP_TIE_MUX1_A0, BSP_TIE_MUX1_A1, BSP_TIE_MUX1_A2, BSP_TIE_MUX1_A3 },  /* MUX1 (U11) → ADC128 CH1 */
+    { BSP_TIE_MUX2_A0, BSP_TIE_MUX2_A1, BSP_TIE_MUX2_A2, BSP_TIE_MUX2_A3 },  /* MUX2 (U12) → ADC128 CH2 */
+    { BSP_TIE_MUX3_A0, BSP_TIE_MUX3_A1, BSP_TIE_MUX3_A2, BSP_TIE_MUX3_A3 },  /* MUX3 (U1)  → ADC128 CH3 */
 };
 
 static const uint8_t s_mux_adc128_ch[TIE_MUX_COUNT] = { 0, 1, 2, 3 };
