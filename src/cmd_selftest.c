@@ -22,6 +22,7 @@
 #include "cmd_selftest.h"
 #include "tc_mqtt.h"
 #include "recipe_primitives.h"
+#include "dut_detect.h"
 #include "tc_statemachine.h"
 #include "driver/uart.h"
 #include "esp_timer.h"
@@ -336,6 +337,25 @@ void selftest_ina219_init(void)
 
 void run_vdut(void)
 {
+    /* ── SAFETY: VDUT voltage sweep must NEVER run with DUT connected ──── *
+     * The sweep drives 10V+ (10% duty) into a ~4V-rated DUT board.        *
+     * Check DUT presence BEFORE enabling any VDUT output.                  *
+     *                                                                       *
+     * NOTE: dut_detect_sample() uses U8 ch3 signal injection + ADC128 read.*
+     * It must run before VDUT is enabled to avoid interference.            */
+    {
+        int mv = 0;
+        bool sampled = dut_detect_sample(&mv);
+        printf("VDUT safety: DUT detect = %d mV (%s)\n",
+               mv, sampled ? (mv < 1500 ? "PRESENT" : "ABSENT") : "SAMPLE FAILED");
+        if (sampled && mv < 1500) {
+            report(false, "VDUT: BLOCKED — DUT detected (%d mV). "
+                   "Remove DUT before running voltage sweep.", mv);
+            st_record("vdut_safety", false);
+            return;
+        }
+    }
+
     /* ── 1. LEDC at 0 %, enable both regulators ────────────────────────── */
     if (!vdac_set_duty(0, 0) || !vdac_set_duty(1, 0)) {
         report(false, "VDUT: LEDC init failed"); return;
@@ -831,7 +851,7 @@ static recipe_step_t s_fixture_recipe[] = {
     { "adc",                 run_adc,            true  },
     { "wifi",                run_wifi,           true  },
     { "ota",                 run_ota,            true  },
-    { "vdut",                run_vdut,           true  },
+    { "vdut",                run_vdut,           false },  /* DISABLED — carrier-only sweep, 10V+ damages DUT */
     { "mux_scan",            run_mux_scan,       true  },
     /* ── DUT pogo-dependent — enable as pogos are loaded ─────── */
     { "dut_heartbeat",       run_dut_heartbeat,  false },  /* DUT PA9 pogo */

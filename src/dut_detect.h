@@ -20,6 +20,11 @@ bool dut_detect_present(void);
 /* Last raw ADC reading in mV (for diagnostics). */
 int dut_detect_last_mv(void);
 
+/* Take a single DUT presence measurement (blocking, ~200ms).
+ * Returns true on successful ADC read; *mv_out receives raw mV.
+ * Below 1500 mV = DUT present, above = absent. */
+bool dut_detect_sample(int *mv_out);
+
 /* Register "dut" console command (dut detect start|stop|status|sample). */
 void register_dut_commands(void);
 

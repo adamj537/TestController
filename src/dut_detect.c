@@ -83,7 +83,7 @@ static bool adc128_read_raw_mv(uint8_t ch, int *mv_out)
  *
  * HW-012: I2C swap errata resolved — ADC128 on same bus as INA219s.
  * No i2c_reinit() needed. */
-static bool dut_detect_sample(int *mv_out)
+bool dut_detect_sample(int *mv_out)
 {
     /* 1. Inject signal: U8 ch3, SIG HIGH */
     mux_select(DUT_DETECT_U8_CH, 1);
