@@ -27,6 +27,7 @@ extern "C" {
 #include "tc_hmi.h"
 #include "net_console.h"
 #include "dut_detect.h"
+#include "recipe_json.h"
 }
 
 static const char *TAG = "g3-tc";
@@ -107,6 +108,7 @@ extern "C" void app_main(void)
     register_mqtt_commands();
     register_statemachine_commands();
     register_dut_commands();
+    register_recipe_commands();
 
     /* WiFi init — sets up netif/event loop and auto-connects if NVS creds exist.
      * Must happen before net_console_start() which needs the TCP/IP stack. */
