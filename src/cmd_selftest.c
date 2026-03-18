@@ -21,6 +21,7 @@
 #include "cmd_vdac.h"
 #include "cmd_selftest.h"
 #include "tc_mqtt.h"
+#include "recipe_primitives.h"
 #include "tc_statemachine.h"
 #include "driver/uart.h"
 #include "esp_timer.h"
@@ -209,7 +210,7 @@ static void run_adc128(void)
 }
 
 /* HW-012: I2C swap errata resolved — all devices on same bus (SDA=15, SCL=16). */
-static void run_i2c(void)
+void run_i2c(void)
 {
     bool bus_ok = i2c_ensure_initialized();
     report(bus_ok, "I2C: bus init  (SDA=GPIO15  SCL=GPIO16  400kHz)");
@@ -237,7 +238,7 @@ static void run_i2c(void)
     if (adc128_ok) run_adc128();
 }
 
-static void run_adc(void)
+void run_adc(void)
 {
     int raw = 0, mv = -1;
     bool ok = adc_selftest_read(0, &raw, &mv);
@@ -253,7 +254,7 @@ static void run_adc(void)
     }
 }
 
-static void run_wifi(void)
+void run_wifi(void)
 {
     wifi_ap_record_t ap;
     if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
@@ -265,7 +266,7 @@ static void run_wifi(void)
     }
 }
 
-static void run_ota(void)
+void run_ota(void)
 {
     const esp_partition_t *p   = esp_ota_get_running_partition();
     const esp_app_desc_t  *d   = esp_app_get_description();
@@ -333,7 +334,7 @@ void selftest_ina219_init(void)
     i2c_write_reg16(ADDR_INA219_1, INA219_REG_CAL,    INA219_CAL_PGA1);
 }
 
-static void run_vdut(void)
+void run_vdut(void)
 {
     /* ── 1. LEDC at 0 %, enable both regulators ────────────────────────── */
     if (!vdac_set_duty(0, 0) || !vdac_set_duty(1, 0)) {
@@ -536,7 +537,7 @@ static bool adc128_read_raw_mv(uint8_t ch, int *mv_out)
     return true;
 }
 
-static void run_mux_scan(void)
+void run_mux_scan(void)
 {
     if (!i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x02) ||
         !i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONV_RATE, 0x01) ||
@@ -586,7 +587,7 @@ static void run_mux_scan(void)
 #define HEARTBEAT_THRESH_MV 1500
 #define HEARTBEAT_SAMPLES   25  /* 25 × 100 ms = 2.5 s */
 
-static void run_dut_heartbeat(void)
+void run_dut_heartbeat(void)
 {
     if (!i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x02) ||
         !i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONV_RATE, 0x01) ||
@@ -692,7 +693,7 @@ static bool dut_cmd(const char *cmd, char *buf, size_t buf_len, int timeout_ms)
 
 /* ── DUT UART recipe steps ────────────────────────────────────────────────── */
 
-static void run_dut_enter_test(void)
+void run_dut_enter_test(void)
 {
     char resp[128] = {0};
     if (!dut_uart_open()) {
@@ -708,7 +709,7 @@ static void run_dut_enter_test(void)
     if (!ok) dut_uart_close();   /* leave closed so subsequent steps skip cleanly */
 }
 
-static void run_dut_version(void)
+void run_dut_version(void)
 {
     char resp[128] = {0};
     if (!s_uart_open) {
@@ -721,7 +722,7 @@ static void run_dut_version(void)
     st_record("dut_version", ok);
 }
 
-static void run_dut_hw_rev(void)
+void run_dut_hw_rev(void)
 {
     char resp[128] = {0};
     if (!s_uart_open) {
@@ -735,7 +736,7 @@ static void run_dut_hw_rev(void)
 }
 
 /* UC_ADC_READ VREF — expect 2.5 V ± 4 % (2400–2600 mV) */
-static void run_dut_vref(void)
+void run_dut_vref(void)
 {
     char resp[128] = {0};
     if (!s_uart_open) {
@@ -752,7 +753,7 @@ static void run_dut_vref(void)
 }
 
 /* UC_ADC_READ 3V_RAIL — expect 3.0 V ± 5 % (2850–3150 mV) */
-static void run_dut_3v_rail(void)
+void run_dut_3v_rail(void)
 {
     char resp[128] = {0};
     if (!s_uart_open) {
@@ -769,7 +770,7 @@ static void run_dut_3v_rail(void)
 }
 
 /* FLASH_TEST — expect "OK FLASH_TEST PASS ..." */
-static void run_dut_flash_test(void)
+void run_dut_flash_test(void)
 {
     char resp[128] = {0};
     if (!s_uart_open) {
@@ -784,7 +785,7 @@ static void run_dut_flash_test(void)
 }
 
 /* RTC_READ — expect battery voltage 1550–3600 mV */
-static void run_dut_rtc_read(void)
+void run_dut_rtc_read(void)
 {
     char resp[128] = {0};
     if (!s_uart_open) {
@@ -800,7 +801,7 @@ static void run_dut_rtc_read(void)
     st_record_mv("dut_rtc_read", in_range, mv);
 }
 
-static void run_dut_exit_test(void)
+void run_dut_exit_test(void)
 {
     if (!s_uart_open) return;   /* ENTER_TEST failed earlier — skip silently */
     char resp[128] = {0};
@@ -862,9 +863,15 @@ static void run_fixture_recipe(void)
             printf("[SKIP] %s\n", step->id);
             continue;
         }
+        /* Resolve primitive via dispatch table (Phase 1 recipe engine) */
+        primitive_fn_t fn = recipe_primitives_lookup(step->id);
+        if (!fn) {
+            printf("[SKIP] %s (primitive not found)\n", step->id);
+            continue;
+        }
         step_num++;
         tc_mqtt_publish_test_progress(true, step_num, enabled_total, step->id);
-        step->fn();
+        fn();
     }
     /* Safety: ensure UART is closed even if dut_exit_test was skipped or failed */
     if (s_uart_open) dut_uart_close();

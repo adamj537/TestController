@@ -269,7 +269,8 @@ def test_ota_status(tc: TCConsole, t: TestRunner):
 
 
 def test_mqtt_log_after_tests(tc: TCConsole, t: TestRunner):
-    resp = tc.cmd("mqtt log", wait=1)
+    time.sleep(5)  # allow SM to settle back to Idle and flush MQTT log
+    resp = tc.cmd("mqtt log", wait=2)
     entries = [l for l in resp.split("\n") if " TX " in l or " RX " in l]
     has_state = any("state" in l for l in entries)
     has_result = any("result" in l for l in entries)
