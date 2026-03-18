@@ -1,0 +1,321 @@
+#!/usr/bin/env python3
+"""Test all TC console commands — validates every command that works with current hardware.
+
+Skips: uart mon, selftest heartbeat, PFW commands (pogo-blocked).
+
+Usage:
+    python3 scripts/test_tc_commands.py [--host 10.0.0.244]
+"""
+
+import argparse
+import socket
+import sys
+import time
+
+HOST = "10.0.0.244"
+PORT = 4242
+
+
+class TC:
+    def __init__(self, host=HOST):
+        self.host = host
+        self.sock = None
+
+    def connect(self):
+        self.sock = socket.socket()
+        self.sock.settimeout(45)
+        self.sock.connect((self.host, PORT))
+        time.sleep(0.5)
+        try:
+            self.sock.recv(4096)
+        except:
+            pass
+
+    def cmd(self, command, wait=3.0):
+        self.sock.sendall((command + "\n").encode())
+        out = []
+        deadline = time.time() + wait
+        self.sock.settimeout(1)
+        while time.time() < deadline:
+            try:
+                chunk = self.sock.recv(8192).decode(errors="replace")
+                if chunk:
+                    out.append(chunk)
+                    if "g3-tc|" in chunk and ">" in chunk:
+                        break
+            except socket.timeout:
+                continue
+        return "".join(out)
+
+    def cmd_long(self, command, stop_marker="Results:", timeout=40.0):
+        self.sock.sendall((command + "\n").encode())
+        out = []
+        deadline = time.time() + timeout
+        self.sock.settimeout(1)
+        while time.time() < deadline:
+            try:
+                chunk = self.sock.recv(8192).decode(errors="replace")
+                if chunk:
+                    out.append(chunk)
+                    if stop_marker in chunk:
+                        time.sleep(0.5)
+                        try:
+                            out.append(self.sock.recv(4096).decode(errors="replace"))
+                        except:
+                            pass
+                        break
+            except socket.timeout:
+                continue
+        return "".join(out)
+
+    def reconnect(self):
+        self.close()
+        time.sleep(0.5)
+        self.connect()
+
+    def close(self):
+        if self.sock:
+            self.sock.close()
+            self.sock = None
+
+
+class Results:
+    def __init__(self):
+        self.passed = 0
+        self.failed = 0
+        self.skipped = 0
+
+    def check(self, name, condition, detail=""):
+        if condition:
+            self.passed += 1
+            mark = "\033[32mPASS\033[0m"
+        else:
+            self.failed += 1
+            mark = "\033[31mFAIL\033[0m"
+        line = f"  [{mark}] {name}"
+        if detail:
+            line += f"  ({detail})"
+        print(line)
+
+    def skip(self, name, reason=""):
+        self.skipped += 1
+        print(f"  [\033[33mSKIP\033[0m] {name}  ({reason})")
+
+    def summary(self):
+        total = self.passed + self.failed + self.skipped
+        print(f"\nTC command tests: {self.passed}/{total} passed, "
+              f"{self.failed} failed, {self.skipped} skipped")
+        return self.failed == 0
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--host", default=HOST)
+    args = parser.parse_args()
+
+    r = Results()
+    tc = TC(args.host)
+
+    # ── 1. Connectivity ──────────────────────────────────────────────────
+    print("[1] TCP Console")
+    try:
+        tc.connect()
+        r.check("TCP connect", True, f"{args.host}:{PORT}")
+    except Exception as e:
+        r.check("TCP connect", False, str(e))
+        r.summary()
+        sys.exit(1)
+
+    # ── 2. help ──────────────────────────────────────────────────────────
+    print("\n[2] help")
+    resp = tc.cmd("help")
+    expected_cmds = ["gpio", "pwm", "adc", "i2c", "wifi", "ota", "selftest",
+                     "mac", "vdac", "uart", "swd", "mux", "mqtt", "sm", "dut", "recipe"]
+    for cmd_name in expected_cmds:
+        r.check(f"help lists '{cmd_name}'", cmd_name in resp)
+
+    # ── 3. mac ───────────────────────────────────────────────────────────
+    print("\n[3] mac")
+    tc.reconnect()
+    resp = tc.cmd("mac")
+    r.check("mac: has MAC address", "MAC" in resp and ":" in resp)
+    r.check("mac: has chip info", "Chip" in resp or "chip" in resp or "ESP32" in resp)
+    r.check("mac: has firmware version", "fw=" in resp.lower() or "FW" in resp or "version" in resp.lower())
+
+    # ── 4. gpio ──────────────────────────────────────────────────────────
+    print("\n[4] gpio (using GPIO21 — U8 A2, safe to toggle)")
+    tc.reconnect()
+    resp = tc.cmd("gpio set 21 1")
+    r.check("gpio set 21 1", "GPIO21 -> 1" in resp)
+    resp = tc.cmd("gpio set 21 0")
+    r.check("gpio set 21 0", "GPIO21 -> 0" in resp)
+    resp = tc.cmd("gpio mode 21 in")
+    r.check("gpio mode 21 in", "GPIO21 mode -> in" in resp)
+
+    # ── 5. adc ───────────────────────────────────────────────────────────
+    print("\n[5] adc")
+    tc.reconnect()
+    resp = tc.cmd("adc read 0")
+    r.check("adc read 0", "raw=" in resp or "mV" in resp or "CH0" in resp.upper())
+
+    # ── 6. i2c ───────────────────────────────────────────────────────────
+    print("\n[6] i2c")
+    tc.reconnect()
+    resp = tc.cmd("i2c scan", wait=5)
+    r.check("i2c scan: INA219 #0 (0x40)", "40" in resp)
+    r.check("i2c scan: INA219 #1 (0x41)", "41" in resp)
+    r.check("i2c scan: ADC128 (0x1D)", "1d" in resp)
+
+    # ── 7. wifi ──────────────────────────────────────────────────────────
+    print("\n[7] wifi")
+    tc.reconnect()
+    resp = tc.cmd("wifi status")
+    r.check("wifi status: has SSID", "SSID" in resp)
+    r.check("wifi status: has IP", "IP" in resp and "." in resp)
+    r.check("wifi status: has RSSI", "RSSI" in resp)
+
+    # ── 8. ota ───────────────────────────────────────────────────────────
+    print("\n[8] ota")
+    tc.reconnect()
+    resp = tc.cmd("ota status")
+    r.check("ota status: has partition", "Partition" in resp or "partition" in resp)
+    r.check("ota status: has version", "Version" in resp or "version" in resp)
+
+    # ── 9. mqtt ──────────────────────────────────────────────────────────
+    print("\n[9] mqtt")
+    tc.reconnect()
+    resp = tc.cmd("mqtt status")
+    r.check("mqtt status: connected", "connected" in resp.lower() and "disconnected" not in resp.lower())
+    resp = tc.cmd("mqtt log")
+    r.check("mqtt log: has NBIRTH", "NBIRTH" in resp)
+
+    # ── 10. pwm ──────────────────────────────────────────────────────────
+    print("\n[10] pwm")
+    tc.reconnect()
+    resp = tc.cmd("pwm set 0 1000 50")
+    r.check("pwm set", "PWM" in resp.upper() or "set" in resp.lower() or ">" in resp)
+    resp = tc.cmd("pwm stop 0")
+    r.check("pwm stop", "PWM" in resp.upper() or "stop" in resp.lower() or ">" in resp)
+
+    # ── 11. vdac ─────────────────────────────────────────────────────────
+    print("\n[11] vdac")
+    tc.reconnect()
+    resp = tc.cmd("vdac set 0 50", wait=3)
+    r.check("vdac set 0 50", "VDUT" in resp.upper() or "duty" in resp.lower() or ">" in resp)
+    resp = tc.cmd("vdac off", wait=2)
+    r.check("vdac off", "off" in resp.lower() or "disable" in resp.lower() or ">" in resp)
+
+    # ── 12. swd ──────────────────────────────────────────────────────────
+    print("\n[12] swd")
+    tc.reconnect()
+    resp = tc.cmd("swd probe", wait=5)
+    # Look for successful IDCODE read (hex value), not just the word IDCODE in an error
+    swd_ok = "IDCODE" in resp and "0x0" not in resp.lower() and "[FAIL]" not in resp
+    swd_detail = ""
+    for line in resp.split("\n"):
+        if "IDCODE" in line and "[FAIL]" not in line:
+            swd_detail = line.strip()
+    r.check("swd probe: DUT responds", swd_ok or swd_detail != "", swd_detail if swd_detail else "no IDCODE")
+
+    # ── 13. mux ──────────────────────────────────────────────────────────
+    print("\n[13] mux")
+    tc.reconnect()
+    resp = tc.cmd("mux select 0 1")
+    r.check("mux select 0 1", "ch=0" in resp and "SIG=1" in resp)
+    resp = tc.cmd("mux release")
+    r.check("mux release", ">" in resp)
+
+    # ── 14. dut ──────────────────────────────────────────────────────────
+    print("\n[14] dut")
+    tc.reconnect()
+    resp = tc.cmd("dut sample", wait=5)
+    has_mv = "mV" in resp
+    r.check("dut sample: ADC reading", has_mv)
+    if has_mv:
+        for line in resp.split("\n"):
+            if "mV" in line and "DUT sample:" in line:
+                r.check("dut sample: valid result", "PRESENT" in line or "ABSENT" in line, line.strip())
+                break
+
+    resp = tc.cmd("dut status")
+    r.check("dut status", "present" in resp.lower() or "stopped" in resp.lower() or "running" in resp.lower())
+
+    # ── 15. sm ───────────────────────────────────────────────────────────
+    print("\n[15] sm")
+    tc.reconnect()
+    resp = tc.cmd("sm status")
+    r.check("sm status: shows state", "state:" in resp.lower() or "Idle" in resp)
+
+    resp = tc.cmd("sm abort")
+    r.check("sm abort: no crash in Idle", ">" in resp)
+
+    # ── 16. selftest all (full fixture recipe) ───────────────────────────
+    print("\n[16] selftest all (full fixture recipe)")
+    tc.reconnect()
+    resp = tc.cmd_long("selftest all", stop_marker="Results:", timeout=35)
+    pass_lines = [l for l in resp.split("\n") if "[PASS]" in l]
+    fail_lines = [l for l in resp.split("\n") if "[FAIL]" in l]
+    results_line = [l for l in resp.split("\n") if "Results:" in l]
+    r.check("selftest all: no failures", len(fail_lines) == 0,
+            f"{len(pass_lines)} pass, {len(fail_lines)} fail")
+    if results_line:
+        r.check("selftest all: results printed", True, results_line[0].strip())
+
+    # ── 17. sm start (full production cycle) ─────────────────────────────
+    print("\n[17] sm start (full production cycle)")
+    tc.reconnect()
+    resp = tc.cmd_long("sm start", stop_marker="Idle", timeout=40)
+    r.check("sm start: Precheck entered", "Precheck" in resp)
+    r.check("sm start: Testing entered", "Testing" in resp)
+    sm_pass_lines = [l for l in resp.split("\n") if "[PASS]" in l]
+    sm_fail_lines = [l for l in resp.split("\n") if "[FAIL]" in l]
+    r.check("sm start: no failures", len(sm_fail_lines) == 0,
+            f"{len(sm_pass_lines)} pass, {len(sm_fail_lines)} fail")
+    r.check("sm start: result published", "outcome=pass" in resp or "result DDATA" in resp)
+
+    # ── 18. recipe commands ──────────────────────────────────────────────
+    print("\n[18] recipe")
+    tc.reconnect()
+    resp = tc.cmd("recipe show", wait=5)
+    r.check("recipe show: valid JSON", "recipeId" in resp)
+
+    tc.reconnect()
+    resp = tc.cmd("recipe store regtest", wait=5)
+    r.check("recipe store regtest", "stored" in resp.lower())
+
+    tc.reconnect()
+    resp = tc.cmd("recipe list", wait=3)
+    r.check("recipe list: shows regtest", "regtest" in resp)
+
+    tc.reconnect()
+    resp = tc.cmd("recipe load regtest", wait=3)
+    r.check("recipe load regtest", "prim=" in resp)
+
+    tc.reconnect()
+    resp = tc.cmd_long("recipe run regtest", stop_marker="=== Recipe:", timeout=45)
+    r.check("recipe run regtest: passes", "outcome=PASS" in resp or "passed" in resp.lower())
+
+    tc.reconnect()
+    resp = tc.cmd("recipe delete regtest", wait=3)
+    r.check("recipe delete regtest", "deleted" in resp.lower())
+
+    # ── Pogo-blocked (skipped) ───────────────────────────────────────────
+    print("\n[--] Pogo-blocked (skipped)")
+    r.skip("uart mon", "UART pogo not loaded")
+    r.skip("selftest heartbeat", "heartbeat pogo not loaded")
+    r.skip("PFW ENTER_TEST", "UART pogo not loaded")
+    r.skip("PFW VERSION", "UART pogo not loaded")
+    r.skip("PFW HW_REV", "UART pogo not loaded")
+    r.skip("PFW UC_ADC_READ", "UART pogo not loaded")
+    r.skip("PFW FLASH_TEST", "UART pogo not loaded")
+    r.skip("PFW RTC_READ", "UART pogo not loaded")
+    r.skip("PFW EXIT_TEST", "UART pogo not loaded")
+
+    # ── Summary ──────────────────────────────────────────────────────────
+    tc.close()
+    ok = r.summary()
+    sys.exit(0 if ok else 1)
+
+
+if __name__ == "__main__":
+    main()

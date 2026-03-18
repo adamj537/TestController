@@ -1,0 +1,203 @@
+[1] TCP Console
+  [PASS] TCP connect  (10.0.0.244:4242)
+
+[2] help
+  [PASS] help lists 'gpio'
+  [PASS] help lists 'pwm'
+  [PASS] help lists 'adc'
+  [PASS] help lists 'i2c'
+  [PASS] help lists 'wifi'
+  [PASS] help lists 'ota'
+  [PASS] help lists 'selftest'
+  [PASS] help lists 'mac'
+  [PASS] help lists 'vdac'
+  [PASS] help lists 'uart'
+  [PASS] help lists 'swd'
+  [PASS] help lists 'mux'
+  [PASS] help lists 'mqtt'
+  [PASS] help lists 'sm'
+  [PASS] help lists 'dut'
+  [PASS] help lists 'recipe'
+
+[3] mac
+  [PASS] mac: has MAC address
+  [PASS] mac: has chip info
+  [PASS] mac: has firmware version
+
+[4] gpio (using GPIO21 — U8 A2, safe to toggle)
+  [PASS] gpio set 21 1
+  [PASS] gpio set 21 0
+  [PASS] gpio mode 21 in
+
+[5] adc
+  [PASS] adc read 0
+
+[6] i2c
+  [PASS] i2c scan: INA219 #0 (0x40)
+  [PASS] i2c scan: INA219 #1 (0x41)
+  [PASS] i2c scan: ADC128 (0x1D)
+
+[7] wifi
+  [PASS] wifi status: has SSID
+  [PASS] wifi status: has IP
+  [PASS] wifi status: has RSSI
+
+[8] ota
+  [PASS] ota status: has partition
+  [PASS] ota status: has version
+
+[9] mqtt
+  [PASS] mqtt status: connected
+  [FAIL] mqtt log: has NBIRTH
+
+[10] pwm
+  [PASS] pwm set
+  [PASS] pwm stop
+
+[11] vdac
+  [PASS] vdac set 0 50
+  [PASS] vdac off
+
+[12] swd
+  [PASS] swd probe: DUT responds  (IDCODE2  ACK=7 (???)  val=0x00000000  par=FAIL)
+
+[13] mux
+  [PASS] mux select 0 1
+  [PASS] mux release
+
+[14] dut
+  [PASS] dut sample: ADC reading
+  [PASS] dut sample: valid result  (DUT sample: 6 mV  → PRESENT  (threshold 1500 mV))
+  [PASS] dut status
+
+[15] sm
+  [PASS] sm status: shows state
+  [PASS] sm abort: no crash in Idle
+
+[16] selftest all (full fixture recipe)
+  [PASS] selftest all: no failures  (19 pass, 0 fail)
+  [PASS] selftest all: results printed  (Results: 19/19 passed)
+
+[17] sm start (full production cycle)
+  [PASS] sm start: Precheck entered
+  [PASS] sm start: Testing entered
+  [PASS] sm start: no failures  (12 pass, 0 fail)
+  [PASS] sm start: result published
+
+[18] recipe
+  [PASS] recipe show: valid JSON
+  [PASS] recipe store regtest
+  [PASS] recipe list: shows regtest
+  [PASS] recipe load regtest
+  [PASS] recipe run regtest: passes
+  [PASS] recipe delete regtest
+
+[--] Pogo-blocked (skipped)
+  [SKIP] uart mon  (UART pogo not loaded)
+  [SKIP] selftest heartbeat  (heartbeat pogo not loaded)
+  [SKIP] PFW ENTER_TEST  (UART pogo not loaded)
+  [SKIP] PFW VERSION  (UART pogo not loaded)
+  [SKIP] PFW HW_REV  (UART pogo not loaded)
+  [SKIP] PFW UC_ADC_READ  (UART pogo not loaded)
+  [SKIP] PFW FLASH_TEST  (UART pogo not loaded)
+  [SKIP] PFW RTC_READ  (UART pogo not loaded)
+  [SKIP] PFW EXIT_TEST  (UART pogo not loaded)
+
+TC command tests: 57/67 passed, 1 failed, 9 skipped
+[1] recipe show
+  PASS: fixture-selftest v1.0.0 — 15 steps
+[2] recipe store default
+  PASS: stored to NVS
+[3] recipe load default
+  PASS: loaded — 6 enabled, 9 disabled, 15 total
+
+Recipe JSON tests: 3/3 passed
+[1] recipe run (hardcoded fallback)
+  PASS: 19 checks passed, outcome=PASS
+[2] recipe store default + recipe run default (NVS round-trip)
+  PASS: NVS recipe executed — 19 checks, outcome=PASS
+[3] MQTT log has progress from engine run
+  PASS: 46 progress entries in MQTT log
+
+Recipe engine tests: 3/3 passed
+[1] recipe store test1
+  [PASS] Store test1
+[2] recipe store test2
+  [PASS] Store test2
+[3] recipe list (expect 2)
+  [PASS] List shows both  (test1=yes test2=yes)
+[4] recipe load test1
+  [PASS] Load test1
+[5] recipe run test1
+  [PASS] Run test1
+[6] recipe delete test2
+  [PASS] Delete test2
+[7] recipe list (expect 1)
+  [PASS] List shows only test1
+
+Recipe storage tests: 7/7 passed
+/home/cbasta/G3-MB-Tester/embedded/tester-client/scripts/test_recipe_dcmd.py:43: DeprecationWarning: Callback API version 1 is deprecated, update to latest version
+  self.client = mqtt.Client()
+[1] DCMD recipe_update
+  [PASS] recipe_update  (id=dcmd-test)
+[2] DCMD recipe_list
+  [PASS] recipe_list contains dcmd-test  (ids=['default', 'test1', 'dcmd-test'])
+[3] DCMD recipe_select
+  [PASS] recipe_select sent  (no error response = OK)
+[4] DCMD recipe_delete
+  [PASS] recipe_delete sent
+[5] DCMD recipe_list (after delete)
+  [PASS] dcmd-test removed  (ids=['default', 'test1'])
+
+Recipe DCMD tests: 5/5 passed
+============================================================
+TC Full Regression Suite
+============================================================
+
+────────────────────────────────────────────────────────────
+▶ TC Commands  (test_tc_commands.py)
+────────────────────────────────────────────────────────────
+
+
+  [FAIL] TC Commands  (43.8s)
+  ⚠ test_tc_commands.py returned exit code 1
+
+────────────────────────────────────────────────────────────
+▶ Recipe JSON  (test_recipe_json.py)
+────────────────────────────────────────────────────────────
+
+
+  [PASS] Recipe JSON  (41.7s)
+
+────────────────────────────────────────────────────────────
+▶ Recipe Engine  (test_recipe_engine.py)
+────────────────────────────────────────────────────────────
+
+
+  [PASS] Recipe Engine  (27.9s)
+
+────────────────────────────────────────────────────────────
+▶ Recipe Storage  (test_recipe_storage.py)
+────────────────────────────────────────────────────────────
+
+
+  [PASS] Recipe Storage  (18.2s)
+
+────────────────────────────────────────────────────────────
+▶ Recipe DCMD  (test_recipe_dcmd.py)
+────────────────────────────────────────────────────────────
+
+
+  [PASS] Recipe DCMD  (14.2s)
+
+============================================================
+Full Suite Results  (146s total)
+============================================================
+  [FAIL] TC Commands                  43.8s
+  [PASS] Recipe JSON                  41.7s
+  [PASS] Recipe Engine                27.9s
+  [PASS] Recipe Storage               18.2s
+  [PASS] Recipe DCMD                  14.2s
+
+  Suites: 4/5 passed, 1 failed
+============================================================
