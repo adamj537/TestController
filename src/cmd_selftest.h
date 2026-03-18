@@ -1,5 +1,7 @@
 #pragma once
 
+#include "tc_mqtt.h"  /* tc_mqtt_check_t */
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -30,6 +32,18 @@ void selftest_run_diagnostic(const char *test);
  * selftest run, or NULL if all checks passed.  Valid until the next run resets
  * the check buffer.  Safe to call from the selftest task before vTaskDelete. */
 const char *selftest_first_failed_check(void);
+
+/* ── Check buffer accessors (used by recipe_engine) ──────────────────────── */
+
+/* Current check count and pass/total counters.
+ * The engine snapshots ncheck before a step and reads new entries after. */
+int selftest_get_ncheck(void);
+int selftest_get_pass(void);
+int selftest_get_total(void);
+const tc_mqtt_check_t *selftest_get_checks(void);
+
+/* Reset check buffer (call before recipe run). */
+void selftest_reset_checks(void);
 
 #ifdef __cplusplus
 }

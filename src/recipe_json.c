@@ -6,6 +6,7 @@
 
 #include "recipe_json.h"
 #include "recipe_primitives.h"
+#include "recipe_engine.h"
 #include "cJSON.h"
 #include "nvs.h"
 #include "esp_log.h"
@@ -248,11 +249,73 @@ static int do_recipe(int argc, char **argv)
         return rc;
     }
 
+    if (strcmp(argv[1], "run") == 0) {
+        const char *id = (argc >= 3) ? argv[2] : "default";
+
+        /* Load recipe JSON from NVS */
+        char *json = recipe_json_load_nvs(id);
+        if (!json) {
+            /* If no stored recipe, use hardcoded */
+            printf("Recipe '%s' not in NVS — using hardcoded\n", id);
+            json_recipe_t *recipe = malloc(sizeof(json_recipe_t));
+            if (!recipe) { printf("malloc failed\n"); return 1; }
+            recipe_json_from_hardcoded(recipe);
+
+            recipe_run_result_t *result = malloc(sizeof(recipe_run_result_t));
+            if (!result) { free(recipe); printf("malloc failed\n"); return 1; }
+
+            recipe_engine_run(recipe, result);
+
+            printf("\n=== Recipe: %s  outcome=%s  %d/%d  %lu ms ===\n",
+                   recipe->recipe_id,
+                   result->outcome == RECIPE_RESULT_PASS ? "PASS" :
+                   result->outcome == RECIPE_RESULT_FAIL ? "FAIL" : "TIMEOUT",
+                   result->pass_count, result->total_count,
+                   (unsigned long)result->duration_ms);
+            if (result->failed_step[0])
+                printf("Failed step: %s\n", result->failed_step);
+
+            free(result);
+            free(recipe);
+            return (result->outcome == RECIPE_RESULT_PASS) ? 0 : 1;
+        }
+
+        /* Parse stored JSON */
+        json_recipe_t *recipe = malloc(sizeof(json_recipe_t));
+        if (!recipe) { free(json); printf("malloc failed\n"); return 1; }
+        if (recipe_json_parse(json, strlen(json), recipe) != 0) {
+            free(json); free(recipe);
+            printf("Parse failed\n");
+            return 1;
+        }
+        free(json);
+
+        recipe_run_result_t *result = malloc(sizeof(recipe_run_result_t));
+        if (!result) { free(recipe); printf("malloc failed\n"); return 1; }
+
+        recipe_engine_run(recipe, result);
+
+        printf("\n=== Recipe: %s  outcome=%s  %d/%d  %lu ms ===\n",
+               recipe->recipe_id,
+               result->outcome == RECIPE_RESULT_PASS ? "PASS" :
+               result->outcome == RECIPE_RESULT_FAIL ? "FAIL" : "TIMEOUT",
+               result->pass_count, result->total_count,
+               (unsigned long)result->duration_ms);
+        if (result->failed_step[0])
+            printf("Failed step: %s\n", result->failed_step);
+
+        int rc = (result->outcome == RECIPE_RESULT_PASS) ? 0 : 1;
+        free(result);
+        free(recipe);
+        return rc;
+    }
+
 usage:
     printf("Usage:\n"
            "  recipe show              show hardcoded recipe as JSON\n"
            "  recipe store [id]        store hardcoded recipe to NVS (default: 'default')\n"
-           "  recipe load [id]         load recipe from NVS and print\n");
+           "  recipe load [id]         load recipe from NVS and print\n"
+           "  recipe run [id]          run recipe (from NVS or hardcoded fallback)\n");
     return 1;
 }
 

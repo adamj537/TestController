@@ -1076,6 +1076,20 @@ const char *selftest_first_failed_check(void)
     return NULL;
 }
 
+/* ── Check buffer accessors (used by recipe_engine) ──────────────────────── */
+
+int selftest_get_ncheck(void) { return s_ncheck; }
+int selftest_get_pass(void)   { return s_pass; }
+int selftest_get_total(void)  { return s_total; }
+const tc_mqtt_check_t *selftest_get_checks(void) { return s_checks; }
+
+void selftest_reset_checks(void)
+{
+    s_pass = 0;
+    s_total = 0;
+    st_reset();
+}
+
 void selftest_run_diagnostic(const char *test)
 {
     /* Duplicate to heap — task arg must outlive the MQTT event handler */
