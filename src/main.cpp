@@ -26,6 +26,7 @@ extern "C" {
 #include "tc_statemachine.h"
 #include "tc_hmi.h"
 #include "net_console.h"
+#include "dut_detect.h"
 }
 
 static const char *TAG = "g3-tc";
@@ -105,6 +106,7 @@ extern "C" void app_main(void)
     register_swd_commands();
     register_mqtt_commands();
     register_statemachine_commands();
+    register_dut_commands();
 
     /* WiFi init — sets up netif/event loop and auto-connects if NVS creds exist.
      * Must happen before net_console_start() which needs the TCP/IP stack. */
@@ -120,6 +122,11 @@ extern "C" void app_main(void)
     /* Configure INA219s at boot so current readings are valid immediately
      * without requiring a selftest run first. */
     selftest_ina219_init();
+
+    /* DUT presence detection — disabled at auto-start until I2C bus gets
+     * a mutex (i2c_reinit is not thread-safe with HMI/INA219 tasks).
+     * Start manually via: dut detect start */
+    /* dut_detect_start(); */
 
     /* TCP console server — listens on port 4242, accepts when WiFi is up.
      * All stdout/stderr is tee'd to the connected client via __wrap__write_r. */

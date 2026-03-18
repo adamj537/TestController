@@ -117,8 +117,7 @@ static bool adc128_read_channel(uint8_t ch, int *rail_mv_out)
 
 /* ── Individual test groups ───────────────────────────────────────────────── */
 
-/* Called while bus is already on swapped orientation (SDA=16, SCL=15).
- * Reads ADC128D818 CH7 (internal temperature diode) by temporarily switching
+/* Reads ADC128D818 CH7 (internal temperature diode) by temporarily switching
  * to Mode 0 (IN7 → temp diode), then restoring Mode 1 (all voltage inputs).
  *
  * Conversion per SNAS483F Table 16, Equations 2 & 3:
@@ -127,7 +126,7 @@ static bool adc128_read_channel(uint8_t ch, int *rail_mv_out)
  *   If DOUT[8]=0 (positive): Temp = DOUT / 2           (Eq 2)
  *   If DOUT[8]=1 (negative): Temp = (DOUT − 512) / 2  (Eq 3)
  *   Accuracy: ±2°C over −25°C to 100°C. */
-static void run_temp_on_swapped_bus(void)
+static void run_temp(void)
 {
     if (!i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x00) ||
         !i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONV_RATE, 0x01) ||
@@ -165,18 +164,6 @@ static void run_temp_on_swapped_bus(void)
     i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONFIG,    0x01);
 }
 
-/* Standalone temperature read — handles bus setup itself. */
-static void run_temp(void)
-{
-    if (!i2c_reinit(16, 15)) {
-        report(false, "ADC128: CH7  temp sensor  (bus reinit failed)");
-        return;
-    }
-    run_temp_on_swapped_bus();
-    i2c_reinit(15, 16);  /* restore default */
-}
-
-/* Called while bus is already on swapped orientation (SDA=16, SCL=15). */
 static void run_adc128(void)
 {
     /* Mode 1: all 8 pins as voltage inputs (default Mode 0 maps IN7 to temp sensor).
@@ -217,17 +204,13 @@ static void run_adc128(void)
         st_record_mv("adc_rail_3v3", ok, rail_mv);
     }
 
-    /* Append temperature read on the same (swapped) bus while it's active. */
-    run_temp_on_swapped_bus();
+    /* Append temperature read on the same bus */
+    run_temp();
 }
 
-/* TCC carrier v1 errata: ADC128D818 SDA/SCL are swapped relative to the INA219s.
- * INA219s live on GPIO15(SDA)/GPIO16(SCL); ADC128D818 on GPIO16(SDA)/GPIO15(SCL).
- * Workaround: probe each group on its own bus orientation, then restore default.
- * TODO(hw-fix): swap bus wires on carrier at next board spin (multi-channel). */
+/* HW-012: I2C swap errata resolved — all devices on same bus (SDA=15, SCL=16). */
 static void run_i2c(void)
 {
-    /* Pass 1: default orientation — INA219s */
     bool bus_ok = i2c_ensure_initialized();
     report(bus_ok, "I2C: bus init  (SDA=GPIO15  SCL=GPIO16  400kHz)");
     st_record("i2c_bus", bus_ok);
@@ -248,18 +231,10 @@ static void run_i2c(void)
     report(ina1_ok, "I2C: INA219 #1  @ 0x%02X", ADDR_INA219_1);
     st_record("i2c_ina219_1", ina1_ok);
 
-    /* Pass 2: swapped orientation — ADC128D818 */
-    bool swap_ok = i2c_reinit(16, 15);
-    if (!swap_ok) {
-        report(false, "I2C: ADC128D818 @ 0x%02X  (skipped — bus reinit failed)", ADDR_ADC128D818);
-        st_record("i2c_adc128", false);
-    } else {
-        bool adc128_ok = i2c_probe(ADDR_ADC128D818);
-        report(adc128_ok, "I2C: ADC128D818 @ 0x%02X", ADDR_ADC128D818);
-        st_record("i2c_adc128", adc128_ok);
-        run_adc128();
-        i2c_reinit(15, 16);  /* restore default */
-    }
+    bool adc128_ok = i2c_probe(ADDR_ADC128D818);
+    report(adc128_ok, "I2C: ADC128D818 @ 0x%02X", ADDR_ADC128D818);
+    st_record("i2c_adc128", adc128_ok);
+    if (adc128_ok) run_adc128();
 }
 
 static void run_adc(void)
@@ -563,16 +538,10 @@ static bool adc128_read_raw_mv(uint8_t ch, int *mv_out)
 
 static void run_mux_scan(void)
 {
-    if (!i2c_reinit(16, 15)) {
-        report(false, "MUX: ADC128 bus reinit failed");
-        return;
-    }
-
     if (!i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x02) ||
         !i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONV_RATE, 0x01) ||
         !i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONFIG,    0x01)) {
         report(false, "MUX: ADC128 init failed");
-        i2c_reinit(15, 16);
         return;
     }
     vTaskDelay(pdMS_TO_TICKS(150));
@@ -601,7 +570,6 @@ static void run_mux_scan(void)
         for (int bit = 0; bit < 4; bit++)
             gpio_set_direction((gpio_num_t)s_mux_gpio[m][bit], GPIO_MODE_INPUT);
 
-    i2c_reinit(15, 16);
     report(err_count == 0, "MUX: scan complete  %d read errors", err_count);
     st_record("mux_scan", err_count == 0);
 }
@@ -620,16 +588,10 @@ static void run_mux_scan(void)
 
 static void run_dut_heartbeat(void)
 {
-    if (!i2c_reinit(16, 15)) {
-        report(false, "DUT heartbeat: ADC128 bus reinit failed");
-        return;
-    }
-
     if (!i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x02) ||
         !i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONV_RATE, 0x01) ||
         !i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONFIG,    0x01)) {
         report(false, "DUT heartbeat: ADC128 init failed");
-        i2c_reinit(15, 16);
         return;
     }
     vTaskDelay(pdMS_TO_TICKS(150));
@@ -651,8 +613,6 @@ static void run_dut_heartbeat(void)
     /* Release address GPIOs */
     for (int bit = 0; bit < 4; bit++)
         gpio_set_direction((gpio_num_t)s_mux_gpio[HEARTBEAT_MUX_IDX][bit], GPIO_MODE_INPUT);
-
-    i2c_reinit(15, 16);
 
     bool saw_low  = min_mv < HEARTBEAT_THRESH_MV;
     bool saw_high = max_mv > HEARTBEAT_THRESH_MV;
@@ -889,12 +849,21 @@ static recipe_step_t s_fixture_recipe[] = {
 static void run_fixture_recipe(void)
 {
     s_uart_open = false;   /* ensure clean UART state at recipe start */
+
+    /* Count enabled steps for progress reporting */
+    int enabled_total = 0;
+    for (size_t i = 0; i < RECIPE_LEN; i++)
+        if (s_fixture_recipe[i].enabled) enabled_total++;
+
+    int step_num = 0;
     for (size_t i = 0; i < RECIPE_LEN; i++) {
         recipe_step_t *step = &s_fixture_recipe[i];
         if (!step->enabled) {
             printf("[SKIP] %s\n", step->id);
             continue;
         }
+        step_num++;
+        tc_mqtt_publish_test_progress(true, step_num, enabled_total, step->id);
         step->fn();
     }
     /* Safety: ensure UART is closed even if dut_exit_test was skipped or failed */
@@ -1001,7 +970,9 @@ static void selftest_task(void *pvarg)
     if (strcmp(mode, "quick") == 0) {
         /* Quick precheck: I2C bus + INA219 probes + rail voltages + WiFi.
          * Skips VDUT sweep (~6s) and mux scan — fast enough for SM precheck. */
+        tc_mqtt_publish_test_progress(true, 1, 2, "i2c_scan");
         run_i2c();
+        tc_mqtt_publish_test_progress(true, 2, 2, "wifi");
         run_wifi();
     } else {
         /* fixture: execute recipe (same table as interactive 'selftest all') */
@@ -1057,10 +1028,7 @@ static void diagnostic_task(void *arg)
     if (strcmp(test, "i2c") == 0) {
         run_i2c();
     } else if (strcmp(test, "adc") == 0 || strcmp(test, "adc128") == 0) {
-        if (i2c_reinit(16, 15)) {
-            run_adc128();
-            i2c_reinit(15, 16);
-        }
+        run_adc128();
     } else if (strcmp(test, "wifi") == 0) {
         run_wifi();
     } else if (strcmp(test, "ota") == 0) {

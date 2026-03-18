@@ -26,10 +26,9 @@ extern "C" {
 #endif
 
 /* ── BSP_I2C_* aliases (backward-compat shims — prefer TCC_I2C_* in new code) */
+/* HW-012: I2C swap errata resolved — all devices on same bus orientation */
 #define BSP_I2C_SDA_GPIO         TCC_I2C_SDA_GPIO
 #define BSP_I2C_SCL_GPIO         TCC_I2C_SCL_GPIO
-#define BSP_I2C_ADC128_SDA_GPIO  TCC_I2C_ADC128_SDA_GPIO
-#define BSP_I2C_ADC128_SCL_GPIO  TCC_I2C_ADC128_SCL_GPIO
 #define BSP_I2C_SPEED_HZ         TCC_I2C_SPEED_HZ
 
 /* ── TIE analog MUX address lines — G3-specific ────────────────────────────*

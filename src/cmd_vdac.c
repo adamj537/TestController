@@ -15,7 +15,7 @@
 #define VDUT1_ENA_GPIO  46   /* active-high enable for U1 */
 #define VDUT2_ENA_GPIO  47   /* active-high enable for U7 */
 
-/* ── ADC128D818 — lives on swapped bus (SDA=GPIO16, SCL=GPIO15) ─────────── */
+/* ── ADC128D818 — same bus as INA219s (HW-012 swap resolved) ──────────────── */
 
 #define ADDR_ADC128D818    0x1D
 #define ADC128_REG_CONFIG    0x00   /* bit0=START, bit7=INIT(resets all regs, self-clearing) */
@@ -100,7 +100,6 @@ bool vdac_set_enable(int ch_idx, bool enable)
 
 /* ── ADC128 helpers ──────────────────────────────────────────────────────── */
 
-/* Caller must have already switched to swapped bus (SDA=GPIO16, SCL=GPIO15). */
 bool adc128_ensure_running(void)
 {
     return i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x02) &&  /* Mode 1: IN7 as voltage (bits[2:1]=01 → 0x02) */
@@ -134,15 +133,9 @@ static int do_vdac_char(int argc, char **argv)
         printf("Enable GPIO config failed\n"); return 1;
     }
 
-    /* 3. Switch to swapped bus for ADC128 (TCC v1 errata) */
-    if (!i2c_reinit(16, 15)) {
-        printf("I2C reinit (swapped) failed\n");
-        vdac_set_enable(0, false); vdac_set_enable(1, false);
-        return 1;
-    }
+    /* 3. Ensure ADC128 is running */
     if (!adc128_ensure_running()) {
         printf("ADC128 init failed\n");
-        i2c_reinit(15, 16);
         vdac_set_enable(0, false); vdac_set_enable(1, false);
         return 1;
     }
@@ -178,7 +171,6 @@ static int do_vdac_char(int argc, char **argv)
     vdac_set_duty(1, 0);
     vdac_set_enable(0, false);
     vdac_set_enable(1, false);
-    i2c_reinit(15, 16);
 
     return 0;
 }
