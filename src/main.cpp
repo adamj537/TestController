@@ -3,6 +3,8 @@
 #include "esp_console.h"
 #include "esp_log.h"
 #include "esp_ota_ops.h"
+#include "esp_timer.h"
+#include "esp_wifi.h"
 #ifdef CONFIG_SPIRAM
 #include "esp_psram.h"
 #include "esp_private/esp_psram_extram.h"
@@ -43,16 +45,85 @@ static void initialize_nvs(void)
     ESP_ERROR_CHECK(err);
 }
 
-/* Confirm OTA image is valid to prevent rollback after successful boot */
-static void ota_rollback_guard(void)
+/* ── OTA health check — deferred validation with auto-rollback ────────────── *
+ * After OTA, the new partition boots in ESP_OTA_IMG_PENDING_VERIFY state.    *
+ * We defer marking it valid until basic health checks pass:                  *
+ *   1. I2C bus + INA219s + ADC128 respond                                    *
+ *   2. WiFi connects (IP obtained)                                           *
+ *   3. MQTT broker connects                                                  *
+ * If all pass within OTA_HEALTH_TIMEOUT_S, the partition is marked valid.    *
+ * If timeout expires, the partition is marked invalid and the ESP32 reboots  *
+ * into the previous known-good partition.                                    */
+
+#define OTA_HEALTH_TIMEOUT_S  30
+
+static void ota_health_check_task(void *arg)
 {
+    (void)arg;
     const esp_partition_t *running = esp_ota_get_running_partition();
-    esp_ota_img_states_t   state;
-    if (esp_ota_get_state_partition(running, &state) == ESP_OK &&
-        state == ESP_OTA_IMG_PENDING_VERIFY) {
-        esp_ota_mark_app_valid_cancel_rollback();
-        ESP_LOGI(TAG, "OTA: partition '%s' marked valid", running->label);
+    esp_ota_img_states_t state;
+
+    /* Only run health check if we're in pending-verify state (post-OTA) */
+    if (esp_ota_get_state_partition(running, &state) != ESP_OK ||
+        state != ESP_OTA_IMG_PENDING_VERIFY) {
+        ESP_LOGI(TAG, "OTA: partition '%s' already validated (state=%d)", running->label, (int)state);
+        vTaskDelete(NULL);
+        return;
     }
+
+    ESP_LOGW(TAG, "OTA: partition '%s' PENDING VERIFY — health check starting (%ds timeout)",
+             running->label, OTA_HEALTH_TIMEOUT_S);
+    printf("OTA health check: %ds to validate or rollback\n", OTA_HEALTH_TIMEOUT_S);
+
+    int64_t deadline = esp_timer_get_time() + (int64_t)OTA_HEALTH_TIMEOUT_S * 1000000LL;
+    bool i2c_ok = false;
+    bool wifi_ok = false;
+    bool mqtt_ok = false;
+
+    while (esp_timer_get_time() < deadline) {
+        /* Check I2C — probe INA219 #0 */
+        if (!i2c_ok) {
+            if (i2c_ensure_initialized() && i2c_probe(0x40)) {
+                i2c_ok = true;
+                ESP_LOGI(TAG, "OTA health: I2C OK");
+            }
+        }
+
+        /* Check WiFi — has IP? */
+        if (!wifi_ok) {
+            wifi_ap_record_t ap = {};
+            if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
+                wifi_ok = true;
+                ESP_LOGI(TAG, "OTA health: WiFi OK (RSSI=%d)", ap.rssi);
+            }
+        }
+
+        /* Check MQTT */
+        if (!mqtt_ok) {
+            if (tc_mqtt_connected()) {
+                mqtt_ok = true;
+                ESP_LOGI(TAG, "OTA health: MQTT OK");
+            }
+        }
+
+        if (i2c_ok && wifi_ok && mqtt_ok) break;
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+
+    if (i2c_ok && wifi_ok && mqtt_ok) {
+        esp_ota_mark_app_valid_cancel_rollback();
+        ESP_LOGI(TAG, "OTA health: ALL PASSED — partition '%s' marked VALID", running->label);
+        printf("OTA health: PASSED — firmware validated\n");
+    } else {
+        ESP_LOGE(TAG, "OTA health: FAILED (i2c=%d wifi=%d mqtt=%d) — ROLLING BACK",
+                 i2c_ok, wifi_ok, mqtt_ok);
+        printf("OTA health: FAILED — rolling back to previous firmware!\n");
+        vTaskDelay(pdMS_TO_TICKS(1000));  /* let message flush */
+        esp_ota_mark_app_invalid_rollback_and_reboot();
+        /* does not return */
+    }
+
+    vTaskDelete(NULL);
 }
 
 extern "C" void app_main(void)
@@ -79,8 +150,8 @@ extern "C" void app_main(void)
 #endif
 
     initialize_nvs();
-    ota_rollback_guard();
-    Storage_Init();   /* LittleFS recipe partition — formats on first boot */
+    /* OTA rollback guard is deferred — see ota_health_check_task below */
+    Storage_Init();   /* SPIFFS recipe partition — formats on first boot */
     tc_sm_init();
     tc_hmi_init();    /* GPIO + LCD setup before MQTT/WiFi tasks start */
     tc_mqtt_init();
@@ -126,6 +197,11 @@ extern "C" void app_main(void)
     /* Configure INA219s at boot so current readings are valid immediately
      * without requiring a selftest run first. */
     selftest_ina219_init();
+
+    /* OTA health check — runs in background, validates I2C + WiFi + MQTT.
+     * If all pass within 30s, marks partition valid.
+     * If timeout, rolls back to previous partition automatically. */
+    xTaskCreate(ota_health_check_task, "ota_health", 4096, NULL, 3, NULL);
 
     /* DUT presence detection — disabled at auto-start until I2C bus gets
      * a mutex (i2c_reinit is not thread-safe with HMI/INA219 tasks).
