@@ -5,8 +5,9 @@
 # dut_fw  = PFW (test-mode firmware with UART command handler)
 # prod_fw = agency-approved production firmware (programmed after tests pass)
 #           Both slots use dut_fw_hdr_t format {magic, size, version[16], _pad[8]}
-# Flash used: 7.875 MB of 8 MB. 0.125 MB remaining.
-# Note: dut_fw/prod_fw are 896 KB each — sufficient for STM32L476 single-bank fw.
+# recipes = LittleFS partition for JSON recipe storage (~30-50 recipes)
+# Flash used: 8.0 MB of 8 MB.
+# Note: prod_fw shrunk from 896KB to 640KB (still >> 15KB DUT fw) to make room.
 #
 # Name,   Type, SubType,  Offset,   Size,     Flags
 nvs,      data, nvs,      0x9000,   0x6000,
@@ -16,4 +17,5 @@ factory,  app,  factory,  0x20000,  2M,
 ota_0,    app,  ota_0,    0x220000, 2M,
 ota_1,    app,  ota_1,    0x420000, 2M,
 dut_fw,   data, 0xff,     0x620000, 0xE0000,
-prod_fw,  data, 0xff,     0x700000, 0xE0000,
+prod_fw,  data, 0xff,     0x700000, 0xA0000,
+recipes,  data, spiffs,   0x7A0000, 0x60000,

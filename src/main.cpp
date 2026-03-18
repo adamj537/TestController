@@ -28,6 +28,7 @@ extern "C" {
 #include "net_console.h"
 #include "dut_detect.h"
 #include "recipe_json.h"
+#include "../storage/storage.h"
 }
 
 static const char *TAG = "g3-tc";
@@ -79,6 +80,7 @@ extern "C" void app_main(void)
 
     initialize_nvs();
     ota_rollback_guard();
+    Storage_Init();   /* LittleFS recipe partition — formats on first boot */
     tc_sm_init();
     tc_hmi_init();    /* GPIO + LCD setup before MQTT/WiFi tasks start */
     tc_mqtt_init();

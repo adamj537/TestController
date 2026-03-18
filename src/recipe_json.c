@@ -7,6 +7,7 @@
 #include "recipe_json.h"
 #include "recipe_primitives.h"
 #include "recipe_engine.h"
+#include "../storage/storage.h"
 #include "cJSON.h"
 #include "nvs.h"
 #include "esp_log.h"
@@ -131,62 +132,41 @@ int recipe_json_from_hardcoded(json_recipe_t *out)
     return 0;
 }
 
-/* ── NVS persistence ─────────────────────────────────────────────────────── */
-
-#define NVS_NAMESPACE "recipes"
+/* ── Recipe persistence (LittleFS via storage.h) ─────────────────────────── */
 
 int recipe_json_store_nvs(const char *recipe_id, const char *json_str, size_t len)
 {
-    nvs_handle_t h;
-    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &h);
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "NVS open failed: %s", esp_err_to_name(err));
-        return -1;
-    }
-    err = nvs_set_blob(h, recipe_id, json_str, len);
-    if (err == ESP_OK) err = nvs_commit(h);
-    nvs_close(h);
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "NVS write failed: %s", esp_err_to_name(err));
-        return -1;
-    }
-    ESP_LOGI(TAG, "Stored recipe '%s' (%d bytes)", recipe_id, (int)len);
-    return 0;
+    int rc = Storage_Write(STORAGE_DOMAIN_RECIPES, recipe_id,
+                           (const uint8_t *)json_str, len, false);
+    if (rc == 0)
+        ESP_LOGI(TAG, "Stored recipe '%s' (%d bytes)", recipe_id, (int)len);
+    else
+        ESP_LOGW(TAG, "Failed to store recipe '%s'", recipe_id);
+    return rc;
 }
 
 char *recipe_json_load_nvs(const char *recipe_id)
 {
-    nvs_handle_t h;
-    if (nvs_open(NVS_NAMESPACE, NVS_READONLY, &h) != ESP_OK) return NULL;
+    int32_t sz = Storage_GetSize(STORAGE_DOMAIN_RECIPES, recipe_id);
+    if (sz <= 0) return NULL;
 
-    size_t len = 0;
-    if (nvs_get_blob(h, recipe_id, NULL, &len) != ESP_OK || len == 0) {
-        nvs_close(h);
-        return NULL;
-    }
+    char *buf = malloc((size_t)sz + 1);
+    if (!buf) return NULL;
 
-    char *buf = malloc(len + 1);
-    if (!buf) { nvs_close(h); return NULL; }
-
-    if (nvs_get_blob(h, recipe_id, buf, &len) != ESP_OK) {
+    int32_t n = Storage_Read(STORAGE_DOMAIN_RECIPES, recipe_id,
+                             (uint8_t *)buf, (size_t)sz);
+    if (n <= 0) {
         free(buf);
-        nvs_close(h);
         return NULL;
     }
-    nvs_close(h);
-    buf[len] = '\0';
-    ESP_LOGI(TAG, "Loaded recipe '%s' (%d bytes)", recipe_id, (int)len);
+    buf[n] = '\0';
+    ESP_LOGI(TAG, "Loaded recipe '%s' (%ld bytes)", recipe_id, (long)n);
     return buf;
 }
 
 int recipe_json_delete_nvs(const char *recipe_id)
 {
-    nvs_handle_t h;
-    if (nvs_open(NVS_NAMESPACE, NVS_READWRITE, &h) != ESP_OK) return -1;
-    esp_err_t err = nvs_erase_key(h, recipe_id);
-    nvs_commit(h);
-    nvs_close(h);
-    return (err == ESP_OK) ? 0 : -1;
+    return Storage_Delete(STORAGE_DOMAIN_RECIPES, recipe_id);
 }
 
 /* ── Console commands ────────────────────────────────────────────────────── */
@@ -246,6 +226,29 @@ static int do_recipe(int argc, char **argv)
         }
         free(recipe);
         free(json);
+        return rc;
+    }
+
+    if (strcmp(argv[1], "list") == 0) {
+        const char *keys[20];
+        int32_t count = Storage_ListKeys(STORAGE_DOMAIN_RECIPES, keys, 20);
+        if (count <= 0) {
+            printf("No recipes stored\n");
+            return 0;
+        }
+        printf("Stored recipes (%ld):\n", (long)count);
+        for (int i = 0; i < count; i++) {
+            int32_t sz = Storage_GetSize(STORAGE_DOMAIN_RECIPES, keys[i]);
+            printf("  %s  (%ld bytes)\n", keys[i], (long)sz);
+            free((void *)keys[i]);
+        }
+        return 0;
+    }
+
+    if (strcmp(argv[1], "delete") == 0) {
+        if (argc < 3) { printf("Usage: recipe delete <id>\n"); return 1; }
+        int rc = recipe_json_delete_nvs(argv[2]);
+        printf("%s: %s\n", argv[2], rc == 0 ? "deleted" : "NOT FOUND");
         return rc;
     }
 
@@ -313,9 +316,11 @@ static int do_recipe(int argc, char **argv)
 usage:
     printf("Usage:\n"
            "  recipe show              show hardcoded recipe as JSON\n"
-           "  recipe store [id]        store hardcoded recipe to NVS (default: 'default')\n"
-           "  recipe load [id]         load recipe from NVS and print\n"
-           "  recipe run [id]          run recipe (from NVS or hardcoded fallback)\n");
+           "  recipe store [id]        store hardcoded recipe to flash\n"
+           "  recipe load [id]         load recipe from flash and print\n"
+           "  recipe list              list all stored recipes\n"
+           "  recipe delete <id>       delete recipe from flash\n"
+           "  recipe run [id]          run recipe (from flash or hardcoded fallback)\n");
     return 1;
 }
 
