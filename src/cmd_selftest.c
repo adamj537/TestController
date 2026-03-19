@@ -27,6 +27,7 @@
 #include "driver/uart.h"
 #include "esp_timer.h"
 #include "tie_pinmap.h"
+#include "cJSON.h"
 
 /* ── TCC carrier device map ───────────────────────────────────────────────── */
 
@@ -82,12 +83,17 @@ static void st_record_mv(const char *id, bool pass, int mv)
     s_ncheck++;
 }
 
+/* ── Public check buffer API (used by primitive modules) ─────────────────── */
+
+void selftest_check_record(const char *id, bool pass)    { st_record(id, pass); }
+void selftest_check_record_mv(const char *id, bool pass, int mv) { st_record_mv(id, pass, mv); }
+
 /* ── ADC128D818 register map (subset) ────────────────────────────────────── */
 
 #define ADC128_REG_CONFIG    0x00  /* bit0=START, bit7=INIT(resets all regs, self-clearing) */
 #define ADC128_REG_CONV_RATE 0x07  /* 0=low-power (~728ms/scan), 1=high-rate (~12ms/ch) */
 #define ADC128_REG_CH_DIS    0x08  /* bit N = disable channel N */
-#define ADC128_REG_ADV_CFG   0x0B  /* bit0=ext-VREF-en, bits[2:1]=mode: 0x02=Mode1(all 8 pins voltage) */
+#define ADC128_REG_ADV_CFG   0x0B  /* bit0=ext-VREF-en, bits[2:1]=mode: 0x03=Mode1+ext-VREF */
 #define ADC128_REG_CH_BASE  0x20  /* CH0=0x20 … CH7=0x27, 2 bytes each   */
                                   /* value = ((b0<<8)|b1)>>4, Vref=2560mV */
 
@@ -161,7 +167,7 @@ static void run_temp(void)
     }
 
     /* Restore Mode 1 so voltage channels work after selftest */
-    i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x02);
+    i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x03);
     i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONV_RATE, 0x01);
     i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONFIG,    0x01);
 }
@@ -171,7 +177,7 @@ static void run_adc128(void)
     /* Mode 1: all 8 pins as voltage inputs (default Mode 0 maps IN7 to temp sensor).
      * ADV_CFG and CONV_RATE must be written before START bit.
      * At high rate: ~12ms/channel × 8 channels ≈ 100ms for first full scan. */
-    if (!i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x02) ||
+    if (!i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x03) ||
         !i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONV_RATE, 0x01) ||
         !i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONFIG,    0x01)) {
         report(false, "ADC128: init failed");
@@ -211,7 +217,7 @@ static void run_adc128(void)
 }
 
 /* HW-012: I2C swap errata resolved — all devices on same bus (SDA=15, SCL=16). */
-void run_i2c(void)
+void run_i2c(const cJSON *params)
 {
     bool bus_ok = i2c_ensure_initialized();
     report(bus_ok, "I2C: bus init  (SDA=GPIO15  SCL=GPIO16  400kHz)");
@@ -239,7 +245,7 @@ void run_i2c(void)
     if (adc128_ok) run_adc128();
 }
 
-void run_adc(void)
+void run_adc(const cJSON *params)
 {
     int raw = 0, mv = -1;
     bool ok = adc_selftest_read(0, &raw, &mv);
@@ -255,7 +261,7 @@ void run_adc(void)
     }
 }
 
-void run_wifi(void)
+void run_wifi(const cJSON *params)
 {
     wifi_ap_record_t ap;
     if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
@@ -267,7 +273,7 @@ void run_wifi(void)
     }
 }
 
-void run_ota(void)
+void run_ota(const cJSON *params)
 {
     const esp_partition_t *p   = esp_ota_get_running_partition();
     const esp_app_desc_t  *d   = esp_app_get_description();
@@ -335,7 +341,7 @@ void selftest_ina219_init(void)
     i2c_write_reg16(ADDR_INA219_1, INA219_REG_CAL,    INA219_CAL_PGA1);
 }
 
-void run_vdut(void)
+void run_vdut(const cJSON *params)
 {
     /* ── SAFETY: VDUT voltage sweep must NEVER run with DUT connected ──── *
      * The sweep drives 10V+ (10% duty) into a ~4V-rated DUT board.        *
@@ -557,9 +563,9 @@ static bool adc128_read_raw_mv(uint8_t ch, int *mv_out)
     return true;
 }
 
-void run_mux_scan(void)
+void run_mux_scan(const cJSON *params)
 {
-    if (!i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x02) ||
+    if (!i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x03) ||
         !i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONV_RATE, 0x01) ||
         !i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONFIG,    0x01)) {
         report(false, "MUX: ADC128 init failed");
@@ -607,9 +613,9 @@ void run_mux_scan(void)
 #define HEARTBEAT_THRESH_MV 1500
 #define HEARTBEAT_SAMPLES   25  /* 25 × 100 ms = 2.5 s */
 
-void run_dut_heartbeat(void)
+void run_dut_heartbeat(const cJSON *params)
 {
-    if (!i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x02) ||
+    if (!i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x03) ||
         !i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONV_RATE, 0x01) ||
         !i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONFIG,    0x01)) {
         report(false, "DUT heartbeat: ADC128 init failed");
@@ -713,7 +719,7 @@ static bool dut_cmd(const char *cmd, char *buf, size_t buf_len, int timeout_ms)
 
 /* ── DUT UART recipe steps ────────────────────────────────────────────────── */
 
-void run_dut_enter_test(void)
+void run_dut_enter_test(const cJSON *params)
 {
     char resp[128] = {0};
     if (!dut_uart_open()) {
@@ -729,7 +735,7 @@ void run_dut_enter_test(void)
     if (!ok) dut_uart_close();   /* leave closed so subsequent steps skip cleanly */
 }
 
-void run_dut_version(void)
+void run_dut_version(const cJSON *params)
 {
     char resp[128] = {0};
     if (!s_uart_open) {
@@ -742,7 +748,7 @@ void run_dut_version(void)
     st_record("dut_version", ok);
 }
 
-void run_dut_hw_rev(void)
+void run_dut_hw_rev(const cJSON *params)
 {
     char resp[128] = {0};
     if (!s_uart_open) {
@@ -756,7 +762,7 @@ void run_dut_hw_rev(void)
 }
 
 /* UC_ADC_READ VREF — expect 2.5 V ± 4 % (2400–2600 mV) */
-void run_dut_vref(void)
+void run_dut_vref(const cJSON *params)
 {
     char resp[128] = {0};
     if (!s_uart_open) {
@@ -773,7 +779,7 @@ void run_dut_vref(void)
 }
 
 /* UC_ADC_READ 3V_RAIL — expect 3.0 V ± 5 % (2850–3150 mV) */
-void run_dut_3v_rail(void)
+void run_dut_3v_rail(const cJSON *params)
 {
     char resp[128] = {0};
     if (!s_uart_open) {
@@ -790,7 +796,7 @@ void run_dut_3v_rail(void)
 }
 
 /* FLASH_TEST — expect "OK FLASH_TEST PASS ..." */
-void run_dut_flash_test(void)
+void run_dut_flash_test(const cJSON *params)
 {
     char resp[128] = {0};
     if (!s_uart_open) {
@@ -805,7 +811,7 @@ void run_dut_flash_test(void)
 }
 
 /* RTC_READ — expect battery voltage 1550–3600 mV */
-void run_dut_rtc_read(void)
+void run_dut_rtc_read(const cJSON *params)
 {
     char resp[128] = {0};
     if (!s_uart_open) {
@@ -821,7 +827,7 @@ void run_dut_rtc_read(void)
     st_record_mv("dut_rtc_read", in_range, mv);
 }
 
-void run_dut_exit_test(void)
+void run_dut_exit_test(const cJSON *params)
 {
     if (!s_uart_open) return;   /* ENTER_TEST failed earlier — skip silently */
     char resp[128] = {0};
@@ -841,7 +847,7 @@ void run_dut_exit_test(void)
 
 typedef struct {
     const char *id;
-    void        (*fn)(void);
+    void        (*fn)(const cJSON *params);
     bool         enabled;
 } recipe_step_t;
 
@@ -891,7 +897,7 @@ static void run_fixture_recipe(void)
         }
         step_num++;
         tc_mqtt_publish_test_progress(true, step_num, enabled_total, step->id);
-        fn();
+        fn(NULL);  /* legacy internal table has no params */
     }
     /* Safety: ensure UART is closed even if dut_exit_test was skipped or failed */
     if (s_uart_open) dut_uart_close();
@@ -909,14 +915,14 @@ static int do_selftest(int argc, char **argv)
     if (run_all) {
         printf("=== G3-TC Fixture Recipe ===\n");
         run_fixture_recipe();
-    } else if (strcmp(argv[1], "i2c")       == 0) { run_i2c();          }
-    else if  (strcmp(argv[1], "adc")       == 0) { run_adc();          }
-    else if  (strcmp(argv[1], "wifi")      == 0) { run_wifi();         }
-    else if  (strcmp(argv[1], "ota")       == 0) { run_ota();          }
-    else if  (strcmp(argv[1], "temp")      == 0) { run_temp();         }
-    else if  (strcmp(argv[1], "vdut")      == 0) { run_vdut();         }
-    else if  (strcmp(argv[1], "mux")       == 0) { run_mux_scan();     }
-    else if  (strcmp(argv[1], "heartbeat") == 0) { run_dut_heartbeat();}
+    } else if (strcmp(argv[1], "i2c")       == 0) { run_i2c(NULL);          }
+    else if  (strcmp(argv[1], "adc")       == 0) { run_adc(NULL);          }
+    else if  (strcmp(argv[1], "wifi")      == 0) { run_wifi(NULL);         }
+    else if  (strcmp(argv[1], "ota")       == 0) { run_ota(NULL);          }
+    else if  (strcmp(argv[1], "temp")      == 0) { run_temp();             }
+    else if  (strcmp(argv[1], "vdut")      == 0) { run_vdut(NULL);         }
+    else if  (strcmp(argv[1], "mux")       == 0) { run_mux_scan(NULL);     }
+    else if  (strcmp(argv[1], "heartbeat") == 0) { run_dut_heartbeat(NULL);}
     else if  (strcmp(argv[1], "char")      == 0) { run_char(); return 0; }
     else {
         printf("Unknown test '%s'\n", argv[1]);
@@ -998,9 +1004,9 @@ static void selftest_task(void *pvarg)
         /* Quick precheck: I2C bus + INA219 probes + rail voltages + WiFi.
          * Skips VDUT sweep (~6s) and mux scan — fast enough for SM precheck. */
         tc_mqtt_publish_test_progress(true, 1, 2, "i2c_scan");
-        run_i2c();
+        run_i2c(NULL);
         tc_mqtt_publish_test_progress(true, 2, 2, "wifi");
-        run_wifi();
+        run_wifi(NULL);
     } else {
         /* fixture: execute recipe (same table as interactive 'selftest all') */
         run_fixture_recipe();
@@ -1053,21 +1059,21 @@ static void diagnostic_task(void *arg)
     printf("[diagnostic] test=%s\n", test);
 
     if (strcmp(test, "i2c") == 0) {
-        run_i2c();
+        run_i2c(NULL);
     } else if (strcmp(test, "adc") == 0 || strcmp(test, "adc128") == 0) {
         run_adc128();
     } else if (strcmp(test, "wifi") == 0) {
-        run_wifi();
+        run_wifi(NULL);
     } else if (strcmp(test, "ota") == 0) {
-        run_ota();
+        run_ota(NULL);
     } else if (strcmp(test, "temp") == 0) {
         run_temp();
     } else if (strcmp(test, "vdut") == 0) {
-        run_vdut();
+        run_vdut(NULL);
     } else if (strcmp(test, "mux") == 0) {
-        run_mux_scan();
+        run_mux_scan(NULL);
     } else if (strcmp(test, "heartbeat") == 0) {
-        run_dut_heartbeat();
+        run_dut_heartbeat(NULL);
     } else {
         printf("[diagnostic] unknown test '%s'\n", test);
         printf("[diagnostic] valid: i2c adc wifi ota temp vdut mux heartbeat\n");

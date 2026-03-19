@@ -61,8 +61,8 @@ int recipe_engine_run(const json_recipe_t *recipe, recipe_run_result_t *result)
         int total_before  = selftest_get_total();
         int64_t step_start = esp_timer_get_time();
 
-        /* Execute primitive */
-        fn();
+        /* Execute primitive with per-step params (NULL if not specified) */
+        fn(step->params);
 
         /* Capture step results from check buffer delta */
         int64_t step_end = esp_timer_get_time();

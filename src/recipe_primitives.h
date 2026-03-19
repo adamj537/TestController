@@ -1,10 +1,13 @@
 #pragma once
 
+/* Forward declaration — primitives accept params from the recipe step. */
+struct cJSON;
+
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-typedef void (*primitive_fn_t)(void);
+typedef void (*primitive_fn_t)(const struct cJSON *params);
 
 typedef struct {
     const char   *id;

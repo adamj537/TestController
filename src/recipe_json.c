@@ -66,11 +66,29 @@ int recipe_json_parse(const char *json_str, size_t len, json_recipe_t *out)
             /* Default onError to "abort" if not specified */
             if (s->on_error[0] == '\0')
                 strlcpy(s->on_error, "abort", sizeof(s->on_error));
+
+            /* params — non-owning pointer into root tree; root must outlive recipe */
+            s->params = cJSON_GetObjectItem(step, "params");
         }
     }
 
-    cJSON_Delete(root);
+    /* Store owned root so callers can free via recipe_json_free() */
+    out->_root = root;
     return 0;
+}
+
+/* ── Free ────────────────────────────────────────────────────────────────── */
+
+void recipe_json_free(json_recipe_t *recipe)
+{
+    if (!recipe) return;
+    if (recipe->_root) {
+        cJSON_Delete(recipe->_root);
+        recipe->_root = NULL;
+    }
+    /* Clear params pointers — they pointed into _root which is now freed */
+    for (int i = 0; i < recipe->step_count; i++)
+        recipe->steps[i].params = NULL;
 }
 
 /* ── Serialize ───────────────────────────────────────────────────────────── */
@@ -94,6 +112,10 @@ char *recipe_json_serialize(const json_recipe_t *recipe)
         if (s->label[0]) cJSON_AddStringToObject(step, "label", s->label);
         cJSON_AddStringToObject(step, "onError", s->on_error);
         cJSON_AddBoolToObject(step, "enabled", s->enabled);
+        if (s->params) {
+            cJSON *p = cJSON_Duplicate(s->params, true);
+            if (p) cJSON_AddItemToObject(step, "params", p);
+        }
         cJSON_AddItemToArray(steps, step);
     }
 
@@ -224,6 +246,7 @@ static int do_recipe(int argc, char **argv)
         } else {
             printf("Parse failed\n");
         }
+        recipe_json_free(recipe);
         free(recipe);
         free(json);
         return rc;
@@ -278,9 +301,10 @@ static int do_recipe(int argc, char **argv)
             if (result->failed_step[0])
                 printf("Failed step: %s\n", result->failed_step);
 
+            int rc_hc = (result->outcome == RECIPE_RESULT_PASS) ? 0 : 1;
             free(result);
             free(recipe);
-            return (result->outcome == RECIPE_RESULT_PASS) ? 0 : 1;
+            return rc_hc;
         }
 
         /* Parse stored JSON */
@@ -291,10 +315,10 @@ static int do_recipe(int argc, char **argv)
             printf("Parse failed\n");
             return 1;
         }
-        free(json);
+        free(json);  /* raw JSON string no longer needed — tree is in recipe->_root */
 
         recipe_run_result_t *result = malloc(sizeof(recipe_run_result_t));
-        if (!result) { free(recipe); printf("malloc failed\n"); return 1; }
+        if (!result) { recipe_json_free(recipe); free(recipe); printf("malloc failed\n"); return 1; }
 
         recipe_engine_run(recipe, result);
 
@@ -309,6 +333,7 @@ static int do_recipe(int argc, char **argv)
 
         int rc = (result->outcome == RECIPE_RESULT_PASS) ? 0 : 1;
         free(result);
+        recipe_json_free(recipe);
         free(recipe);
         return rc;
     }

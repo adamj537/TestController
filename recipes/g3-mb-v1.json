@@ -1,0 +1,44 @@
+{
+  "recipeId": "g3-mb-v1",
+  "recipeVersion": "1.0.0",
+  "name": "G3 Main Board — Initial Production Test",
+  "timeoutMs": 120000,
+  "steps": [
+    {
+      "id": "step_power_check",
+      "primitive": "power_check",
+      "label": "DUT Power Check",
+      "onError": "abort",
+      "enabled": true,
+      "params": {
+        "v_min_mv": 3100,
+        "v_max_mv": 3500,
+        "i_min_ma": 5,
+        "i_max_ma": 250,
+        "settle_ms": 200
+      }
+    },
+    {
+      "id": "step_program_pfw",
+      "primitive": "dut_program",
+      "label": "Program PFW",
+      "onError": "abort",
+      "enabled": true,
+      "params": {
+        "target": "pfw",
+        "verify": true,
+        "timeout_s": 60
+      }
+    },
+    {
+      "id": "step_read_id",
+      "primitive": "dut_read_id",
+      "label": "Read DUT ID",
+      "onError": "skip",
+      "enabled": true,
+      "params": {
+        "timeout_ms": 3000
+      }
+    }
+  ]
+}

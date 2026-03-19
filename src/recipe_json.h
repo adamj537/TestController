@@ -3,6 +3,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stddef.h>
+#include "cJSON.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -18,27 +19,35 @@ extern "C" {
 #define JSON_STEP_ON_ERROR_MAX   32
 
 typedef struct {
-    char id[JSON_STEP_ID_MAX];
-    char primitive[JSON_STEP_PRIMITIVE_MAX];
-    char label[JSON_STEP_LABEL_MAX];
-    char on_error[JSON_STEP_ON_ERROR_MAX];   /* "abort" | "skip" | "recovery:<name>" */
-    bool enabled;
+    char    id[JSON_STEP_ID_MAX];
+    char    primitive[JSON_STEP_PRIMITIVE_MAX];
+    char    label[JSON_STEP_LABEL_MAX];
+    char    on_error[JSON_STEP_ON_ERROR_MAX];   /* "abort" | "skip" | "recovery:<name>" */
+    bool    enabled;
+    cJSON  *params;   /* Non-owning pointer into recipe's _root cJSON tree. NULL = no params. */
 } json_recipe_step_t;
 
 typedef struct {
-    char recipe_id[JSON_RECIPE_ID_MAX];
-    char recipe_version[16];
-    char name[64];
+    char    recipe_id[JSON_RECIPE_ID_MAX];
+    char    recipe_version[16];
+    char    name[64];
     uint32_t timeout_ms;
     uint8_t  step_count;
     json_recipe_step_t steps[JSON_RECIPE_STEPS_MAX];
+    cJSON  *_root;    /* Owned cJSON parse tree. Free with recipe_json_free(). NULL if not parsed. */
 } json_recipe_t;
 
 /* ── Parse / Serialize ───────────────────────────────────────────────────── */
 
 /* Parse a JSON string into a json_recipe_t.
- * Returns 0 on success, -1 on parse error. */
+ * Returns 0 on success, -1 on parse error.
+ * On success, recipe->_root owns the cJSON tree. Call recipe_json_free() when done. */
 int recipe_json_parse(const char *json_str, size_t len, json_recipe_t *out);
+
+/* Free the cJSON parse tree owned by a recipe (recipe->_root).
+ * Safe to call on recipes built by recipe_json_from_hardcoded() (_root == NULL).
+ * Does NOT free the json_recipe_t struct itself. */
+void recipe_json_free(json_recipe_t *recipe);
 
 /* Serialize a json_recipe_t to a JSON string.
  * Returns heap-allocated buffer (caller must free). NULL on error. */

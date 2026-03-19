@@ -45,6 +45,11 @@ const tc_mqtt_check_t *selftest_get_checks(void);
 /* Reset check buffer (call before recipe run). */
 void selftest_reset_checks(void);
 
+/* Record a check result into the check buffer.
+ * Used by g3_primitives.c and any future primitive modules outside cmd_selftest.c. */
+void selftest_check_record(const char *id, bool pass);
+void selftest_check_record_mv(const char *id, bool pass, int mv);
+
 #ifdef __cplusplus
 }
 #endif
