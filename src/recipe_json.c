@@ -58,6 +58,8 @@ int recipe_json_parse(const char *json_str, size_t len, json_recipe_t *out)
                 strlcpy(s->primitive, item->valuestring ? item->valuestring : "", sizeof(s->primitive));
             if ((item = cJSON_GetObjectItem(step, "label")))
                 strlcpy(s->label, item->valuestring ? item->valuestring : "", sizeof(s->label));
+            if ((item = cJSON_GetObjectItem(step, "status_msg")))
+                strlcpy(s->status_msg, item->valuestring ? item->valuestring : "", sizeof(s->status_msg));
             if ((item = cJSON_GetObjectItem(step, "onError")))
                 strlcpy(s->on_error, item->valuestring ? item->valuestring : "", sizeof(s->on_error));
             if ((item = cJSON_GetObjectItem(step, "enabled")))
@@ -157,7 +159,8 @@ char *recipe_json_serialize(const json_recipe_t *recipe)
         cJSON *step = cJSON_CreateObject();
         cJSON_AddStringToObject(step, "id", s->id);
         cJSON_AddStringToObject(step, "primitive", s->primitive);
-        if (s->label[0]) cJSON_AddStringToObject(step, "label", s->label);
+        if (s->label[0])      cJSON_AddStringToObject(step, "label",      s->label);
+        if (s->status_msg[0]) cJSON_AddStringToObject(step, "status_msg", s->status_msg);
         cJSON_AddStringToObject(step, "onError", s->on_error);
         cJSON_AddBoolToObject(step, "enabled", s->enabled);
         if (s->params) {

@@ -15,6 +15,7 @@ extern "C" {
 #define JSON_RECIPE_STEPS_MAX          50
 #define JSON_STEP_ID_MAX               32
 #define JSON_STEP_LABEL_MAX            48
+#define JSON_STEP_STATUS_MAX           64
 #define JSON_STEP_PRIMITIVE_MAX        32
 #define JSON_STEP_ON_ERROR_MAX         32
 #define JSON_RECOVERY_BRANCH_NAME_MAX  32
@@ -48,6 +49,7 @@ typedef struct {
     char                id[JSON_STEP_ID_MAX];
     char                primitive[JSON_STEP_PRIMITIVE_MAX];
     char                label[JSON_STEP_LABEL_MAX];
+    char                status_msg[JSON_STEP_STATUS_MAX];   /* optional MQTT status override; defaults to label */
     char                on_error[JSON_STEP_ON_ERROR_MAX];   /* "abort" | "skip" | "recovery:<name>" */
     step_criticality_t  criticality;
     bool                enabled;

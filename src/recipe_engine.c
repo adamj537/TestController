@@ -102,8 +102,13 @@ int recipe_engine_run(const json_recipe_t *recipe, recipe_run_result_t *result)
         }
 
         step_num++;
+        /* Resolve display status: status_msg override → label → id */
+        const char *step_status = step->status_msg[0] ? step->status_msg
+                                : (step->label[0]     ? step->label
+                                :                       step->id);
         tc_mqtt_publish_test_progress(true, step_num, enabled_total,
-                                      step->label[0] ? step->label : step->id);
+                                      step->label[0] ? step->label : step->id,
+                                      step_status);
 
         /* ── Execute (with optional retry via recovery branch) ──────────── */
 
@@ -175,6 +180,14 @@ int recipe_engine_run(const json_recipe_t *recipe, recipe_run_result_t *result)
         if (result->step_result_count < JSON_RECIPE_STEPS_MAX) {
             result->step_results[result->step_result_count].passed = step_ok;
             result->step_result_count++;
+        }
+
+        /* Publish per-step result MQTT — after result recorded, before criticality handling */
+        {
+            uint32_t dur_ms = (result->step_result_count > 0)
+                ? result->step_results[result->step_result_count - 1].duration_ms
+                : 0;
+            tc_mqtt_publish_step_result(step_num, step->id, step_status, step_ok, dur_ms);
         }
 
         result->total_count++;
