@@ -93,7 +93,7 @@ bool dut_detect_sample(int *mv_out)
         mux_release();
         return false;
     }
-    bool ok = i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x02) &&
+    bool ok = i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x03) &&
               i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONV_RATE, 0x01) &&
               i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONFIG,    0x01);
     if (!ok) {
@@ -138,7 +138,9 @@ static void dut_detect_task(void *pvarg)
 
     while (s_running) {
         int mv = 0;
-        if (!dut_detect_sample(&mv)) {
+        /* mv==0 means ADC conversion not yet complete (register still zero after
+         * re-init); treat as a failed read and retry next cycle. */
+        if (!dut_detect_sample(&mv) || mv == 0) {
             vTaskDelay(pdMS_TO_TICKS(DUT_DETECT_INTERVAL_MS));
             continue;
         }
