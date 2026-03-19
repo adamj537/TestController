@@ -63,6 +63,20 @@ static bool ina219_read(uint8_t addr, int *vbus_mv_out, int *current_ma_out)
     return true;
 }
 
+/* ── g3_critical_abort ───────────────────────────────────────────────────── *
+ *
+ * Called by the recipe engine on a CRITICAL step failure.
+ * Cuts DUT power immediately (VDUT1+2 off, PB-A released).
+ * Must complete within the engine's 100 ms abort budget.
+ */
+void g3_critical_abort(void)
+{
+    mux_release();        /* Release PB-A (SIG=1) immediately */
+    vdac_set_duty(0, 0); /* VDUT1 off */
+    vdac_set_duty(1, 0); /* VDUT2 off */
+    printf("[ABORT] CRITICAL step failure — DUT power cut\n");
+}
+
 /* ── power_check ─────────────────────────────────────────────────────────── *
  *
  * Enable VDUT at the production operating point, measure DUT supply voltage

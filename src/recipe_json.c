@@ -67,8 +67,56 @@ int recipe_json_parse(const char *json_str, size_t len, json_recipe_t *out)
             if (s->on_error[0] == '\0')
                 strlcpy(s->on_error, "abort", sizeof(s->on_error));
 
+            /* Criticality — default REQUIRED if absent or unrecognised */
+            s->criticality = STEP_CRITICALITY_REQUIRED;
+            if ((item = cJSON_GetObjectItem(step, "criticality")) && cJSON_IsString(item)) {
+                if (strcmp(item->valuestring, "CRITICAL") == 0)
+                    s->criticality = STEP_CRITICALITY_CRITICAL;
+                else if (strcmp(item->valuestring, "OPTIONAL") == 0)
+                    s->criticality = STEP_CRITICALITY_OPTIONAL;
+            }
+
             /* params — non-owning pointer into root tree; root must outlive recipe */
             s->params = cJSON_GetObjectItem(step, "params");
+        }
+    }
+
+    /* Recovery branches — optional "recoveryBranches" object at recipe root */
+    cJSON *branches_obj = cJSON_GetObjectItem(root, "recoveryBranches");
+    if (cJSON_IsObject(branches_obj)) {
+        cJSON *branch = NULL;
+        cJSON_ArrayForEach(branch, branches_obj) {
+            if (out->recovery_branch_count >= JSON_RECOVERY_BRANCHES_MAX) break;
+            json_recovery_branch_t *rb =
+                &out->recovery_branches[out->recovery_branch_count];
+
+            strlcpy(rb->name, branch->string ? branch->string : "", sizeof(rb->name));
+
+            /* onComplete: "retry" (default) or "abort" */
+            cJSON *oc = cJSON_GetObjectItem(branch, "onComplete");
+            rb->retry_after = !(oc && cJSON_IsString(oc) &&
+                                strcmp(oc->valuestring, "abort") == 0);
+
+            cJSON *ma = cJSON_GetObjectItem(branch, "maxAttempts");
+            rb->max_attempts = (ma && cJSON_IsNumber(ma))
+                               ? (uint8_t)ma->valuedouble : 1;
+
+            cJSON *bsteps = cJSON_GetObjectItem(branch, "steps");
+            if (cJSON_IsArray(bsteps)) {
+                int bcount = cJSON_GetArraySize(bsteps);
+                if (bcount > JSON_RECOVERY_STEPS_MAX) bcount = JSON_RECOVERY_STEPS_MAX;
+                rb->step_count = (uint8_t)bcount;
+                for (int j = 0; j < bcount; j++) {
+                    cJSON *bs = cJSON_GetArrayItem(bsteps, j);
+                    json_recovery_step_t *rs = &rb->steps[j];
+                    cJSON *bid  = cJSON_GetObjectItem(bs, "id");
+                    cJSON *bprim = cJSON_GetObjectItem(bs, "primitive");
+                    strlcpy(rs->id,        bid  && bid->valuestring  ? bid->valuestring  : "", sizeof(rs->id));
+                    strlcpy(rs->primitive, bprim && bprim->valuestring ? bprim->valuestring : "", sizeof(rs->primitive));
+                    rs->params = cJSON_GetObjectItem(bs, "params");
+                }
+            }
+            out->recovery_branch_count++;
         }
     }
 
