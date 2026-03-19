@@ -11,12 +11,10 @@
       "onError": "abort",
       "enabled": true,
       "params": {
-        "_note": "duty_pct MUST be calibrated before use — wrong value damages DUT",
-        "v_min_mv": 3100,
-        "v_max_mv": 3500,
+        "v_nominal_mv": 3300,
+        "v_tolerance_pct": 5,
         "i_min_ma": 5,
-        "i_max_ma": 250,
-        "settle_ms": 200
+        "i_max_ma": 250
       }
     },
     {

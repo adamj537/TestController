@@ -18,6 +18,7 @@
 #include "cmd_i2c.h"
 #include "cmd_swd.h"
 #include "dut_identify.h"
+#include "tc_config.h"
 #include "tc_mqtt.h"
 #include "cJSON.h"
 #include "esp_log.h"
@@ -67,36 +68,46 @@ static bool ina219_read(uint8_t addr, int *vbus_mv_out, int *current_ma_out)
  * Enable VDUT at the production operating point, measure DUT supply voltage
  * and quiescent current via INA219 #0, then disable VDUT.
  *
- * Params:
- *   "duty_pct"    : int  REQUIRED — VDUT PWM duty cycle (0–100).
- *                        MUST be characterised before use — no safe default exists.
- *                        VDUT regulator is inverting: higher duty → lower voltage.
- *                        Selftest windows: 10%→8–12V, 50%→5–9V, 90%→1–5V.
- *                        Setting this wrong WILL damage the DUT (rated ~4V).
- *   "v_min_mv"    : int  minimum acceptable VDUT (default 3100)
- *   "v_max_mv"    : int  maximum acceptable VDUT (default 3500)
- *   "i_min_ma"    : int  minimum quiescent current in mA (default 5)
- *   "i_max_ma"    : int  maximum quiescent current in mA (default 250)
- *   "settle_ms"   : int  settling time after VDUT enable (default 200)
+ * Params (all optional — limits fall back to device config, then hard defaults):
+ *   "v_nominal_mv" : int  target VDUT voltage; duty derived from calibrated curve
+ *                         in config (vdut.slope_mv_per_pct + vdut.intercept_mv).
+ *                         Falls back to config "vdut.v_nominal_mv" (default 3300).
+ *   "v_tolerance_pct": int  ± tolerance on v_nominal (default from config, 5%)
+ *   "i_min_ma"     : int  minimum quiescent current (default from config)
+ *   "i_max_ma"     : int  maximum quiescent current (default from config)
+ *   "settle_ms"    : int  settling time after VDUT enable (default from config)
+ *
+ * Requires device config to be loaded and VDUT curve calibrated before use.
+ * Fails with [FAIL] and no VDUT output if calibration is missing.
  */
 void run_power_check(const cJSON *params)
 {
-    /* duty_pct is required — no default, because the wrong value damages the DUT */
-    const cJSON *duty_item = params ? cJSON_GetObjectItem(params, "duty_pct") : NULL;
-    if (!duty_item || !cJSON_IsNumber(duty_item)) {
-        printf("[FAIL] power_check: 'duty_pct' param required — not set. "
-               "Characterise VDUT curve before use.\n");
+    /* Resolve target voltage: recipe param → config → hard default */
+    int v_nominal_mv = param_int(params, "v_nominal_mv",
+                       tc_config_get_int("vdut.v_nominal_mv", 3300));
+
+    /* Derive duty% from calibrated curve — fails if not calibrated */
+    int duty_pct = tc_config_vdut_duty_for_mv(v_nominal_mv);
+    if (duty_pct < 0) {
+        printf("[FAIL] power_check: VDUT not calibrated — "
+               "set vdut.slope_mv_per_pct and vdut.intercept_mv in config\n");
         selftest_check_record("power_v", false);
         selftest_check_record("power_i", false);
         return;
     }
-    int duty_pct  = (int)duty_item->valuedouble;
 
-    int v_min_mv  = param_int(params, "v_min_mv",  3100);
-    int v_max_mv  = param_int(params, "v_max_mv",  3500);
-    int i_min_ma  = param_int(params, "i_min_ma",  5);
-    int i_max_ma  = param_int(params, "i_max_ma",  250);
-    int settle_ms = param_int(params, "settle_ms", 200);
+    /* Voltage window from ±tolerance */
+    int tol_pct   = param_int(params, "v_tolerance_pct",
+                    tc_config_get_int("vdut.v_tolerance_pct", 5));
+    int v_min_mv  = v_nominal_mv * (100 - tol_pct) / 100;
+    int v_max_mv  = v_nominal_mv * (100 + tol_pct) / 100;
+
+    int i_min_ma  = param_int(params, "i_min_ma",
+                    tc_config_get_int("limits.i_idle_min_ma", 5));
+    int i_max_ma  = param_int(params, "i_max_ma",
+                    tc_config_get_int("limits.i_idle_max_ma", 250));
+    int settle_ms = param_int(params, "settle_ms",
+                    tc_config_get_int("vdut.settle_ms", 300));
 
     /* Enable VDUT at calibrated duty cycle.
      * Assert PB-A (ch0, SIG=0 active low) to latch DUT power — required alongside VDUT. */
