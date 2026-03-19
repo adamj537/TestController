@@ -1,8 +1,9 @@
 /* dut_detect.c — DUT presence detection via U8 DAC MUX signal injection
  *
  * Drives GPIO0 (SIG) HIGH through U8 ch3 into the #3_3V_Volt_Mon pogo net.
- * Without a DUT the signal is unloaded (~3.1V at ADC).  With a DUT, the
- * board's internal impedance pulls it down (~0.9V).  Threshold at ~1500 mV.
+ * Without a DUT the signal is unloaded (~2560 mV, ADC Vref saturated).  With
+ * a DUT, the board's internal impedance pulls it down (~1666 mV measured on
+ * G3 Rev1 hardware).  Threshold at 2000 mV gives margin on both sides.
  *
  * Publishes dut_present as a Sparkplug B DDATA metric on state change.
  *
@@ -30,7 +31,8 @@ static const char *TAG = "dut_det";
 #define DUT_DETECT_TIE_MUX_IDX  1     /* MUX1 (U11) */
 #define DUT_DETECT_TIE_MUX_CH   12    /* MUX1 ch12 → #3_3V_Volt_Mon */
 #define DUT_DETECT_ADC128_CH     1     /* ADC128 CH1 = MUX1 output */
-#define DUT_DETECT_THRESHOLD_MV  1500  /* above = no DUT, below = DUT present */
+#define DUT_DETECT_THRESHOLD_MV  2000  /* above = no DUT, below = DUT present
+                                        * G3 Rev1: no-DUT=2560 mV, DUT=~1666 mV */
 #define DUT_DETECT_INTERVAL_MS   1000  /* poll interval when idle */
 #define DUT_DETECT_DEBOUNCE      3     /* consecutive readings to confirm change */
 
@@ -93,7 +95,7 @@ bool dut_detect_sample(int *mv_out)
         mux_release();
         return false;
     }
-    bool ok = i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x03) &&
+    bool ok = i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x02) &&
               i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONV_RATE, 0x01) &&
               i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONFIG,    0x01);
     if (!ok) {
