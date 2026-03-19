@@ -67,7 +67,12 @@ static bool ina219_read(uint8_t addr, int *vbus_mv_out, int *current_ma_out)
  * Enable VDUT at the production operating point, measure DUT supply voltage
  * and quiescent current via INA219 #0, then disable VDUT.
  *
- * Params (all optional — defaults match G3 MB rev B specs):
+ * Params:
+ *   "duty_pct"    : int  REQUIRED — VDUT PWM duty cycle (0–100).
+ *                        MUST be characterised before use — no safe default exists.
+ *                        VDUT regulator is inverting: higher duty → lower voltage.
+ *                        Selftest windows: 10%→8–12V, 50%→5–9V, 90%→1–5V.
+ *                        Setting this wrong WILL damage the DUT (rated ~4V).
  *   "v_min_mv"    : int  minimum acceptable VDUT (default 3100)
  *   "v_max_mv"    : int  maximum acceptable VDUT (default 3500)
  *   "i_min_ma"    : int  minimum quiescent current in mA (default 5)
@@ -76,21 +81,35 @@ static bool ina219_read(uint8_t addr, int *vbus_mv_out, int *current_ma_out)
  */
 void run_power_check(const cJSON *params)
 {
+    /* duty_pct is required — no default, because the wrong value damages the DUT */
+    const cJSON *duty_item = params ? cJSON_GetObjectItem(params, "duty_pct") : NULL;
+    if (!duty_item || !cJSON_IsNumber(duty_item)) {
+        printf("[FAIL] power_check: 'duty_pct' param required — not set. "
+               "Characterise VDUT curve before use.\n");
+        selftest_check_record("power_v", false);
+        selftest_check_record("power_i", false);
+        return;
+    }
+    int duty_pct  = (int)duty_item->valuedouble;
+
     int v_min_mv  = param_int(params, "v_min_mv",  3100);
     int v_max_mv  = param_int(params, "v_max_mv",  3500);
     int i_min_ma  = param_int(params, "i_min_ma",  5);
     int i_max_ma  = param_int(params, "i_max_ma",  250);
     int settle_ms = param_int(params, "settle_ms", 200);
 
-    /* Enable VDUT at 50% duty (≈3.3V nominal) */
-    vdac_set_duty(0, 50);  /* VDUT1 */
-    vdac_set_duty(1, 50);  /* VDUT2 */
+    /* Enable VDUT at calibrated duty cycle.
+     * Assert PB-A (ch0, SIG=0 active low) to latch DUT power — required alongside VDUT. */
+    vdac_set_duty(0, duty_pct);  /* VDUT1 */
+    vdac_set_duty(1, duty_pct);  /* VDUT2 */
+    mux_select(0, 0);            /* PB-A assert: ch0, SIG=0 */
     vTaskDelay(pdMS_TO_TICKS(settle_ms));
 
     int vbus_mv = 0, current_ma = 0;
     bool read_ok = ina219_read(ADDR_INA219_0, &vbus_mv, &current_ma);
 
-    /* Disable VDUT before any pass/fail recording */
+    /* Disable VDUT and release PB-A before pass/fail recording */
+    mux_release();               /* SIG=1 — DUT KEEPALIVE must take over */
     vdac_set_duty(0, 0);
     vdac_set_duty(1, 0);
 

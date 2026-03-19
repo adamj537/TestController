@@ -4,7 +4,11 @@
  *
  * Simulates NVS and SD card storage in RAM for off-board testing.
  * Includes test helpers for verification.
+ *
+ * NOT compiled for embedded targets — guard prevents 1MB BSS from landing
+ * in firmware. Included directly by test files via #include.
  */
+#ifndef ESP_PLATFORM
 
 #include "storage.h"
 #include <string.h>
@@ -261,3 +265,5 @@ void Storage_Mock_GetStats(uint32_t* used_bytes, uint32_t* total_bytes) {
 uint32_t Storage_Mock_GetEntryCount(void) {
     return mock_storage.entry_count;
 }
+
+#endif /* ESP_PLATFORM */

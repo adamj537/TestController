@@ -11,6 +11,7 @@
       "onError": "abort",
       "enabled": true,
       "params": {
+        "_note": "duty_pct MUST be calibrated before use — wrong value damages DUT",
         "v_min_mv": 3100,
         "v_max_mv": 3500,
         "i_min_ma": 5,
