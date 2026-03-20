@@ -20,7 +20,7 @@
 #define ADDR_ADC128D818    0x1D
 #define ADC128_REG_CONFIG    0x00   /* bit0=START, bit7=INIT(resets all regs, self-clearing) */
 #define ADC128_REG_CONV_RATE 0x07   /* 0=low-power (~728ms/scan), 1=high-rate (~12ms/ch) */
-#define ADC128_REG_ADV_CFG   0x0B   /* bit0=ext-VREF-en, bits[2:1]=mode: 0x02=Mode1(all 8 voltage) */
+#define ADC128_REG_ADV_CFG   0x0B   /* bit0=ext-VREF-en, bits[2:1]=mode: 0x03=Mode1+ext-VREF */
 #define ADC128_REG_CH_BASE 0x20   /* CH0=0x20 … CH7=0x27, 2 bytes, left-justified 12-bit */
 #define ADC128_VREF_MV     2560
 #define ADC128_FULL        4096
@@ -102,7 +102,7 @@ bool vdac_set_enable(int ch_idx, bool enable)
 
 bool adc128_ensure_running(void)
 {
-    return i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x02) &&  /* Mode 1: IN7 as voltage (bits[2:1]=01 → 0x02) */
+    return i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x03) &&  /* Mode 1 + ext-VREF: bits[2:1]=01 → 0x02, bit0=1 → 0x03 */
            i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONV_RATE, 0x01) &&  /* high rate ~12ms/ch */
            i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONFIG,    0x01);
 }
