@@ -7,6 +7,7 @@
 #include "freertos/task.h"
 #include "cmd_i2c.h"
 #include "cmd_vdac.h"
+#include "tc_config.h"
 
 /* ── TCC carrier v1 pin assignments ──────────────────────────────────────── */
 
@@ -25,10 +26,15 @@
 #define ADC128_VREF_MV     2560
 #define ADC128_FULL        4096
 
-/* CH6 = VDUT1Mon, CH7 = VDUT2Mon.
- * Divider: 30K top (R7/R8) + 10K bottom (R1/R2)  → V_rail = V_adc × 4 */
+/* CH6 = VDUT1Mon, CH7 = VDUT2Mon — voltage dividers not wired on TCC v1.1.
+ * INA219 Vbus is the primary voltage measurement path on this board spin. */
 #define ADC128_MON_NUM  4
 #define ADC128_MON_DEN  1
+
+/* ── INA219 Vbus — primary VDUT voltage measurement ─────────────────────── */
+#define INA219_0_ADDR       0x40
+#define INA219_1_ADDR       0x41
+#define INA219_REG_BUS_V    0x02   /* Bus voltage; 12-bit left-justified, 4mV LSB */
 
 /* ── LEDC — Timer 1 (Timer 0 is reserved by cmd_pwm) ────────────────────── */
 
@@ -117,6 +123,17 @@ bool adc128_read_mon(uint8_t ch, int *rail_mv_out)
     return true;
 }
 
+/* ── INA219 Vbus helper ──────────────────────────────────────────────────── */
+
+static bool read_ina219_vbus(uint8_t addr, int *vbus_mv_out)
+{
+    uint8_t buf[2];
+    if (!i2c_read_reg(addr, INA219_REG_BUS_V, buf, 2)) return false;
+    /* Bits[15:3] are the 13-bit bus voltage (4 mV LSB); bits[2:0] are flags. */
+    *vbus_mv_out = (((int16_t)((buf[0] << 8) | buf[1])) >> 3) * 4;
+    return true;
+}
+
 /* ── vdac char ───────────────────────────────────────────────────────────── */
 
 static int do_vdac_char(int argc, char **argv)
@@ -133,22 +150,20 @@ static int do_vdac_char(int argc, char **argv)
         printf("Enable GPIO config failed\n"); return 1;
     }
 
-    /* 3. Ensure ADC128 is running */
-    if (!adc128_ensure_running()) {
-        printf("ADC128 init failed\n");
-        vdac_set_enable(0, false); vdac_set_enable(1, false);
-        return 1;
-    }
-
     /* Allow regulator to ramp from any previous state to 0%-duty setpoint */
     printf("Settling %d ms...\n", VDAC_INIT_SETTLE_MS);
     vTaskDelay(pdMS_TO_TICKS(VDAC_INIT_SETTLE_MS));
 
-    /* 4. Sweep 0 % → 100 % in 5 % steps */
+    /* 3. Sweep 0 % → 100 % in 5 % steps.
+     * INA219 Vbus is the primary voltage source — ADC128 CH6/CH7 (VDUT1Mon/
+     * VDUT2Mon) are not wired on TCC v1.1 and always read 0 mV. */
     printf("VDAC Characterization  (LEDC %d kHz, %d ms/step)\n",
            VDAC_LEDC_FREQ_HZ / 1000, VDAC_STEP_SETTLE_MS);
     printf("duty%%  VDUT1_mV  VDUT2_mV\n");
     printf("-----  --------  --------\n");
+
+    /* Capture two well-separated points for slope/intercept calibration. */
+    int cal_v50 = -1, cal_v90 = -1;
 
     for (int pct = 0; pct <= 100; pct += 5) {
         vdac_set_duty(0, pct);
@@ -156,21 +171,45 @@ static int do_vdac_char(int argc, char **argv)
         vTaskDelay(pdMS_TO_TICKS(VDAC_STEP_SETTLE_MS));
 
         int v1 = -1, v2 = -1;
-        bool ok1 = adc128_read_mon(6, &v1);
-        bool ok2 = adc128_read_mon(7, &v2);
+        bool ok1 = read_ina219_vbus(INA219_0_ADDR, &v1);
+        bool ok2 = read_ina219_vbus(INA219_1_ADDR, &v2);
 
         if (ok1 && ok2)
             printf("  %3d    %5d     %5d\n", pct, v1, v2);
         else
             printf("  %3d    %-8s  %-8s\n", pct,
                    ok1 ? "ok" : "ERR", ok2 ? "ok" : "ERR");
+
+        /* Calibration anchor points for VDUT1 */
+        if (pct == 50 && ok1 && v1 > 0) cal_v50 = v1;
+        if (pct == 90 && ok1 && v1 > 0) cal_v90 = v1;
     }
 
-    /* 5. Clean up */
+    /* 4. Clean up */
     vdac_set_duty(0, 0);
     vdac_set_duty(1, 0);
     vdac_set_enable(0, false);
     vdac_set_enable(1, false);
+
+    /* 5. Compute calibration from the two anchor points and persist.
+     *    slope = ΔV / Δduty  (negative — higher duty → lower voltage)
+     *    intercept = V50 - slope × 50 */
+    if (cal_v50 > 0 && cal_v90 > 0 && cal_v50 != cal_v90) {
+        int slope     = (cal_v90 - cal_v50) / (90 - 50);
+        int intercept = cal_v50 - slope * 50;
+        printf("\nCalibration:  slope=%d mV/%%  intercept=%d mV\n",
+               slope, intercept);
+        printf("  Predicted V@90%%=%d mV  measured=%d mV\n",
+               slope * 90 + intercept, cal_v90);
+        tc_config_set_int("vdut.slope_mv_per_pct", slope);
+        tc_config_set_int("vdut.intercept_mv",     intercept);
+        if (tc_config_save() == 0)
+            printf("Calibration saved.\n");
+        else
+            printf("ERROR: save failed — run 'config save' manually\n");
+    } else {
+        printf("\nCalibration skipped — INA219 readings at 50%% or 90%% not valid\n");
+    }
 
     return 0;
 }
