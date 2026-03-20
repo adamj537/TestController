@@ -29,6 +29,10 @@
 #include "tie_pinmap.h"
 #include "cJSON.h"
 
+/* ── Forward declarations ─────────────────────────────────────────────────── */
+
+static bool adc128_read_raw_mv(uint8_t ch, int *mv_out);
+
 /* ── TCC carrier device map ───────────────────────────────────────────────── */
 
 #define ADDR_ADC128D818  0x1D   /* 8-ch analog input ADC */
@@ -247,18 +251,20 @@ void run_i2c(const cJSON *params)
 
 void run_adc(const cJSON *params)
 {
-    int raw = 0, mv = -1;
-    bool ok = adc_selftest_read(0, &raw, &mv);
-    if (ok && mv >= 0) {
-        report(true,  "ADC:  CH0 (GPIO1) raw=%-5d  %4d mV", raw, mv);
-        st_record_mv("adc_gpio1", true, mv);
-    } else if (ok) {
-        report(true,  "ADC:  CH0 (GPIO1) raw=%-5d  (no calibration)", raw);
-        st_record("adc_gpio1", true);
-    } else {
-        report(false, "ADC:  CH0 (GPIO1) read failed");
-        st_record("adc_gpio1", false);
-    }
+    /* GPIO1 (ADC1_CH0) and GPIO2 (ADC1_CH1) are now dedicated to LEDC/VDUT PWM
+     * (HW-013 rework, HW-014 fix).  The DC monitoring signals previously on
+     * those GPIOs have moved to the external ADC128D818: CH6 = VDUT1Mon,
+     * CH7 = VDUT2Mon.  Read the ADC128 directly; no divider correction here
+     * (raw mV at the ADC pin — the 4× scale factor is applied in cmd_vdac.c). */
+    int mv6 = -1, mv7 = -1;
+    bool ok6 = adc128_read_raw_mv(6, &mv6);
+    bool ok7 = adc128_read_raw_mv(7, &mv7);
+
+    report(ok6, "ADC:  ADC128 CH6 (VDUT1Mon)  %4d mV", mv6);
+    st_record_mv("adc128_ch6", ok6, mv6);
+
+    report(ok7, "ADC:  ADC128 CH7 (VDUT2Mon)  %4d mV", mv7);
+    st_record_mv("adc128_ch7", ok7, mv7);
 }
 
 void run_wifi(const cJSON *params)
@@ -299,8 +305,8 @@ void run_ota(const cJSON *params)
  * Sweeps VDUT1 and VDUT2 through three duty-cycle setpoints.  INA219 V_BUS
  * is the primary voltage measurement (±0.5% max at room temp, measured at
  * the DUT connector — after the 0.1Ω shunt, which drops <0.1mV at 1mA).
- * ADC128 CH6/CH7 are no longer used here; those channels are reserved for
- * DUT_VIN and ISO_POWER_IN monitoring on the next board spin.
+ * ADC128 CH6/CH7 carry VDUT1Mon and VDUT2Mon respectively (HW-014 fix —
+ * these moved from ADC1_CH0/CH1 on GPIO1/2, which are now LEDC-only).
  *
  * Pass criteria:
  *   1. INA219 V_BUS within the per-point sanity window.
