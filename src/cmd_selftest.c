@@ -252,10 +252,10 @@ void run_i2c(const cJSON *params)
 void run_adc(const cJSON *params)
 {
     /* GPIO1 (ADC1_CH0) and GPIO2 (ADC1_CH1) are now dedicated to LEDC/VDUT PWM
-     * (HW-013 rework, HW-014 fix).  The DC monitoring signals previously on
-     * those GPIOs have moved to the external ADC128D818: CH6 = VDUT1Mon,
-     * CH7 = VDUT2Mon.  Read the ADC128 directly; no divider correction here
-     * (raw mV at the ADC pin — the 4× scale factor is applied in cmd_vdac.c). */
+     * (HW-013 rework, HW-014 fix).  Reading ADC1_CH0 puts GPIO1 in analog mode
+     * which suppresses LEDC output on that pin.  Read ADC128 CH6/CH7 instead.
+     * NOTE: CH6/CH7 voltage dividers are not yet wired on TCC v1.1 — reads 0 mV
+     * until the next board spin adds VDUT1Mon/VDUT2Mon connections. */
     int mv6 = -1, mv7 = -1;
     bool ok6 = adc128_read_raw_mv(6, &mv6);
     bool ok7 = adc128_read_raw_mv(7, &mv7);
@@ -305,8 +305,9 @@ void run_ota(const cJSON *params)
  * Sweeps VDUT1 and VDUT2 through three duty-cycle setpoints.  INA219 V_BUS
  * is the primary voltage measurement (±0.5% max at room temp, measured at
  * the DUT connector — after the 0.1Ω shunt, which drops <0.1mV at 1mA).
- * ADC128 CH6/CH7 carry VDUT1Mon and VDUT2Mon respectively (HW-014 fix —
- * these moved from ADC1_CH0/CH1 on GPIO1/2, which are now LEDC-only).
+ * ADC128 CH6/CH7 carry VDUT1Mon/VDUT2Mon (planned — not yet wired on TCC v1.1).
+ * The selftest adc step reads CH6/CH7 instead of ADC1_CH0/CH1 to keep GPIO1/2
+ * in digital mode for LEDC (HW-014 fix).
  *
  * Pass criteria:
  *   1. INA219 V_BUS within the per-point sanity window.
