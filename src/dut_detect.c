@@ -15,6 +15,7 @@
 #include "cmd_swd.h"
 #include "cmd_i2c.h"
 #include "tc_mqtt.h"
+#include "tc_statemachine.h"
 #include "tcc_pinmap.h"
 #include "tie_pinmap.h"
 #include "driver/gpio.h"
@@ -122,6 +123,11 @@ static void publish_dut_presence(bool present, int mv)
 {
     printf("DUT detect: %s  (%d mV)\n", present ? "PRESENT" : "ABSENT", mv);
     tc_mqtt_publish_dut_presence(present, mv);
+    /* Auto-start: trigger selftest-only cycle on DUT insert (if SM is idle).
+     * Config key autostart/enabled (default 1) can disable this per-fixture. */
+    if (present && tc_sm_state() == TC_SM_IDLE) {
+        tc_sm_cmd_start_selftest_only();
+    }
 }
 
 /* ── Detection task ────────────────────────────────────────────────────────── */
