@@ -36,8 +36,8 @@
 #define VDAC_LEDC_TIMER     LEDC_TIMER_1
 #define VDAC_LEDC_DUTY_RES  LEDC_TIMER_12_BIT   /* 0–4095 */
 #define VDAC_LEDC_FREQ_HZ   10000               /* 10 kHz carrier */
-#define VDAC_CH1            LEDC_CHANNEL_0      /* GPIO19 → VDUT1 */
-#define VDAC_CH2            LEDC_CHANNEL_1      /* GPIO20 → VDUT2 */
+#define VDAC_CH1            LEDC_CHANNEL_0      /* GPIO1 → VDUT1 (HW-013 rework; was GPIO19) */
+#define VDAC_CH2            LEDC_CHANNEL_1      /* GPIO2 → VDUT2 (HW-013 rework; was GPIO20) */
 
 /* Regulator settling time after a duty step change.
  * RC filter τ = 1kΩ × 0.1µF = 100µs (negligible).
