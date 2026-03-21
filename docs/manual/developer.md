@@ -493,3 +493,85 @@ payload schema and all supported `cal_set` keys.
 
 The blob survives OTA because NVS is a separate flash partition from the
 firmware image.
+
+---
+
+## Production recipe — g3-mb-v1
+
+The production test recipe is defined in `recipes/g3-mb-v1.json`.  It runs
+when the state machine starts and loads the recipe from LittleFS by ID
+(`g3-mb-v1`).  Steps execute in order; a CRITICAL failure aborts immediately
+and (where applicable) cuts VDUT power.
+
+### Step summary
+
+| # | Step ID | Criticality | Enabled | Description |
+|---|---------|-------------|---------|-------------|
+| 1 | `i2c` | CRITICAL | ✅ | I²C bus scan + rail check |
+| 2 | `adc` | OPTIONAL | ✅ | ESP32 internal ADC sanity |
+| 3 | `wifi` | REQUIRED | ✅ | WiFi connected |
+| 4 | `ota` | REQUIRED | ✅ | OTA partition valid |
+| 5 | `dut_read_id` | REQUIRED | ✅ | DUT STM32 UID96 via UART |
+| 6 | `dut_program` | CRITICAL | ❌ | Flash PFW via SWD — disabled until PFW binary in NVS |
+| 7 | `power_check` | CRITICAL | ✅ | DUT 3.3 V ± 5 %, 5–250 mA (INA219) |
+| 8 | `dut_heartbeat` | CRITICAL | ❌ | PA9 1 Hz toggle via ADC128 — disabled until PFW running |
+| 9 | `dut_enter_test` | CRITICAL | ✅ | UART: `ENTER_TEST` → `OK TEST_MODE_ACTIVE` |
+| 10 | `dut_version` | REQUIRED | ✅ | UART: `VERSION` → `OK <fw-string>` |
+| 11 | `dut_hw_rev` | REQUIRED | ✅ | UART: `HW_REV` → `OK <rev-string>` |
+| 12 | `dut_uc_adc_vref` | REQUIRED | ✅ | UART: `UC_ADC_READ VREF` → 2400–2600 mV |
+| 13 | `dut_uc_adc_3v_rail` | REQUIRED | ✅ | UART: `UC_ADC_READ 3V_RAIL` → 2850–3150 mV |
+| 14 | `dut_flash_test` | REQUIRED | ✅ | UART: `FLASH_TEST` → response contains `PASS` |
+| 15 | `dut_rtc_read` | REQUIRED | ✅ | UART: `RTC_READ` → 1550–3600 mV (coin cell) |
+| 16 | `dut_exit_test` | REQUIRED | ✅ | UART: `EXIT_TEST` → `OK` |
+| 17 | `mux_scan` | REQUIRED | ✅ | TIE MUX scan (4 mux × 16 ch) |
+
+### DUT UART interface
+
+Steps 9–16 communicate with the DUT over UART_NUM_1 (TC GPIO43 TX → DUT RX,
+GPIO44 RX ← DUT TX) at 115200 8N1.  All commands follow the protocol:
+
+```
+TC → DUT:  CMD [ARGS]\r\n
+DUT → TC:  OK [DATA]\r\n   (or ERR [CODE]\r\n on failure)
+```
+
+The UART driver is opened once in `dut_enter_test` and closed in
+`dut_exit_test`.  If `ENTER_TEST` fails, the driver closes immediately and all
+subsequent UART steps skip via the `s_uart_open` gate — no spurious UART
+errors propagate.
+
+**Blocker:** Steps 9–16 require the DUT PFW UART command handler (FW-2) to be
+flashed.  Until FW-2 is implemented and flashed, all UART steps will time out
+and record as FAIL.
+
+### Uploading the recipe
+
+The recipe JSON lives in the repo at `recipes/g3-mb-v1.json`.  After an OTA
+firmware update, upload the recipe to LittleFS with:
+
+```bash
+python3 scripts/upload_recipe.py recipes/g3-mb-v1.json
+```
+
+This uses the `recipe set-b64 <id> <base64>` console command (requires
+firmware with `max_cmdline_length = 4096`, set since v1.2.0).
+
+To run the recipe manually from the TCP console:
+
+```
+recipe run g3-mb-v1
+```
+
+To set it as the active recipe (run automatically on `sm start`):
+
+```
+nvs_set recipes active str g3-mb-v1
+```
+
+### Recipe version history
+
+| Version | Date | Change |
+|---------|------|--------|
+| 1.0.0 | 2026-03-18 | Initial recipe — TC carrier steps only |
+| 1.1.0 | 2026-03-19 | Add DUT UART steps (disabled), heartbeat, dut_program |
+| 1.2.0 | 2026-03-21 | Enable 8 DUT UART steps (enter→exit); heartbeat + program remain disabled |
