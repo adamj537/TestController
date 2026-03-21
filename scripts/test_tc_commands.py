@@ -130,7 +130,8 @@ def main():
     print("\n[2] help")
     resp = tc.cmd("help")
     expected_cmds = ["gpio", "pwm", "adc", "i2c", "wifi", "ota", "selftest",
-                     "mac", "vdac", "uart", "swd", "mux", "mqtt", "sm", "dut", "recipe"]
+                     "mac", "vdac", "uart", "swd", "mux", "mqtt", "sm", "dut", "recipe",
+                     "config", "cal"]
     for cmd_name in expected_cmds:
         r.check(f"help lists '{cmd_name}'", cmd_name in resp)
 
@@ -298,6 +299,54 @@ def main():
     tc.reconnect()
     resp = tc.cmd("recipe delete regtest", wait=3)
     r.check("recipe delete regtest", "deleted" in resp.lower())
+
+    # ── 19. cal ──────────────────────────────────────────────────────────
+    print("\n[19] cal")
+    tc.reconnect()
+    resp = tc.cmd("cal show", wait=3)
+    r.check("cal show: returns JSON", "{" in resp and "vdut" in resp)
+    r.check("cal show: has ina219 block", "ina219" in resp)
+    r.check("cal show: has adc128 block", "adc128" in resp)
+
+    tc.reconnect()
+    resp = tc.cmd("cal load", wait=3)
+    r.check("cal load: succeeds", "loaded" in resp.lower() or "default" in resp.lower())
+
+    tc.reconnect()
+    resp = tc.cmd("cal vdut 0 -87 11200", wait=3)
+    r.check("cal vdut set: accepted", "slope" in resp.lower() or "vdut" in resp.lower())
+
+    tc.reconnect()
+    resp = tc.cmd("cal vdut-duty 0 3300", wait=3)
+    r.check("cal vdut-duty: returns duty", "duty" in resp.lower() or "%" in resp)
+
+    tc.reconnect()
+    resp = tc.cmd("cal ina 0 v 1.02 10", wait=3)
+    r.check("cal ina ch0 v: accepted", "gain" in resp.lower() or "ina219" in resp.lower())
+
+    tc.reconnect()
+    resp = tc.cmd("cal adc 0 1.05 -5", wait=3)
+    r.check("cal adc ch0: accepted", "gain" in resp.lower() or "adc" in resp.lower())
+
+    tc.reconnect()
+    resp = tc.cmd("cal save", wait=3)
+    r.check("cal save: succeeds", "saved" in resp.lower())
+
+    # Verify round-trip: reset to defaults, reload from NVS, confirm vdut is back
+    tc.reconnect()
+    tc.cmd("cal reset", wait=2)
+    tc.reconnect()
+    tc.cmd("cal load", wait=2)
+    tc.reconnect()
+    resp = tc.cmd("cal show", wait=3)
+    r.check("cal load roundtrip: vdut slope restored", '"slope_mv_per_pct": -87' in resp or
+            '"slope_mv_per_pct":\t-87' in resp)
+
+    # Clean up: restore factory defaults and save
+    tc.reconnect()
+    tc.cmd("cal reset", wait=2)
+    tc.reconnect()
+    tc.cmd("cal save", wait=2)
 
     # ── Pogo-blocked (skipped) ───────────────────────────────────────────
     print("\n[--] Pogo-blocked (skipped)")

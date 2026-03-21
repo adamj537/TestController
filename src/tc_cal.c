@@ -28,9 +28,9 @@ static const char *KEY = "cal";
 /* ── In-RAM calibration data ─────────────────────────────────────────────── */
 
 typedef struct {
-    /* VDUT PWM DAC — inverting model */
-    int   vdut_slope_mv_per_pct;   /* 0 = uncalibrated */
-    int   vdut_intercept_mv;
+    /* VDUT PWM DAC — inverting model; ch0=VDUT1, ch1=VDUT2; 0=uncalibrated */
+    int   vdut_slope_mv_per_pct[TC_CAL_VDUT_NCH];
+    int   vdut_intercept_mv[TC_CAL_VDUT_NCH];
 
     /* INA219 voltage (Vbus) per channel */
     float ina_v_gain[TC_CAL_INA_NCH];
@@ -52,8 +52,10 @@ static bool       s_loaded = false;
 
 static void apply_defaults(cal_data_t *c)
 {
-    c->vdut_slope_mv_per_pct = 0;   /* uncalibrated sentinel */
-    c->vdut_intercept_mv     = 0;
+    for (int i = 0; i < TC_CAL_VDUT_NCH; i++) {
+        c->vdut_slope_mv_per_pct[i] = 0;   /* uncalibrated sentinel */
+        c->vdut_intercept_mv[i]     = 0;
+    }
 
     for (int i = 0; i < TC_CAL_INA_NCH; i++) {
         c->ina_v_gain[i]      = 1.0f;
@@ -74,10 +76,15 @@ static cJSON *cal_to_json(const cal_data_t *c)
     cJSON *root = cJSON_CreateObject();
     if (!root) return NULL;
 
-    /* VDUT */
+    /* VDUT — two channels */
     cJSON *vdut = cJSON_AddObjectToObject(root, "vdut");
-    cJSON_AddNumberToObject(vdut, "slope_mv_per_pct", c->vdut_slope_mv_per_pct);
-    cJSON_AddNumberToObject(vdut, "intercept_mv",     c->vdut_intercept_mv);
+    for (int ch = 0; ch < TC_CAL_VDUT_NCH; ch++) {
+        char vkey[8];
+        snprintf(vkey, sizeof(vkey), "ch%d", ch);
+        cJSON *vc = cJSON_AddObjectToObject(vdut, vkey);
+        cJSON_AddNumberToObject(vc, "slope_mv_per_pct", c->vdut_slope_mv_per_pct[ch]);
+        cJSON_AddNumberToObject(vc, "intercept_mv",     c->vdut_intercept_mv[ch]);
+    }
 
     /* INA219 */
     cJSON *ina = cJSON_AddObjectToObject(root, "ina219");
@@ -108,13 +115,29 @@ static void json_to_cal(const cJSON *root, cal_data_t *c)
 {
     apply_defaults(c);   /* start from defaults — missing keys stay at default */
 
-    /* VDUT */
+    /* VDUT — new format: ch0/ch1 sub-objects; old format: slope/intercept directly */
     const cJSON *vdut = cJSON_GetObjectItem(root, "vdut");
     if (vdut) {
-        const cJSON *s = cJSON_GetObjectItem(vdut, "slope_mv_per_pct");
-        const cJSON *i = cJSON_GetObjectItem(vdut, "intercept_mv");
-        if (s && cJSON_IsNumber(s)) c->vdut_slope_mv_per_pct = (int)s->valuedouble;
-        if (i && cJSON_IsNumber(i)) c->vdut_intercept_mv     = (int)i->valuedouble;
+        const cJSON *ch0_node = cJSON_GetObjectItem(vdut, "ch0");
+        if (ch0_node) {
+            /* New per-channel format */
+            for (int ch = 0; ch < TC_CAL_VDUT_NCH; ch++) {
+                char vkey[8];
+                snprintf(vkey, sizeof(vkey), "ch%d", ch);
+                const cJSON *vc = cJSON_GetObjectItem(vdut, vkey);
+                if (!vc) continue;
+                const cJSON *s = cJSON_GetObjectItem(vc, "slope_mv_per_pct");
+                const cJSON *i = cJSON_GetObjectItem(vc, "intercept_mv");
+                if (s && cJSON_IsNumber(s)) c->vdut_slope_mv_per_pct[ch] = (int)s->valuedouble;
+                if (i && cJSON_IsNumber(i)) c->vdut_intercept_mv[ch]     = (int)i->valuedouble;
+            }
+        } else {
+            /* Old single-channel format — migrate to ch0; ch1 stays at default */
+            const cJSON *s = cJSON_GetObjectItem(vdut, "slope_mv_per_pct");
+            const cJSON *i = cJSON_GetObjectItem(vdut, "intercept_mv");
+            if (s && cJSON_IsNumber(s)) c->vdut_slope_mv_per_pct[0] = (int)s->valuedouble;
+            if (i && cJSON_IsNumber(i)) c->vdut_intercept_mv[0]     = (int)i->valuedouble;
+        }
     }
 
     /* INA219 */
@@ -233,25 +256,28 @@ int tc_cal_save(void)
 
 /* ── VDUT ────────────────────────────────────────────────────────────────── */
 
-void tc_cal_get_vdut(int *slope_out, int *intercept_out)
+void tc_cal_get_vdut(int ch, int *slope_out, int *intercept_out)
 {
-    if (slope_out)     *slope_out     = s_cal.vdut_slope_mv_per_pct;
-    if (intercept_out) *intercept_out = s_cal.vdut_intercept_mv;
+    if (ch < 0 || ch >= TC_CAL_VDUT_NCH) return;
+    if (slope_out)     *slope_out     = s_cal.vdut_slope_mv_per_pct[ch];
+    if (intercept_out) *intercept_out = s_cal.vdut_intercept_mv[ch];
 }
 
-void tc_cal_set_vdut(int slope_mv_per_pct, int intercept_mv)
+void tc_cal_set_vdut(int ch, int slope_mv_per_pct, int intercept_mv)
 {
-    s_cal.vdut_slope_mv_per_pct = slope_mv_per_pct;
-    s_cal.vdut_intercept_mv     = intercept_mv;
+    if (ch < 0 || ch >= TC_CAL_VDUT_NCH) return;
+    s_cal.vdut_slope_mv_per_pct[ch] = slope_mv_per_pct;
+    s_cal.vdut_intercept_mv[ch]     = intercept_mv;
 }
 
-int tc_cal_vdut_duty_for_mv(int target_mv)
+int tc_cal_vdut_duty_for_mv(int ch, int target_mv)
 {
-    if (s_cal.vdut_slope_mv_per_pct == 0) {
-        ESP_LOGW(TAG, "VDUT not calibrated (slope=0)");
+    if (ch < 0 || ch >= TC_CAL_VDUT_NCH) return -1;
+    if (s_cal.vdut_slope_mv_per_pct[ch] == 0) {
+        ESP_LOGW(TAG, "VDUT%d not calibrated (slope=0)", ch + 1);
         return -1;
     }
-    int duty = (target_mv - s_cal.vdut_intercept_mv) / s_cal.vdut_slope_mv_per_pct;
+    int duty = (target_mv - s_cal.vdut_intercept_mv[ch]) / s_cal.vdut_slope_mv_per_pct[ch];
     if (duty < 1)  duty = 1;
     if (duty > 99) duty = 99;
     return duty;
@@ -373,31 +399,40 @@ static int do_cal(int argc, char **argv)
         return 0;
     }
 
-    /* cal vdut <slope> <intercept> */
+    /* cal vdut <ch> <slope> <intercept> */
     if (strcmp(argv[1], "vdut") == 0) {
-        if (argc < 4) {
-            printf("Usage: cal vdut <slope_mv_per_pct> <intercept_mv>\n");
+        if (argc < 5) {
+            printf("Usage: cal vdut <ch 0|1> <slope_mv_per_pct> <intercept_mv>\n");
             return 1;
         }
-        int slope     = atoi(argv[2]);
-        int intercept = atoi(argv[3]);
-        tc_cal_set_vdut(slope, intercept);
-        printf("VDUT cal: slope=%d mV/%%  intercept=%d mV  "
-               "(not saved — run: cal save)\n", slope, intercept);
+        int ch        = atoi(argv[2]);
+        int slope     = atoi(argv[3]);
+        int intercept = atoi(argv[4]);
+        if (ch < 0 || ch >= TC_CAL_VDUT_NCH) {
+            printf("VDUT channel must be 0 (VDUT1) or 1 (VDUT2)\n"); return 1;
+        }
+        tc_cal_set_vdut(ch, slope, intercept);
+        printf("VDUT%d cal: slope=%d mV/%%  intercept=%d mV  "
+               "(not saved — run: cal save)\n", ch + 1, slope, intercept);
         return 0;
     }
 
-    /* cal vdut-duty <target_mv> */
+    /* cal vdut-duty <ch> <target_mv> */
     if (strcmp(argv[1], "vdut-duty") == 0) {
-        if (argc < 3) { printf("Usage: cal vdut-duty <target_mv>\n"); return 1; }
-        int target_mv = atoi(argv[2]);
-        int duty = tc_cal_vdut_duty_for_mv(target_mv);
+        if (argc < 4) { printf("Usage: cal vdut-duty <ch 0|1> <target_mv>\n"); return 1; }
+        int ch        = atoi(argv[2]);
+        int target_mv = atoi(argv[3]);
+        if (ch < 0 || ch >= TC_CAL_VDUT_NCH) {
+            printf("VDUT channel must be 0 (VDUT1) or 1 (VDUT2)\n"); return 1;
+        }
+        int duty = tc_cal_vdut_duty_for_mv(ch, target_mv);
         if (duty < 0)
-            printf("VDUT not calibrated — run: cal vdut <slope> <intercept> && cal save\n");
+            printf("VDUT%d not calibrated — run: cal vdut %d <slope> <intercept> && cal save\n",
+                   ch + 1, ch);
         else
-            printf("Target %d mV → duty %d%%  (slope=%d  intercept=%d)\n",
-                   target_mv, duty,
-                   s_cal.vdut_slope_mv_per_pct, s_cal.vdut_intercept_mv);
+            printf("VDUT%d: target %d mV → duty %d%%  (slope=%d  intercept=%d)\n",
+                   ch + 1, target_mv, duty,
+                   s_cal.vdut_slope_mv_per_pct[ch], s_cal.vdut_intercept_mv[ch]);
         return 0;
     }
 
@@ -452,23 +487,25 @@ static int do_cal(int argc, char **argv)
 
 usage:
     printf("Usage:\n"
-           "  cal show                           print all calibration as JSON\n"
-           "  cal load                           reload from storage\n"
-           "  cal save                           write to storage\n"
-           "  cal reset                          restore factory defaults (in RAM)\n"
+           "  cal show                              print all calibration as JSON\n"
+           "  cal load                              reload from storage\n"
+           "  cal save                              write to storage\n"
+           "  cal reset                             restore factory defaults (in RAM)\n"
            "\n"
-           "  cal vdut <slope> <intercept>       VDUT PWM slope_mv_per_pct + intercept_mv\n"
-           "  cal vdut-duty <target_mv>          compute duty%% for target voltage\n"
+           "  cal vdut <ch> <slope> <intercept>     VDUT PWM slope_mv_per_pct + intercept_mv\n"
+           "                                          ch=0 → VDUT1,  ch=1 → VDUT2\n"
+           "  cal vdut-duty <ch> <target_mv>        compute duty%% for target voltage\n"
            "\n"
-           "  cal ina <ch> v <gain> <offset_mv>  INA219 ch voltage correction\n"
-           "  cal ina <ch> i <gain> <offset_ma>  INA219 ch current correction\n"
+           "  cal ina <ch> v <gain> <offset_mv>     INA219 ch voltage correction\n"
+           "  cal ina <ch> i <gain> <offset_ma>     INA219 ch current correction\n"
            "\n"
-           "  cal adc <ch> <gain> <offset_mv>    ADC128D818 channel correction\n"
+           "  cal adc <ch> <gain> <offset_mv>       ADC128D818 channel correction\n"
            "\n"
-           "Example — migrate VDUT calibration from config:\n"
-           "  cal vdut -87 11200\n"
+           "Example — set VDUT calibration:\n"
+           "  cal vdut 0 -87 11200\n"
+           "  cal vdut 1 -89 11400\n"
            "  cal save\n"
-           "  cal vdut-duty 3300   → should print ~90%%\n");
+           "  cal vdut-duty 0 3300   → prints duty for VDUT1\n");
     return 1;
 }
 

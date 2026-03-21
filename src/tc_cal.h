@@ -25,7 +25,9 @@
 extern "C" {
 #endif
 
-/* ── VDUT channel indices ────────────────────────────────────────────────── */
+/* ── Channel constants ───────────────────────────────────────────────────── */
+
+#define TC_CAL_VDUT_NCH  2   /* VDUT1 = ch 0,  VDUT2 = ch 1 */
 
 #define TC_CAL_INA_CH0   0
 #define TC_CAL_INA_CH1   1
@@ -47,18 +49,18 @@ int tc_cal_save(void);
  * Does NOT save — call tc_cal_save() explicitly. */
 void tc_cal_reset(void);
 
-/* ── VDUT PWM DAC ────────────────────────────────────────────────────────── *
+/* ── VDUT PWM DAC (ch 0 = VDUT1, ch 1 = VDUT2) ──────────────────────────── *
  *
  * Model: V_mv = slope_mv_per_pct × duty_pct + intercept_mv  (inverting)
  * slope=0 means uncalibrated — tc_cal_vdut_duty_for_mv() returns -1.
  */
 
-void tc_cal_get_vdut(int *slope_out, int *intercept_out);
-void tc_cal_set_vdut(int slope_mv_per_pct, int intercept_mv);
+void tc_cal_get_vdut(int ch, int *slope_out, int *intercept_out);
+void tc_cal_set_vdut(int ch, int slope_mv_per_pct, int intercept_mv);
 
-/* Compute duty_pct for target_mv.  Returns -1 if slope==0 (uncalibrated).
- * Result is clamped to [1, 99]. */
-int  tc_cal_vdut_duty_for_mv(int target_mv);
+/* Compute duty_pct for target_mv on the given channel.
+ * Returns -1 if slope==0 (uncalibrated).  Result is clamped to [1, 99]. */
+int  tc_cal_vdut_duty_for_mv(int ch, int target_mv);
 
 /* ── INA219 (ch 0 or 1) ──────────────────────────────────────────────────── */
 

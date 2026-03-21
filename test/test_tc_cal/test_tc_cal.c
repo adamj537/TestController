@@ -121,33 +121,34 @@ void test_apply_does_not_bleed_channels(void)
 
 void test_vdut_duty_uncalibrated_returns_minus1(void)
 {
-    /* Default: slope=0 (uncalibrated sentinel) */
-    TEST_ASSERT_EQUAL_INT(-1, tc_cal_vdut_duty_for_mv(3300));
+    /* Default: slope=0 (uncalibrated sentinel) — both channels */
+    TEST_ASSERT_EQUAL_INT(-1, tc_cal_vdut_duty_for_mv(0, 3300));
+    TEST_ASSERT_EQUAL_INT(-1, tc_cal_vdut_duty_for_mv(1, 3300));
 }
 
 void test_vdut_duty_typical_values(void)
 {
     /* slope=-87 mV/pct, intercept=11200 mV
      * duty = (3300 - 11200) / -87 = -7900 / -87 ≈ 90.8 → 90 or 91 */
-    tc_cal_set_vdut(-87, 11200);
-    int duty = tc_cal_vdut_duty_for_mv(3300);
+    tc_cal_set_vdut(0, -87, 11200);
+    int duty = tc_cal_vdut_duty_for_mv(0, 3300);
     TEST_ASSERT_INT_WITHIN(1, 91, duty);   /* allow ±1 for integer truncation */
 }
 
 void test_vdut_duty_clamped_low(void)
 {
-    tc_cal_set_vdut(-87, 11200);
+    tc_cal_set_vdut(0, -87, 11200);
     /* duty=1 at V=11113 mV; higher V gives duty<1 → clamp to 1.
      * 20000 mV: (20000-11200)/-87 = -101 → clamped to 1 */
-    int duty = tc_cal_vdut_duty_for_mv(20000);
+    int duty = tc_cal_vdut_duty_for_mv(0, 20000);
     TEST_ASSERT_EQUAL_INT(1, duty);
 }
 
 void test_vdut_duty_clamped_high(void)
 {
-    tc_cal_set_vdut(-87, 11200);
+    tc_cal_set_vdut(0, -87, 11200);
     /* Very low voltage → very high duty; must clamp to 99 */
-    int duty = tc_cal_vdut_duty_for_mv(100);
+    int duty = tc_cal_vdut_duty_for_mv(0, 100);
     TEST_ASSERT_EQUAL_INT(99, duty);
 }
 
@@ -157,11 +158,15 @@ void test_vdut_duty_clamped_high(void)
 
 void test_vdut_get_set_roundtrip(void)
 {
-    tc_cal_set_vdut(-55, 9800);
+    tc_cal_set_vdut(0, -55, 9800);
+    tc_cal_set_vdut(1, -60, 9900);
     int slope, intercept;
-    tc_cal_get_vdut(&slope, &intercept);
+    tc_cal_get_vdut(0, &slope, &intercept);
     TEST_ASSERT_EQUAL_INT(-55, slope);
     TEST_ASSERT_EQUAL_INT(9800, intercept);
+    tc_cal_get_vdut(1, &slope, &intercept);
+    TEST_ASSERT_EQUAL_INT(-60, slope);
+    TEST_ASSERT_EQUAL_INT(9900, intercept);
 }
 
 void test_ina_v_get_set_roundtrip(void)
@@ -190,21 +195,25 @@ void test_adc_get_set_roundtrip(void)
 
 void test_save_load_vdut(void)
 {
-    tc_cal_set_vdut(-87, 11200);
+    tc_cal_set_vdut(0, -87, 11200);
+    tc_cal_set_vdut(1, -92, 11500);
     int rc = tc_cal_save();
     TEST_ASSERT_EQUAL_INT(0, rc);
 
     tc_cal_reset();   /* wipe in-RAM */
     int slope, intercept;
-    tc_cal_get_vdut(&slope, &intercept);
+    tc_cal_get_vdut(0, &slope, &intercept);
     TEST_ASSERT_EQUAL_INT(0, slope);   /* confirm reset */
 
     rc = tc_cal_load();
     TEST_ASSERT_EQUAL_INT(0, rc);
 
-    tc_cal_get_vdut(&slope, &intercept);
+    tc_cal_get_vdut(0, &slope, &intercept);
     TEST_ASSERT_EQUAL_INT(-87, slope);
     TEST_ASSERT_EQUAL_INT(11200, intercept);
+    tc_cal_get_vdut(1, &slope, &intercept);
+    TEST_ASSERT_EQUAL_INT(-92, slope);
+    TEST_ASSERT_EQUAL_INT(11500, intercept);
 }
 
 void test_save_load_ina_calibration(void)
@@ -257,8 +266,10 @@ void test_load_from_empty_storage_gives_defaults(void)
     TEST_ASSERT_EQUAL_INT(0, rc);
 
     int slope, intercept;
-    tc_cal_get_vdut(&slope, &intercept);
-    TEST_ASSERT_EQUAL_INT(0, slope);   /* uncalibrated sentinel */
+    tc_cal_get_vdut(0, &slope, &intercept);
+    TEST_ASSERT_EQUAL_INT(0, slope);   /* uncalibrated sentinel ch0 */
+    tc_cal_get_vdut(1, &slope, &intercept);
+    TEST_ASSERT_EQUAL_INT(0, slope);   /* uncalibrated sentinel ch1 */
 
     float gain; int offset;
     tc_cal_get_ina_v(TC_CAL_INA_CH0, &gain, &offset);
@@ -268,12 +279,15 @@ void test_load_from_empty_storage_gives_defaults(void)
 
 void test_reset_clears_calibration(void)
 {
-    tc_cal_set_vdut(-87, 11200);
+    tc_cal_set_vdut(0, -87, 11200);
+    tc_cal_set_vdut(1, -90, 11400);
     tc_cal_set_ina_v(TC_CAL_INA_CH0, 1.05f, 20);
     tc_cal_reset();
 
     int slope, intercept;
-    tc_cal_get_vdut(&slope, &intercept);
+    tc_cal_get_vdut(0, &slope, &intercept);
+    TEST_ASSERT_EQUAL_INT(0, slope);
+    tc_cal_get_vdut(1, &slope, &intercept);
     TEST_ASSERT_EQUAL_INT(0, slope);
 
     float gain; int offset;
@@ -288,14 +302,19 @@ void test_reset_clears_calibration(void)
 
 void test_vdut_calibrated_flag(void)
 {
-    /* Uncalibrated: slope == 0 */
+    /* Uncalibrated: slope == 0 for both channels */
     int slope, intercept;
-    tc_cal_get_vdut(&slope, &intercept);
+    tc_cal_get_vdut(0, &slope, &intercept);
+    TEST_ASSERT_EQUAL_INT(0, slope);
+    tc_cal_get_vdut(1, &slope, &intercept);
     TEST_ASSERT_EQUAL_INT(0, slope);
 
     /* Calibrated: slope != 0 */
-    tc_cal_set_vdut(-87, 11200);
-    tc_cal_get_vdut(&slope, &intercept);
+    tc_cal_set_vdut(0, -87, 11200);
+    tc_cal_get_vdut(0, &slope, &intercept);
+    TEST_ASSERT_NOT_EQUAL(0, slope);
+    tc_cal_set_vdut(1, -90, 11400);
+    tc_cal_get_vdut(1, &slope, &intercept);
     TEST_ASSERT_NOT_EQUAL(0, slope);
 }
 

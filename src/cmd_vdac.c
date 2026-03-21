@@ -107,7 +107,7 @@ bool vdac_set_enable(int ch_idx, bool enable)
 
 bool vdac_set_voltage(int ch_idx, int voltage_mv)
 {
-    int duty = tc_cal_vdut_duty_for_mv(voltage_mv);
+    int duty = tc_cal_vdut_duty_for_mv(ch_idx, voltage_mv);
     if (duty < 0) return false;   /* slope == 0 — calibration not set */
     if (duty > 100) duty = 100;
     return vdac_set_duty(ch_idx, duty);
@@ -192,8 +192,9 @@ static int do_vdac_char(int argc, char **argv)
     printf("duty%%  VDUT1_mV  VDUT2_mV\n");
     printf("-----  --------  --------\n");
 
-    /* Capture two well-separated points for slope/intercept calibration. */
-    int cal_v50 = -1, cal_v90 = -1;
+    /* Capture two well-separated anchor points per channel for linear fit. */
+    int cal_v50[2] = {-1, -1};
+    int cal_v90[2] = {-1, -1};
 
     for (int pct = 0; pct <= 100; pct += 5) {
         vdac_set_duty(0, pct);
@@ -210,9 +211,15 @@ static int do_vdac_char(int argc, char **argv)
             printf("  %3d    %-8s  %-8s\n", pct,
                    ok1 ? "ok" : "ERR", ok2 ? "ok" : "ERR");
 
-        /* Calibration anchor points for VDUT1 */
-        if (pct == 50 && ok1 && v1 > 0) cal_v50 = v1;
-        if (pct == 90 && ok1 && v1 > 0) cal_v90 = v1;
+        /* Calibration anchor points — both channels */
+        if (pct == 50) {
+            if (ok1 && v1 > 0) cal_v50[0] = v1;
+            if (ok2 && v2 > 0) cal_v50[1] = v2;
+        }
+        if (pct == 90) {
+            if (ok1 && v1 > 0) cal_v90[0] = v1;
+            if (ok2 && v2 > 0) cal_v90[1] = v2;
+        }
     }
 
     /* 4. Clean up */
@@ -221,23 +228,30 @@ static int do_vdac_char(int argc, char **argv)
     vdac_set_enable(0, false);
     vdac_set_enable(1, false);
 
-    /* 5. Compute calibration from the two anchor points and persist.
+    /* 5. Compute and persist calibration for each channel independently.
      *    slope = ΔV / Δduty  (negative — higher duty → lower voltage)
      *    intercept = V50 - slope × 50 */
-    if (cal_v50 > 0 && cal_v90 > 0 && cal_v50 != cal_v90) {
-        int slope     = (cal_v90 - cal_v50) / (90 - 50);
-        int intercept = cal_v50 - slope * 50;
-        printf("\nCalibration:  slope=%d mV/%%  intercept=%d mV\n",
-               slope, intercept);
-        printf("  Predicted V@90%%=%d mV  measured=%d mV\n",
-               slope * 90 + intercept, cal_v90);
-        tc_cal_set_vdut(slope, intercept);
+    bool saved = false;
+    for (int ch = 0; ch < 2; ch++) {
+        if (cal_v50[ch] > 0 && cal_v90[ch] > 0 && cal_v50[ch] != cal_v90[ch]) {
+            int slope     = (cal_v90[ch] - cal_v50[ch]) / (90 - 50);
+            int intercept = cal_v50[ch] - slope * 50;
+            printf("\nVDUT%d calibration:  slope=%d mV/%%  intercept=%d mV\n",
+                   ch + 1, slope, intercept);
+            printf("  Predicted V@90%%=%d mV  measured=%d mV\n",
+                   slope * 90 + intercept, cal_v90[ch]);
+            tc_cal_set_vdut(ch, slope, intercept);
+            saved = true;
+        } else {
+            printf("\nVDUT%d calibration skipped — INA219 readings at 50%% or 90%% not valid\n",
+                   ch + 1);
+        }
+    }
+    if (saved) {
         if (tc_cal_save() == 0)
             printf("Calibration saved.\n");
         else
             printf("ERROR: save failed — run 'cal save' manually\n");
-    } else {
-        printf("\nCalibration skipped — INA219 readings at 50%% or 90%% not valid\n");
     }
 
     return 0;

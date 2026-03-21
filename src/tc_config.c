@@ -228,8 +228,8 @@ void tc_config_set_str(const char *path, const char *val)
 
 int tc_config_vdut_duty_for_mv(int target_mv)
 {
-    /* Delegate to tc_cal — authoritative source for VDUT calibration. */
-    return tc_cal_vdut_duty_for_mv(target_mv);
+    /* Delegate to tc_cal — uses VDUT1 (ch0) calibration. */
+    return tc_cal_vdut_duty_for_mv(0, target_mv);
 }
 
 /* ── Console commands ────────────────────────────────────────────────────── */
@@ -314,13 +314,13 @@ static int do_config(int argc, char **argv)
     if (strcmp(argv[1], "vdut-duty") == 0) {
         if (argc < 3) { printf("Usage: config vdut-duty <target_mv>\n"); return 1; }
         int target_mv = atoi(argv[2]);
-        int duty = tc_cal_vdut_duty_for_mv(target_mv);
+        int duty = tc_cal_vdut_duty_for_mv(0, target_mv);
         if (duty < 0)
-            printf("VDUT not calibrated — use: cal vdut <slope> <intercept> && cal save\n");
+            printf("VDUT1 not calibrated — use: cal vdut 0 <slope> <intercept> && cal save\n");
         else {
             int slope, intercept;
-            tc_cal_get_vdut(&slope, &intercept);
-            printf("Target %d mV → duty %d%%  (slope=%d  intercept=%d)\n",
+            tc_cal_get_vdut(0, &slope, &intercept);
+            printf("VDUT1: target %d mV → duty %d%%  (slope=%d  intercept=%d)\n",
                    target_mv, duty, slope, intercept);
         }
         return 0;
