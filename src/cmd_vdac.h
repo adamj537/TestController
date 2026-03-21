@@ -16,7 +16,8 @@ void register_vdac_commands(void);
 #define VDAC_INIT_SETTLE_MS  2000  /* initial ramp from disable */
 
 /* LEDC / regulator control — ch_idx: 0=VDUT1, 1=VDUT2 */
-bool vdac_set_duty(int ch_idx, int duty_pct);    /* 0–100 % */
+bool vdac_set_duty(int ch_idx, int duty_pct);             /* 0–100 % */
+bool vdac_set_voltage(int ch_idx, int voltage_mv);        /* converts via calibration; false if uncalibrated */
 bool vdac_set_enable(int ch_idx, bool enable);
 
 /* ADC128D818 helpers — all devices on same bus after HW-012 rework */

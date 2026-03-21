@@ -104,6 +104,14 @@ bool vdac_set_enable(int ch_idx, bool enable)
     return true;
 }
 
+bool vdac_set_voltage(int ch_idx, int voltage_mv)
+{
+    int duty = tc_config_vdut_duty_for_mv(voltage_mv);
+    if (duty < 0) return false;   /* slope == 0 — calibration not set */
+    if (duty > 100) duty = 100;
+    return vdac_set_duty(ch_idx, duty);
+}
+
 /* ── ADC128 helpers ──────────────────────────────────────────────────────── */
 
 bool adc128_ensure_running(void)
@@ -254,26 +262,25 @@ static int do_vdac_voltage(int argc, char **argv)
     }
     int target_mv = atoi(argv[2]);
 
-    int duty = tc_config_vdut_duty_for_mv(target_mv);
-    if (duty < 0) {
-        printf("ERROR: VDUT calibration not set — run 'vdac char' first\n");
-        return 1;
-    }
-    if (duty > 100) duty = 100;
-
     bool do1 = (strcmp(argv[1], "1")    == 0 || strcmp(argv[1], "both") == 0);
     bool do2 = (strcmp(argv[1], "2")    == 0 || strcmp(argv[1], "both") == 0);
     if (!do1 && !do2) { printf("channel must be 1, 2, or both\n"); return 1; }
 
     if (do1) {
         vdac_set_enable(0, true);
-        vdac_set_duty(0, duty);
-        printf("VDUT1: target=%d mV  duty=%d%%\n", target_mv, duty);
+        if (!vdac_set_voltage(0, target_mv)) {
+            printf("ERROR: VDUT calibration not set — run 'vdac char' first\n");
+            return 1;
+        }
+        printf("VDUT1: %d mV\n", target_mv);
     }
     if (do2) {
         vdac_set_enable(1, true);
-        vdac_set_duty(1, duty);
-        printf("VDUT2: target=%d mV  duty=%d%%\n", target_mv, duty);
+        if (!vdac_set_voltage(1, target_mv)) {
+            printf("ERROR: VDUT calibration not set — run 'vdac char' first\n");
+            return 1;
+        }
+        printf("VDUT2: %d mV\n", target_mv);
     }
     return 0;
 }
