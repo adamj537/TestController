@@ -57,7 +57,7 @@ static void initialize_nvs(void)
  * If timeout expires, the partition is marked invalid and the ESP32 reboots  *
  * into the previous known-good partition.                                    */
 
-#define OTA_HEALTH_TIMEOUT_S  30
+#define OTA_HEALTH_TIMEOUT_S  90   /* GAP-OTA-02: 90s > T2's 60s NBIRTH window */
 
 static void ota_health_check_task(void *arg)
 {
@@ -120,7 +120,13 @@ static void ota_health_check_task(void *arg)
         ESP_LOGE(TAG, "OTA health: FAILED (i2c=%d wifi=%d mqtt=%d) — ROLLING BACK",
                  i2c_ok, wifi_ok, mqtt_ok);
         printf("OTA health: FAILED — rolling back to previous firmware!\n");
-        vTaskDelay(pdMS_TO_TICKS(1000));  /* let message flush */
+        /* GAP-OTA-05: publish rolledback status so T2 can mark OTA job failed
+         * before the reboot (best-effort — only reaches broker if MQTT is up) */
+        tc_mqtt_publish_ota_progress("tc", "rolledback", -1,
+            "HEALTH_CHECK_TIMEOUT",
+            "I2C/WiFi/MQTT health checks failed before 90s deadline",
+            true);
+        vTaskDelay(pdMS_TO_TICKS(500));  /* let publish flush before reboot */
         esp_ota_mark_app_invalid_rollback_and_reboot();
         /* does not return */
     }
