@@ -8,6 +8,7 @@
 #include "cmd_i2c.h"
 #include "cmd_vdac.h"
 #include "tc_config.h"
+#include "dut_detect.h"
 
 /* ── TCC carrier v1 pin assignments ──────────────────────────────────────── */
 
@@ -153,6 +154,18 @@ static bool read_ina219_vbus(uint8_t addr, int *vbus_mv_out)
 static int do_vdac_char(int argc, char **argv)
 {
     (void)argc; (void)argv;
+
+    /* 0. SAFETY: sweep drives >10 V at low duty — must not run with DUT present */
+    {
+        int mv = 0;
+        bool sampled = dut_detect_sample(&mv);
+        printf("DUT detect: %d mV (%s)\n", mv,
+               sampled ? (mv < 1500 ? "PRESENT" : "ABSENT") : "SAMPLE FAILED");
+        if (sampled && mv < 1500) {
+            printf("ERROR: DUT detected (%d mV) — remove DUT before running vdac char\n", mv);
+            return 1;
+        }
+    }
 
     /* 1. LEDC — both channels at 0 % */
     if (!vdac_set_duty(0, 0) || !vdac_set_duty(1, 0)) {
