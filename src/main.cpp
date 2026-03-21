@@ -49,13 +49,14 @@ static void initialize_nvs(void)
 
 /* ── OTA health check — deferred validation with auto-rollback ────────────── *
  * After OTA, the new partition boots in ESP_OTA_IMG_PENDING_VERIFY state.    *
- * We defer marking it valid until basic health checks pass:                  *
- *   1. I2C bus + INA219s + ADC128 respond                                    *
- *   2. WiFi connects (IP obtained)                                           *
- *   3. MQTT broker connects                                                  *
- * If all pass within OTA_HEALTH_TIMEOUT_S, the partition is marked valid.    *
- * If timeout expires, the partition is marked invalid and the ESP32 reboots  *
- * into the previous known-good partition.                                    */
+ * Gate: WiFi IP obtained AND MQTT broker connected (NBIRTH published).       *
+ * Hardware checks (I2C, ADC) are NOT part of this gate — they are hardware-  *
+ * specific and would block OTA validation on standalone ESP32 modules.       *
+ * Hardware health is validated separately via selftest / selftest_run_sm().  *
+ *                                                                            *
+ * If both WiFi + MQTT pass within OTA_HEALTH_TIMEOUT_S, partition is marked  *
+ * valid.  On timeout, partition is marked invalid and TC reboots to the      *
+ * previous known-good partition.                                             */
 
 #define OTA_HEALTH_TIMEOUT_S  90   /* GAP-OTA-02: 90s > T2's 60s NBIRTH window */
 
@@ -75,23 +76,13 @@ static void ota_health_check_task(void *arg)
 
     ESP_LOGW(TAG, "OTA: partition '%s' PENDING VERIFY — health check starting (%ds timeout)",
              running->label, OTA_HEALTH_TIMEOUT_S);
-    printf("OTA health check: %ds to validate or rollback\n", OTA_HEALTH_TIMEOUT_S);
+    printf("OTA health check: %ds to validate (WiFi + MQTT) or rollback\n", OTA_HEALTH_TIMEOUT_S);
 
     int64_t deadline = esp_timer_get_time() + (int64_t)OTA_HEALTH_TIMEOUT_S * 1000000LL;
-    bool i2c_ok = false;
     bool wifi_ok = false;
     bool mqtt_ok = false;
 
     while (esp_timer_get_time() < deadline) {
-        /* Check I2C — probe INA219 #0 */
-        if (!i2c_ok) {
-            if (i2c_ensure_initialized() && i2c_probe(0x40)) {
-                i2c_ok = true;
-                ESP_LOGI(TAG, "OTA health: I2C OK");
-            }
-        }
-
-        /* Check WiFi — has IP? */
         if (!wifi_ok) {
             wifi_ap_record_t ap = {};
             if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
@@ -100,33 +91,31 @@ static void ota_health_check_task(void *arg)
             }
         }
 
-        /* Check MQTT */
         if (!mqtt_ok) {
             if (tc_mqtt_connected()) {
                 mqtt_ok = true;
-                ESP_LOGI(TAG, "OTA health: MQTT OK");
+                ESP_LOGI(TAG, "OTA health: MQTT OK (NBIRTH published)");
             }
         }
 
-        if (i2c_ok && wifi_ok && mqtt_ok) break;
+        if (wifi_ok && mqtt_ok) break;
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
 
-    if (i2c_ok && wifi_ok && mqtt_ok) {
+    if (wifi_ok && mqtt_ok) {
         esp_ota_mark_app_valid_cancel_rollback();
-        ESP_LOGI(TAG, "OTA health: ALL PASSED — partition '%s' marked VALID", running->label);
+        ESP_LOGI(TAG, "OTA health: PASSED — partition '%s' marked VALID", running->label);
         printf("OTA health: PASSED — firmware validated\n");
     } else {
-        ESP_LOGE(TAG, "OTA health: FAILED (i2c=%d wifi=%d mqtt=%d) — ROLLING BACK",
-                 i2c_ok, wifi_ok, mqtt_ok);
+        ESP_LOGE(TAG, "OTA health: FAILED (wifi=%d mqtt=%d) — ROLLING BACK",
+                 wifi_ok, mqtt_ok);
         printf("OTA health: FAILED — rolling back to previous firmware!\n");
-        /* GAP-OTA-05: publish rolledback status so T2 can mark OTA job failed
-         * before the reboot (best-effort — only reaches broker if MQTT is up) */
+        /* GAP-OTA-05: best-effort publish before reboot (only reaches broker if MQTT is up) */
         tc_mqtt_publish_ota_progress("tc", "rolledback", -1,
             "HEALTH_CHECK_TIMEOUT",
-            "I2C/WiFi/MQTT health checks failed before 90s deadline",
+            "WiFi/MQTT did not connect within 90s",
             true);
-        vTaskDelay(pdMS_TO_TICKS(500));  /* let publish flush before reboot */
+        vTaskDelay(pdMS_TO_TICKS(500));
         esp_ota_mark_app_invalid_rollback_and_reboot();
         /* does not return */
     }
