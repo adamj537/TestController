@@ -64,4 +64,4 @@ jobs:
       uses: actions/upload-artifact@v4
       with:
         name: native-test-results
-        path: embedded/tester-client/test_results.txt
+        path: test_results.txt
