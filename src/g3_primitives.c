@@ -100,16 +100,6 @@ void run_power_check(const cJSON *params)
     int v_nominal_mv = param_int(params, "v_nominal_mv",
                        tc_config_get_int("vdut.v_nominal_mv", 3300));
 
-    /* Derive duty% from calibrated curve — fails if not calibrated */
-    int duty_pct = tc_config_vdut_duty_for_mv(v_nominal_mv);
-    if (duty_pct < 0) {
-        printf("[FAIL] power_check: VDUT not calibrated — "
-               "set vdut.slope_mv_per_pct and vdut.intercept_mv in config\n");
-        selftest_check_record("power_v", false);
-        selftest_check_record("power_i", false);
-        return;
-    }
-
     /* Voltage window from ±tolerance */
     int tol_pct   = param_int(params, "v_tolerance_pct",
                     tc_config_get_int("vdut.v_tolerance_pct", 5));
@@ -123,10 +113,15 @@ void run_power_check(const cJSON *params)
     int settle_ms = param_int(params, "settle_ms",
                     tc_config_get_int("vdut.settle_ms", 300));
 
-    /* Enable VDUT at calibrated duty cycle.
+    /* Enable VDUT at calibrated voltage.
      * Assert PB-A (ch0, SIG=0 active low) to latch DUT power — required alongside VDUT. */
-    vdac_set_duty(0, duty_pct);  /* VDUT1 */
-    vdac_set_duty(1, duty_pct);  /* VDUT2 */
+    if (!vdac_set_voltage(0, v_nominal_mv) || !vdac_set_voltage(1, v_nominal_mv)) {
+        printf("[FAIL] power_check: VDUT not calibrated — "
+               "set vdut.slope_mv_per_pct and vdut.intercept_mv in config\n");
+        selftest_check_record("power_v", false);
+        selftest_check_record("power_i", false);
+        return;
+    }
     mux_select(0, 0);            /* PB-A assert: ch0, SIG=0 */
     vTaskDelay(pdMS_TO_TICKS(settle_ms));
 
