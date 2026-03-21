@@ -1,5 +1,6 @@
 #pragma once
 
+#include <stddef.h>
 #include "tc_mqtt.h"  /* tc_mqtt_check_t */
 
 #ifdef __cplusplus
@@ -44,6 +45,11 @@ const tc_mqtt_check_t *selftest_get_checks(void);
 
 /* Reset check buffer (call before recipe run). */
 void selftest_reset_checks(void);
+
+/* Return the PFW version string cached by the most recent successful
+ * run_dut_version() call.  Empty string if not yet read or last read failed.
+ * Format: "x.y.z+N" (FW_VERSION_STRING from PFW build). */
+void selftest_get_pfw_version(char *buf, size_t len);
 
 /* Record a check result into the check buffer.
  * Used by g3_primitives.c and any future primitive modules outside cmd_selftest.c. */

@@ -747,6 +747,17 @@ void run_dut_enter_test(const cJSON *params)
     if (!ok) dut_uart_close();   /* leave closed so subsequent steps skip cleanly */
 }
 
+/* Cached PFW version string — populated by run_dut_version on success.
+ * Format: "x.y.z+N" (FW_VERSION_STRING from PFW build).
+ * Empty string if not yet read or last read failed. */
+static char s_pfw_version[48] = {};
+
+void selftest_get_pfw_version(char *buf, size_t len)
+{
+    strncpy(buf, s_pfw_version, len - 1);
+    buf[len - 1] = '\0';
+}
+
 void run_dut_version(const cJSON *params)
 {
     char resp[128] = {0};
@@ -758,6 +769,20 @@ void run_dut_version(const cJSON *params)
     bool ok = dut_cmd("VERSION", resp, sizeof(resp), 500);
     report(ok, "DUT: VERSION  %s", resp);
     st_record("dut_version", ok);
+
+    if (ok) {
+        /* Parse "OK FW_VERSION:x.y.z+N HW_REV:..." — extract version token */
+        const char *tag = strstr(resp, "FW_VERSION:");
+        if (tag) {
+            tag += 11; /* skip "FW_VERSION:" */
+            size_t i = 0;
+            while (tag[i] && tag[i] != ' ' && i < sizeof(s_pfw_version) - 1) {
+                s_pfw_version[i] = tag[i];
+                i++;
+            }
+            s_pfw_version[i] = '\0';
+        }
+    }
 }
 
 void run_dut_hw_rev(const cJSON *params)
