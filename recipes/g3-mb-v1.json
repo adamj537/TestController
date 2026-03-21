@@ -1,6 +1,6 @@
 {
   "recipeId": "g3-mb-v1",
-  "recipeVersion": "1.1.0",
+  "recipeVersion": "1.2.0",
   "name": "G3 Main Board — Production Test",
   "timeoutMs": 120000,
   "steps": [
@@ -88,7 +88,7 @@
       "label": "DUT Enter Test Mode",
       "criticality": "CRITICAL",
       "onError": "abort",
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "dut_version",
@@ -96,7 +96,7 @@
       "label": "DUT Firmware Version",
       "criticality": "REQUIRED",
       "onError": "skip",
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "dut_hw_rev",
@@ -104,7 +104,7 @@
       "label": "DUT Hardware Rev",
       "criticality": "REQUIRED",
       "onError": "skip",
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "dut_uc_adc_vref",
@@ -112,7 +112,7 @@
       "label": "DUT uC ADC Vref (2400-2600 mV)",
       "criticality": "REQUIRED",
       "onError": "skip",
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "dut_uc_adc_3v_rail",
@@ -120,7 +120,7 @@
       "label": "DUT uC ADC 3V Rail (2850-3150 mV)",
       "criticality": "REQUIRED",
       "onError": "skip",
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "dut_flash_test",
@@ -128,7 +128,7 @@
       "label": "DUT Flash Self-Test",
       "criticality": "REQUIRED",
       "onError": "skip",
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "dut_rtc_read",
@@ -136,7 +136,7 @@
       "label": "DUT RTC Battery (1550-3600 mV)",
       "criticality": "REQUIRED",
       "onError": "skip",
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "dut_exit_test",
@@ -144,7 +144,7 @@
       "label": "DUT Exit Test Mode",
       "criticality": "REQUIRED",
       "onError": "skip",
-      "enabled": false
+      "enabled": true
     },
     {
       "id": "mux_scan",
