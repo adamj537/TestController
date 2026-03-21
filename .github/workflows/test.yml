@@ -2,8 +2,10 @@ name: FW-1 TC Firmware Unit Tests
 
 on:
   push:
-    branches: [ main, feat/fw1-tc-firmware ]
+    branches: [ main, 'feat/**' ]
     paths:
+      - 'src/**'
+      - 'common/**'
       - 'hal/**'
       - 'bsp/**'
       - 'app/**'
@@ -11,166 +13,55 @@ on:
       - 'recipes/**'
       - 'dut/**'
       - 'test/**'
+      - 'platformio.ini'
       - '.github/workflows/test.yml'
   pull_request:
-    branches: [ main, feat/fw1-tc-firmware ]
+    branches: [ main ]
 
 jobs:
-  build-and-test:
+  native-tests:
+    name: Native unit tests (pio test)
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        compiler: [gcc, clang]
 
     steps:
     - uses: actions/checkout@v4
+      with:
+        submodules: recursive
 
-    - name: Install dependencies
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install PlatformIO
+      run: pip install platformio
+
+    - name: Cache PlatformIO packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.platformio
+        key: ${{ runner.os }}-pio-${{ hashFiles('platformio.ini') }}
+        restore-keys: |
+          ${{ runner.os }}-pio-
+
+    - name: Run native test suite
+      working-directory: embedded/tester-client
+      run: pio test -e native -v 2>&1 | tee test_results.txt
+
+    - name: Check test results
+      working-directory: embedded/tester-client
       run: |
-        sudo apt-get update
-        sudo apt-get install -y gcc clang
-
-    - name: Check compiler versions
-      run: |
-        ${{ matrix.compiler }} --version
-
-    - name: Compile Phase 1 HAL/GPIO (9 tests)
-      run: |
-        cd embedded/tester-client
-        ${{ matrix.compiler }} -I. -DDEBUG -Wall -Wextra \
-          test/test_hal_gpio.c hal/mock/hal_gpio_mock.c \
-          -o test_hal_gpio 2>&1 | tee build.log
-        if [ ${PIPESTATUS[0]} -ne 0 ]; then exit 1; fi
-
-    - name: Run Phase 1 HAL/GPIO tests
-      run: |
-        cd embedded/tester-client
-        ./test_hal_gpio 2>&1 | tee phase1_results.txt
-        if [ ${PIPESTATUS[0]} -ne 0 ]; then exit 1; fi
-
-    - name: Compile Phase 2 Hardware Module (19 tests)
-      run: |
-        cd embedded/tester-client
-        ${{ matrix.compiler }} -I. -DDEBUG -Wall -Wextra \
-          test/test_hardware.c \
-          hal/mock/hal_gpio_mock.c \
-          hal/mock/hal_adc_mock.c \
-          hal/mock/hal_dac_mock.c \
-          hal/mock/hal_uart_mock.c \
-          hal/mock/hal_system_mock.c \
-          bsp/bsp_g3_tc.c \
-          -o test_hardware 2>&1 | tee build.log
-        if [ ${PIPESTATUS[0]} -ne 0 ]; then exit 1; fi
-
-    - name: Run Phase 2 Hardware Module tests
-      run: |
-        cd embedded/tester-client
-        ./test_hardware 2>&1 | tee phase2_results.txt
-        if [ ${PIPESTATUS[0]} -ne 0 ]; then exit 1; fi
-
-    - name: Compile Phase 3 Recipe Manager (21 tests)
-      run: |
-        cd embedded/tester-client
-        ${{ matrix.compiler }} -I. -DDEBUG -Wall -Wextra \
-          test/test_recipe_manager.c \
-          storage/storage_mock.c \
-          recipes/recipe_manager_mock.c \
-          -o test_recipes 2>&1 | tee build.log
-        if [ ${PIPESTATUS[0]} -ne 0 ]; then exit 1; fi
-
-    - name: Run Phase 3 Recipe Manager tests
-      run: |
-        cd embedded/tester-client
-        ./test_recipes 2>&1 | tee phase3_results.txt
-        if [ ${PIPESTATUS[0]} -ne 0 ]; then exit 1; fi
-
-    - name: Compile Phase 4 DUT Interface (27 tests)
-      run: |
-        cd embedded/tester-client
-        ${{ matrix.compiler }} -I. -DDEBUG -Wall -Wextra \
-          test/test_dut_interface.c \
-          hal/mock/hal_uart_mock.c \
-          dut/dut_interface_mock.c \
-          -o test_dut 2>&1 | tee build.log
-        if [ ${PIPESTATUS[0]} -ne 0 ]; then exit 1; fi
-
-    - name: Run Phase 4 DUT Interface tests
-      run: |
-        cd embedded/tester-client
-        ./test_dut 2>&1 | tee phase4_results.txt
-        if [ ${PIPESTATUS[0]} -ne 0 ]; then exit 1; fi
-
-    - name: Compile Phase 5 Mock ESP32 HAL (Verification only)
-      run: |
-        cd embedded/tester-client
-        ${{ matrix.compiler }} -I. -DDEBUG -Wall -Wextra -c \
-          hal/mock/hal_gpio_esp32_mock.c -o /tmp/test_gpio.o 2>&1
-        ${{ matrix.compiler }} -I. -DDEBUG -Wall -Wextra -c \
-          hal/mock/hal_uart_esp32_mock.c -o /tmp/test_uart.o 2>&1
-        ${{ matrix.compiler }} -I. -DDEBUG -Wall -Wextra -c \
-          hal/mock/hal_adc_esp32_mock.c -o /tmp/test_adc.o 2>&1
-        ${{ matrix.compiler }} -I. -DDEBUG -Wall -Wextra -c \
-          hal/mock/hal_dac_esp32_mock.c -o /tmp/test_dac.o 2>&1
-        ${{ matrix.compiler }} -I. -DDEBUG -Wall -Wextra -c \
-          hal/mock/hal_system_esp32_mock.c -o /tmp/test_system.o 2>&1
-        echo "✓ All Phase 5 mock implementations compile successfully"
-
-    - name: Generate test summary
-      if: always()
-      run: |
-        cd embedded/tester-client
-        echo "========================================" > test_summary.txt
-        echo "  FW-1 TC FIRMWARE TEST RESULTS" >> test_summary.txt
-        echo "========================================" >> test_summary.txt
-        echo "" >> test_summary.txt
-        echo "Compiler: ${{ matrix.compiler }}" >> test_summary.txt
-        echo "Date: $(date)" >> test_summary.txt
-        echo "" >> test_summary.txt
-
-        echo "Phase 1: HAL/GPIO (9 tests)" >> test_summary.txt
-        tail -5 phase1_results.txt >> test_summary.txt
-        echo "" >> test_summary.txt
-
-        echo "Phase 2: Hardware Module (19 tests)" >> test_summary.txt
-        tail -5 phase2_results.txt >> test_summary.txt
-        echo "" >> test_summary.txt
-
-        echo "Phase 3: Recipe Manager (21 tests)" >> test_summary.txt
-        tail -5 phase3_results.txt >> test_summary.txt
-        echo "" >> test_summary.txt
-
-        echo "Phase 4: DUT Interface (27 tests)" >> test_summary.txt
-        tail -5 phase4_results.txt >> test_summary.txt
-        echo "" >> test_summary.txt
-
-        echo "Phase 5: ESP32 HAL Mocks (Compilation verified)" >> test_summary.txt
-        echo "✓ All mock implementations compile" >> test_summary.txt
-        echo "" >> test_summary.txt
-
-        echo "========================================" >> test_summary.txt
-        echo "TOTAL: 76 unit tests (mock, off-board)" >> test_summary.txt
-        echo "========================================" >> test_summary.txt
-
-        cat test_summary.txt
+        if grep -q "FAILED\|ERRORED" test_results.txt; then
+          echo "One or more tests failed:"
+          grep -E "FAILED|ERRORED|\[FAIL\]" test_results.txt
+          exit 1
+        fi
+        echo "All tests passed:"
+        grep "succeeded" test_results.txt || true
 
     - name: Upload test results
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
-        name: test-results-${{ matrix.compiler }}
-        path: embedded/tester-client/test_summary.txt
-
-    - name: Comment PR with results
-      if: always() && github.event_name == 'pull_request'
-      uses: actions/github-script@v7
-      with:
-        script: |
-          const fs = require('fs');
-          const testResults = fs.readFileSync('embedded/tester-client/test_summary.txt', 'utf8');
-
-          github.rest.issues.createComment({
-            issue_number: context.issue.number,
-            owner: context.repo.owner,
-            repo: context.repo.repo,
-            body: '## FW-1 TC Firmware Test Results\n\n```\n' + testResults + '\n```'
-          });
+        name: native-test-results
+        path: embedded/tester-client/test_results.txt
