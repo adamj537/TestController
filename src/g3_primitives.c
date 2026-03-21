@@ -71,9 +71,9 @@ static bool ina219_read(uint8_t addr, int *vbus_mv_out, int *current_ma_out)
  */
 void g3_critical_abort(void)
 {
-    mux_release();        /* Release PB-A (SIG=1) immediately */
-    vdac_set_duty(0, 0); /* VDUT1 off */
-    vdac_set_duty(1, 0); /* VDUT2 off */
+    mux_release();     /* Release PB-A (SIG=1) immediately */
+    vdac_disable(0);   /* VDUT1 off */
+    vdac_disable(1);   /* VDUT2 off */
     printf("[ABORT] CRITICAL step failure — DUT power cut\n");
 }
 
@@ -129,9 +129,9 @@ void run_power_check(const cJSON *params)
     bool read_ok = ina219_read(ADDR_INA219_0, &vbus_mv, &current_ma);
 
     /* Disable VDUT and release PB-A before pass/fail recording */
-    mux_release();               /* SIG=1 — DUT KEEPALIVE must take over */
-    vdac_set_duty(0, 0);
-    vdac_set_duty(1, 0);
+    mux_release();   /* SIG=1 — DUT KEEPALIVE must take over */
+    vdac_disable(0);
+    vdac_disable(1);
 
     if (!read_ok) {
         selftest_check_record("power_v", false);

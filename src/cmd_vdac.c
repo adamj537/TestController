@@ -112,6 +112,12 @@ bool vdac_set_voltage(int ch_idx, int voltage_mv)
     return vdac_set_duty(ch_idx, duty);
 }
 
+bool vdac_disable(int ch_idx)
+{
+    vdac_set_duty(ch_idx, 0);
+    return vdac_set_enable(ch_idx, false);
+}
+
 /* ── ADC128 helpers ──────────────────────────────────────────────────────── */
 
 bool adc128_ensure_running(void)

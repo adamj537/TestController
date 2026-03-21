@@ -73,16 +73,13 @@ static void pre_gate_task(void *pvarg)
 
     /* ── Step 1: Enable VDUT (calibrated) + assert PB-A ─────────────────── */
     int vdut_mv = tc_config_get_int("pre_gate.vdut_mv", 3300);
-    int duty    = tc_config_vdut_duty_for_mv(vdut_mv);
-    if (duty < 0) {
+    ESP_LOGI(TAG, "enabling VDUT %d mV + PB-A", vdut_mv);
+    vdac_set_enable(0, true);
+    if (!vdac_set_voltage(0, vdut_mv)) {
         ESP_LOGE(TAG, "VDUT calibration missing (slope=0) — gate cannot run");
         strlcpy(fail_reason, "vdut_uncalibrated", sizeof(fail_reason));
         goto done;
     }
-
-    ESP_LOGI(TAG, "enabling VDUT %d mV (duty=%d%%) + PB-A", vdut_mv, duty);
-    vdac_set_duty(0, duty);
-    vdac_set_enable(0, true);
     mux_select(MUX_PBA_CH, MUX_PBA_SIG);   /* PB-A assert: ch0, SIG=0 */
 
     /* Wait for DUT to power up and INA219 conversion to settle */
