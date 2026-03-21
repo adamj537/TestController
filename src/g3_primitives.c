@@ -19,6 +19,7 @@
 #include "cmd_swd.h"
 #include "dut_identify.h"
 #include "tc_config.h"
+#include "tc_cal.h"
 #include "tc_mqtt.h"
 #include "cJSON.h"
 #include "esp_log.h"
@@ -49,16 +50,18 @@ static int param_int(const cJSON *params, const char *key, int def)
 static bool ina219_read(uint8_t addr, int *vbus_mv_out, int *current_ma_out)
 {
     uint8_t buf[2];
+    int ch = (addr == ADDR_INA219_0) ? TC_CAL_INA_CH0 : TC_CAL_INA_CH1;
 
     /* Bus voltage: 13-bit, 4mV/LSB, bits[15:3] */
     if (!i2c_read_reg(addr, INA219_REG_BUS_V, buf, 2)) return false;
     int vbus_raw = ((buf[0] << 8) | buf[1]) >> 3;
-    *vbus_mv_out = vbus_raw * 4;
+    *vbus_mv_out = tc_cal_apply_ina_v(ch, vbus_raw * 4);
 
     /* Current: signed 16-bit, Current_LSB = 10µA */
     if (!i2c_read_reg(addr, INA219_REG_CURRENT, buf, 2)) return false;
     int16_t current_raw = (int16_t)((buf[0] << 8) | buf[1]);
-    *current_ma_out = (int)(current_raw * INA219_CURRENT_LSB_UA) / 1000;
+    int raw_ma = (int)(current_raw * INA219_CURRENT_LSB_UA) / 1000;
+    *current_ma_out = tc_cal_apply_ina_i(ch, raw_ma);
 
     return true;
 }

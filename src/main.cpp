@@ -31,6 +31,7 @@ extern "C" {
 #include "dut_detect.h"
 #include "recipe_json.h"
 #include "tc_config.h"
+#include "tc_cal.h"
 #include "../storage/storage.h"
 }
 
@@ -153,7 +154,8 @@ extern "C" void app_main(void)
     initialize_nvs();
     /* OTA rollback guard is deferred — see ota_health_check_task below */
     Storage_Init();   /* SPIFFS recipe partition — formats on first boot */
-    tc_config_load(); /* Device config: VDUT calibration, limits, fixture ID */
+    tc_config_load(); /* Device config: operational params (limits, fixture ID) */
+    tc_cal_load();    /* Calibration: VDUT slope/intercept, INA219, ADC128 */
     tc_sm_init();
     tc_hmi_init();    /* GPIO + LCD setup before MQTT/WiFi tasks start */
     tc_mqtt_init();
@@ -185,6 +187,7 @@ extern "C" void app_main(void)
     register_dut_commands();
     register_recipe_commands();
     register_config_commands();
+    register_cal_commands();
 
     /* WiFi init — sets up netif/event loop and auto-connects if NVS creds exist.
      * Must happen before net_console_start() which needs the TCP/IP stack. */

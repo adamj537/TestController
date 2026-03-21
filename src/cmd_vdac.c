@@ -7,7 +7,7 @@
 #include "freertos/task.h"
 #include "cmd_i2c.h"
 #include "cmd_vdac.h"
-#include "tc_config.h"
+#include "tc_cal.h"
 #include "dut_detect.h"
 
 /* ── TCC carrier v1 pin assignments ──────────────────────────────────────── */
@@ -107,7 +107,7 @@ bool vdac_set_enable(int ch_idx, bool enable)
 
 bool vdac_set_voltage(int ch_idx, int voltage_mv)
 {
-    int duty = tc_config_vdut_duty_for_mv(voltage_mv);
+    int duty = tc_cal_vdut_duty_for_mv(voltage_mv);
     if (duty < 0) return false;   /* slope == 0 — calibration not set */
     if (duty > 100) duty = 100;
     return vdac_set_duty(ch_idx, duty);
@@ -132,9 +132,10 @@ bool adc128_read_mon(uint8_t ch, int *rail_mv_out)
 {
     uint8_t buf[2];
     if (!i2c_read_reg(ADDR_ADC128D818, ADC128_REG_CH_BASE + ch, buf, 2)) return false;
-    int count       = ((buf[0] << 8) | buf[1]) >> 4;
-    int adc_mv      = count * ADC128_VREF_MV / ADC128_FULL;
-    *rail_mv_out    = adc_mv * ADC128_MON_NUM / ADC128_MON_DEN;
+    int count    = ((buf[0] << 8) | buf[1]) >> 4;
+    int adc_mv   = count * ADC128_VREF_MV / ADC128_FULL;
+    int raw_mv   = adc_mv * ADC128_MON_NUM / ADC128_MON_DEN;
+    *rail_mv_out = tc_cal_apply_adc(ch, raw_mv);
     return true;
 }
 
@@ -145,7 +146,9 @@ static bool read_ina219_vbus(uint8_t addr, int *vbus_mv_out)
     uint8_t buf[2];
     if (!i2c_read_reg(addr, INA219_REG_BUS_V, buf, 2)) return false;
     /* Bits[15:3] are the 13-bit bus voltage (4 mV LSB); bits[2:0] are flags. */
-    *vbus_mv_out = (((int16_t)((buf[0] << 8) | buf[1])) >> 3) * 4;
+    int ch   = (addr == INA219_0_ADDR) ? TC_CAL_INA_CH0 : TC_CAL_INA_CH1;
+    int raw  = (((int16_t)((buf[0] << 8) | buf[1])) >> 3) * 4;
+    *vbus_mv_out = tc_cal_apply_ina_v(ch, raw);
     return true;
 }
 
@@ -228,12 +231,11 @@ static int do_vdac_char(int argc, char **argv)
                slope, intercept);
         printf("  Predicted V@90%%=%d mV  measured=%d mV\n",
                slope * 90 + intercept, cal_v90);
-        tc_config_set_int("vdut.slope_mv_per_pct", slope);
-        tc_config_set_int("vdut.intercept_mv",     intercept);
-        if (tc_config_save() == 0)
+        tc_cal_set_vdut(slope, intercept);
+        if (tc_cal_save() == 0)
             printf("Calibration saved.\n");
         else
-            printf("ERROR: save failed — run 'config save' manually\n");
+            printf("ERROR: save failed — run 'cal save' manually\n");
     } else {
         printf("\nCalibration skipped — INA219 readings at 50%% or 90%% not valid\n");
     }

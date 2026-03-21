@@ -7,12 +7,70 @@
 
 #include "storage.h"
 #include "esp_spiffs.h"
+#include "nvs.h"
 #include "esp_log.h"
 #include <stdio.h>
 #include <string.h>
 #include <dirent.h>
 #include <sys/stat.h>
 #include <stdlib.h>
+
+/* ── NVS-backed calibration domain ───────────────────────────────────────── *
+ * STORAGE_DOMAIN_CALIBRATION is routed to NVS (namespace "cal") rather than  *
+ * SPIFFS.  This keeps calibration data on a separate storage medium that is   *
+ * independent from the recipe SPIFFS partition and survives format operations.*
+ * nvs_flash_init() must already have been called before Storage_Init().       */
+#define CAL_NVS_NS  "cal"
+
+static int nvs_cal_read(const char *key, uint8_t *buf, size_t bufsz)
+{
+    nvs_handle_t h;
+    if (nvs_open(CAL_NVS_NS, NVS_READONLY, &h) != ESP_OK) return 0;
+    size_t sz = bufsz;
+    esp_err_t err = nvs_get_blob(h, key, buf, &sz);
+    nvs_close(h);
+    if (err == ESP_ERR_NVS_NOT_FOUND) return 0;
+    return (err == ESP_OK) ? (int)sz : -1;
+}
+
+static int nvs_cal_size(const char *key)
+{
+    nvs_handle_t h;
+    if (nvs_open(CAL_NVS_NS, NVS_READONLY, &h) != ESP_OK) return 0;
+    size_t sz = 0;
+    esp_err_t err = nvs_get_blob(h, key, NULL, &sz);
+    nvs_close(h);
+    if (err == ESP_ERR_NVS_NOT_FOUND) return 0;
+    return (err == ESP_OK || err == ESP_ERR_NVS_INVALID_LENGTH) ? (int)sz : -1;
+}
+
+static int nvs_cal_write(const char *key, const uint8_t *data, size_t data_size)
+{
+    nvs_handle_t h;
+    esp_err_t err = nvs_open(CAL_NVS_NS, NVS_READWRITE, &h);
+    if (err != ESP_OK) {
+        ESP_LOGE("storage", "cal NVS open failed: %s", esp_err_to_name(err));
+        return -1;
+    }
+    err = nvs_set_blob(h, key, data, data_size);
+    if (err == ESP_OK) err = nvs_commit(h);
+    nvs_close(h);
+    if (err != ESP_OK) {
+        ESP_LOGE("storage", "cal NVS write failed: %s", esp_err_to_name(err));
+        return -1;
+    }
+    return 0;
+}
+
+static int nvs_cal_delete(const char *key)
+{
+    nvs_handle_t h;
+    if (nvs_open(CAL_NVS_NS, NVS_READWRITE, &h) != ESP_OK) return -1;
+    esp_err_t err = nvs_erase_key(h, key);
+    if (err == ESP_OK) nvs_commit(h);
+    nvs_close(h);
+    return (err == ESP_OK || err == ESP_ERR_NVS_NOT_FOUND) ? 0 : -1;
+}
 
 static const char *TAG = "storage";
 static bool s_mounted;
@@ -80,7 +138,7 @@ static void make_path(char *buf, size_t bufsz, const char *key)
 int32_t Storage_Read(StorageDomain_t domain, const char *key,
                      uint8_t *buffer, size_t buffer_size)
 {
-    (void)domain;
+    if (domain == STORAGE_DOMAIN_CALIBRATION) return nvs_cal_read(key, buffer, buffer_size);
     if (!s_mounted || !key || !buffer) return -1;
 
     char path[296];
@@ -107,8 +165,8 @@ int32_t Storage_ReadString(StorageDomain_t domain, const char *key,
 int Storage_Write(StorageDomain_t domain, const char *key,
                   const uint8_t *data, size_t data_size, bool backup_to_sd)
 {
-    (void)domain;
     (void)backup_to_sd;
+    if (domain == STORAGE_DOMAIN_CALIBRATION) return nvs_cal_write(key, data, data_size);
     if (!s_mounted || !key || !data) return -1;
 
     char path[296];
@@ -140,7 +198,7 @@ int Storage_WriteString(StorageDomain_t domain, const char *key,
 
 int Storage_Delete(StorageDomain_t domain, const char *key)
 {
-    (void)domain;
+    if (domain == STORAGE_DOMAIN_CALIBRATION) return nvs_cal_delete(key);
     if (!s_mounted || !key) return -1;
 
     char path[296];
@@ -200,7 +258,7 @@ int Storage_Commit(void) { return 0; }
 
 int Storage_Exists(StorageDomain_t domain, const char *key)
 {
-    (void)domain;
+    if (domain == STORAGE_DOMAIN_CALIBRATION) return (nvs_cal_size(key) > 0) ? 1 : 0;
     if (!s_mounted || !key) return -1;
 
     char path[296];
@@ -212,7 +270,7 @@ int Storage_Exists(StorageDomain_t domain, const char *key)
 
 int32_t Storage_GetSize(StorageDomain_t domain, const char *key)
 {
-    (void)domain;
+    if (domain == STORAGE_DOMAIN_CALIBRATION) return nvs_cal_size(key);
     if (!s_mounted || !key) return -1;
 
     char path[296];

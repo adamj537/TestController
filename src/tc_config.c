@@ -9,6 +9,7 @@
  */
 
 #include "tc_config.h"
+#include "tc_cal.h"
 #include "../storage/storage.h"
 #include "cJSON.h"
 #include "esp_log.h"
@@ -227,18 +228,8 @@ void tc_config_set_str(const char *path, const char *val)
 
 int tc_config_vdut_duty_for_mv(int target_mv)
 {
-    int slope     = tc_config_get_int("vdut.slope_mv_per_pct",  0);
-    int intercept = tc_config_get_int("vdut.intercept_mv",       0);
-
-    if (slope == 0) {
-        ESP_LOGW(TAG, "vdut.slope_mv_per_pct is 0 — VDUT not calibrated");
-        return -1;  /* caller must refuse to enable VDUT */
-    }
-
-    int duty = (target_mv - intercept) / slope;
-    if (duty < 1)  duty = 1;
-    if (duty > 99) duty = 99;
-    return duty;
+    /* Delegate to tc_cal — authoritative source for VDUT calibration. */
+    return tc_cal_vdut_duty_for_mv(target_mv);
 }
 
 /* ── Console commands ────────────────────────────────────────────────────── */
@@ -323,15 +314,15 @@ static int do_config(int argc, char **argv)
     if (strcmp(argv[1], "vdut-duty") == 0) {
         if (argc < 3) { printf("Usage: config vdut-duty <target_mv>\n"); return 1; }
         int target_mv = atoi(argv[2]);
-        int duty = tc_config_vdut_duty_for_mv(target_mv);
+        int duty = tc_cal_vdut_duty_for_mv(target_mv);
         if (duty < 0)
-            printf("VDUT not calibrated — set vdut.slope_mv_per_pct and vdut.intercept_mv first\n");
-        else
-            printf("Target %d mV → duty %d%%  "
-                   "(slope=%d  intercept=%d)\n",
-                   target_mv, duty,
-                   tc_config_get_int("vdut.slope_mv_per_pct", 0),
-                   tc_config_get_int("vdut.intercept_mv", 0));
+            printf("VDUT not calibrated — use: cal vdut <slope> <intercept> && cal save\n");
+        else {
+            int slope, intercept;
+            tc_cal_get_vdut(&slope, &intercept);
+            printf("Target %d mV → duty %d%%  (slope=%d  intercept=%d)\n",
+                   target_mv, duty, slope, intercept);
+        }
         return 0;
     }
 

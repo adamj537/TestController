@@ -20,6 +20,7 @@
 #include "cmd_adc.h"
 #include "cmd_vdac.h"
 #include "cmd_selftest.h"
+#include "tc_cal.h"
 #include "tc_mqtt.h"
 #include "recipe_primitives.h"
 #include "dut_detect.h"
@@ -119,11 +120,13 @@ static bool adc128_read_channel(uint8_t ch, int *rail_mv_out)
 {
     uint8_t buf[2];
     if (!i2c_read_reg(ADDR_ADC128D818, ADC128_REG_CH_BASE + ch, buf, 2)) return false;
-    int count    = ((buf[0] << 8) | buf[1]) >> 4;
-    int adc_mv   = count * ADC128_VREF_MV / ADC128_FULL;
-    /* scale back to rail voltage using per-channel divider ratio */
-    if (ch == 4) *rail_mv_out = adc_mv * ADC128_CH4_NUM / ADC128_CH4_DEN;
-    else         *rail_mv_out = adc_mv * ADC128_CH5_NUM / ADC128_CH5_DEN;
+    int count  = ((buf[0] << 8) | buf[1]) >> 4;
+    int adc_mv = count * ADC128_VREF_MV / ADC128_FULL;
+    /* scale back to rail voltage using per-channel divider ratio, then apply calibration */
+    int raw_mv;
+    if (ch == 4) raw_mv = adc_mv * ADC128_CH4_NUM / ADC128_CH4_DEN;
+    else         raw_mv = adc_mv * ADC128_CH5_NUM / ADC128_CH5_DEN;
+    *rail_mv_out = tc_cal_apply_adc(ch, raw_mv);
     return true;
 }
 
@@ -398,7 +401,8 @@ void run_vdut(const cJSON *params)
 
         uint8_t buf[2];
         if (i2c_read_reg(ADDR_INA219_0, INA219_REG_BUS_V, buf, 2)) {
-            bus0[p] = (((int16_t)((buf[0] << 8) | buf[1])) >> 3) * 4;
+            bus0[p] = tc_cal_apply_ina_v(TC_CAL_INA_CH0,
+                          (((int16_t)((buf[0] << 8) | buf[1])) >> 3) * 4);
             iok[p][0] = true;
         }
         if (i2c_read_reg(ADDR_INA219_0, INA219_REG_CURRENT, buf, 2))
@@ -407,7 +411,8 @@ void run_vdut(const cJSON *params)
             pwr0[p] = (buf[0] << 8) | buf[1];
 
         if (i2c_read_reg(ADDR_INA219_1, INA219_REG_BUS_V, buf, 2)) {
-            bus1[p] = (((int16_t)((buf[0] << 8) | buf[1])) >> 3) * 4;
+            bus1[p] = tc_cal_apply_ina_v(TC_CAL_INA_CH1,
+                          (((int16_t)((buf[0] << 8) | buf[1])) >> 3) * 4);
             iok[p][1] = true;
         }
         if (i2c_read_reg(ADDR_INA219_1, INA219_REG_CURRENT, buf, 2))

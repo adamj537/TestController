@@ -22,6 +22,7 @@
 
 #include "tc_statemachine.h"
 #include "tc_config.h"
+#include "tc_cal.h"
 #include "cmd_swd.h"
 #include "cmd_i2c.h"
 #include "cmd_vdac.h"
@@ -56,7 +57,8 @@ static bool read_ina219_current_ma(int *current_ma_out)
     if (!i2c_read_reg(PRE_GATE_INA219_ADDR, INA219_REG_CURRENT, buf, 2))
         return false;
     int16_t raw = (int16_t)((buf[0] << 8) | buf[1]);
-    *current_ma_out = (int)(raw * INA219_CURRENT_LSB_UA) / 1000;
+    int raw_ma = (int)(raw * INA219_CURRENT_LSB_UA) / 1000;
+    *current_ma_out = tc_cal_apply_ina_i(TC_CAL_INA_CH0, raw_ma);
     return true;
 }
 
