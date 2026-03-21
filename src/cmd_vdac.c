@@ -214,12 +214,12 @@ static int do_vdac_char(int argc, char **argv)
     return 0;
 }
 
-/* ── vdac set ────────────────────────────────────────────────────────────── */
+/* ── vdac_duty — set channel duty cycle directly ─────────────────────────── */
 
-static int do_vdac_set(int argc, char **argv)
+static int do_vdac_duty(int argc, char **argv)
 {
     if (argc < 3) {
-        printf("Usage: vdac set <1|2|both> <duty_pct 0-100>\n");
+        printf("Usage: vdac_duty <1|2|both> <duty_pct 0-100>\n");
         return 1;
     }
     int duty = atoi(argv[2]);
@@ -244,6 +244,40 @@ static int do_vdac_set(int argc, char **argv)
     return 0;
 }
 
+/* ── vdac_voltage — set channel voltage using calibration ────────────────── */
+
+static int do_vdac_voltage(int argc, char **argv)
+{
+    if (argc < 3) {
+        printf("Usage: vdac_voltage <1|2|both> <voltage_mv>\n");
+        return 1;
+    }
+    int target_mv = atoi(argv[2]);
+
+    int duty = tc_config_vdut_duty_for_mv(target_mv);
+    if (duty < 0) {
+        printf("ERROR: VDUT calibration not set — run 'vdac char' first\n");
+        return 1;
+    }
+    if (duty > 100) duty = 100;
+
+    bool do1 = (strcmp(argv[1], "1")    == 0 || strcmp(argv[1], "both") == 0);
+    bool do2 = (strcmp(argv[1], "2")    == 0 || strcmp(argv[1], "both") == 0);
+    if (!do1 && !do2) { printf("channel must be 1, 2, or both\n"); return 1; }
+
+    if (do1) {
+        vdac_set_enable(0, true);
+        vdac_set_duty(0, duty);
+        printf("VDUT1: target=%d mV  duty=%d%%\n", target_mv, duty);
+    }
+    if (do2) {
+        vdac_set_enable(1, true);
+        vdac_set_duty(1, duty);
+        printf("VDUT2: target=%d mV  duty=%d%%\n", target_mv, duty);
+    }
+    return 0;
+}
+
 /* ── vdac off ────────────────────────────────────────────────────────────── */
 
 static int do_vdac_off(int argc, char **argv)
@@ -263,13 +297,13 @@ static int do_vdac(int argc, char **argv)
 {
     if (argc < 2) {
         printf("VDUT regulator DAC control:\n");
-        printf("  vdac char              sweep 0-100%% and print voltage table\n");
-        printf("  vdac set <1|2|both> <duty_pct>  enable and set duty cycle\n");
-        printf("  vdac off               disable both channels\n");
+        printf("  vdac char                    sweep 0-100%% and print voltage table\n");
+        printf("  vdac off                     disable both channels\n");
+        printf("  vdac_duty <1|2|both> <pct>   enable and set duty cycle directly\n");
+        printf("  vdac_voltage <1|2|both> <mV> enable and set voltage (requires cal)\n");
         return 1;
     }
     if (strcmp(argv[1], "char") == 0) return do_vdac_char(argc - 1, argv + 1);
-    if (strcmp(argv[1], "set")  == 0) return do_vdac_set(argc - 1, argv + 1);
     if (strcmp(argv[1], "off")  == 0) return do_vdac_off(argc - 1, argv + 1);
     printf("Unknown subcommand '%s'\n", argv[1]);
     return 1;
@@ -277,11 +311,26 @@ static int do_vdac(int argc, char **argv)
 
 void register_vdac_commands(void)
 {
-    const esp_console_cmd_t cmd = {
-        .command = "vdac",
-        .help    = "VDUT DAC: vdac <char|set|off>",
-        .hint    = NULL,
-        .func    = &do_vdac,
+    static const esp_console_cmd_t cmds[] = {
+        {
+            .command = "vdac",
+            .help    = "VDUT DAC: vdac <char|off>",
+            .hint    = NULL,
+            .func    = &do_vdac,
+        },
+        {
+            .command = "vdac_duty",
+            .help    = "Set VDUT duty cycle: vdac_duty <1|2|both> <duty_pct 0-100>",
+            .hint    = NULL,
+            .func    = &do_vdac_duty,
+        },
+        {
+            .command = "vdac_voltage",
+            .help    = "Set VDUT voltage: vdac_voltage <1|2|both> <voltage_mv>  (requires calibration)",
+            .hint    = NULL,
+            .func    = &do_vdac_voltage,
+        },
     };
-    ESP_ERROR_CHECK(esp_console_cmd_register(&cmd));
+    for (int i = 0; i < (int)(sizeof(cmds) / sizeof(cmds[0])); i++)
+        ESP_ERROR_CHECK(esp_console_cmd_register(&cmds[i]));
 }
