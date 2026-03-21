@@ -12,6 +12,7 @@
 #include "nvs.h"
 #include "esp_log.h"
 #include "esp_console.h"
+#include "mbedtls/base64.h"
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -319,6 +320,45 @@ static int do_recipe(int argc, char **argv)
         return 0;
     }
 
+    /* recipe set-b64 <id> <base64-encoded-json>
+     * Upload a recipe JSON to storage without firmware rebuild.
+     * Use scripts/upload_recipe.py to generate the base64 argument. */
+    if (strcmp(argv[1], "set-b64") == 0) {
+        if (argc < 4) { printf("Usage: recipe set-b64 <id> <base64-json>\n"); return 1; }
+        const char *id      = argv[2];
+        const char *b64_in  = argv[3];
+        size_t      b64_len = strlen(b64_in);
+
+        /* Decode: output is at most 3/4 of input */
+        size_t out_len = 0;
+        size_t buf_sz  = (b64_len / 4) * 3 + 4;
+        char  *json    = malloc(buf_sz);
+        if (!json) { printf("malloc failed\n"); return 1; }
+
+        int rc = mbedtls_base64_decode((unsigned char *)json, buf_sz, &out_len,
+                                       (const unsigned char *)b64_in, b64_len);
+        if (rc != 0) {
+            free(json);
+            printf("Base64 decode failed (rc=%d)\n", rc);
+            return 1;
+        }
+        json[out_len] = '\0';
+
+        /* Quick JSON validation */
+        cJSON *root = cJSON_ParseWithLength(json, out_len);
+        if (!root) {
+            free(json);
+            printf("JSON parse failed near: %s\n", cJSON_GetErrorPtr());
+            return 1;
+        }
+        cJSON_Delete(root);
+
+        int store_rc = recipe_json_store_nvs(id, json, out_len);
+        free(json);
+        printf("%s: %s (%d bytes)\n", id, store_rc == 0 ? "stored" : "FAILED", (int)out_len);
+        return store_rc;
+    }
+
     if (strcmp(argv[1], "delete") == 0) {
         if (argc < 3) { printf("Usage: recipe delete <id>\n"); return 1; }
         int rc = recipe_json_delete_nvs(argv[2]);
@@ -393,6 +433,7 @@ usage:
     printf("Usage:\n"
            "  recipe show              show hardcoded recipe as JSON\n"
            "  recipe store [id]        store hardcoded recipe to flash\n"
+           "  recipe set-b64 <id> <b64> upload base64-encoded JSON to flash\n"
            "  recipe load [id]         load recipe from flash and print\n"
            "  recipe list              list all stored recipes\n"
            "  recipe delete <id>       delete recipe from flash\n"

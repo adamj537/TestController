@@ -169,7 +169,7 @@ extern "C" void app_main(void)
     static char prompt_buf[40];
     snprintf(prompt_buf, sizeof(prompt_buf), "g3-tc|" FW_VERSION_STRING ">");
     repl_cfg.prompt = prompt_buf;
-    repl_cfg.max_cmdline_length = 256;
+    repl_cfg.max_cmdline_length = 4096;  /* large enough for base64-encoded recipe JSON upload */
 
     esp_console_register_help_command();
     register_gpio_commands();
