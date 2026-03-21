@@ -409,3 +409,87 @@ the target drives ACK starting at TRN (consistent with the read frame).
 | KEYR unlock sequence | `0x45670123`, `0xCDEF89AB` |
 | DHCSR address | `0xE000EDF0` |
 | Halt value | `0xA05F0003` (DBGKEY | C_DEBUGEN | C_HALT) |
+
+---
+
+## Calibration (`tc_cal`)
+
+All measurement channels use a linear correction model:
+
+```
+corrected = gain × raw + offset
+```
+
+VDUT uses an inverting regulator model:
+
+```
+V_mv = slope_mv_per_pct × duty_pct + intercept_mv
+duty_pct = (target_mv − intercept_mv) / slope_mv_per_pct
+```
+
+Calibration data is stored in NVS (namespace `cal`, key `cal`, JSON blob).  It
+survives OTA updates.  Factory defaults are `gain=1.0`, `offset=0` (passthrough)
+for all channels; VDUT `slope=0` is the **uncalibrated sentinel** — the TC
+refuses to enable VDUT until a calibration run sets a non-zero slope.
+
+### Channels
+
+| Channel | Quantity | Keys |
+|---|---|---|
+| VDUT PWM DAC | Duty → voltage | `vdut.slope`, `vdut.intercept` |
+| INA219 ch0 (VDUT1) | Bus voltage | `ina0.v.gain`, `ina0.v.offset_mv` |
+| INA219 ch0 (VDUT1) | Current | `ina0.i.gain`, `ina0.i.offset_ma` |
+| INA219 ch1 (VDUT2) | Bus voltage | `ina1.v.gain`, `ina1.v.offset_mv` |
+| INA219 ch1 (VDUT2) | Current | `ina1.i.gain`, `ina1.i.offset_ma` |
+| ADC128D818 ch0–7 | Rail voltages | `adc.N.gain`, `adc.N.offset_mv` |
+
+### Console commands
+
+```
+cal show                          # print all coefficients
+cal load                          # reload from NVS
+cal save                          # persist in-RAM cal to NVS
+cal reset                         # reset to factory defaults (does not save)
+cal vdut <slope> <intercept>      # set VDUT coefficients and save
+cal vdut-duty <mv>                # compute duty for target mV (dry run)
+cal ina <0|1> v <gain> <offset>   # set INA219 voltage coefficients
+cal ina <0|1> i <gain> <offset>   # set INA219 current coefficients
+cal adc <0-7> <gain> <offset>     # set ADC128D818 channel coefficients
+```
+
+### VDUT calibration workflow
+
+The `vdac char` command performs the hardware sweep and writes calibration:
+
+```
+vdac char    # sweeps 0–100 % duty, reads ADC128 at each step,
+             # fits linear model, writes slope+intercept to tc_cal, saves
+```
+
+After `vdac char` the fixture is calibrated and `cal show` confirms the values.
+No manual `cal save` is needed — `vdac char` saves automatically.
+
+### MQTT interface
+
+Calibration is readable/writable over MQTT by an `engineer`-role session:
+
+| DCMD | Payload | Effect |
+|---|---|---|
+| `cal_get` | *(none)* | TC publishes DDATA with all `Cal/*` metrics |
+| `cal_set` | `{"key":"vdut.slope","value":-87}` | Write one coefficient, persist immediately |
+
+See the [MQTT contract](../design/architecture/mqtt-contract.md) for the full
+payload schema and all supported `cal_set` keys.
+
+`NBIRTH Properties/CalProfileVersion` is `"set"` when VDUT is calibrated
+(slope ≠ 0), `"none"` otherwise.
+
+### NVS storage details
+
+- **Namespace**: `cal`
+- **Key**: `cal` (single JSON blob; atomic write)
+- **Domain**: `STORAGE_DOMAIN_CALIBRATION` → routed to NVS in `storage_spiffs.c`
+- **Blob format**: JSON object with sub-objects `vdut`, `ina219`, `adc128`
+
+The blob survives OTA because NVS is a separate flash partition from the
+firmware image.
