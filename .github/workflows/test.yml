@@ -45,11 +45,11 @@ jobs:
           ${{ runner.os }}-pio-
 
     - name: Run native test suite
-      working-directory: embedded/tester-client
+      working-directory: .
       run: pio test -e native -v 2>&1 | tee test_results.txt
 
     - name: Check test results
-      working-directory: embedded/tester-client
+      working-directory: .
       run: |
         if grep -q "FAILED\|ERRORED" test_results.txt; then
           echo "One or more tests failed:"
