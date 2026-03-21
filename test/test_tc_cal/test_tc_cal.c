@@ -25,9 +25,9 @@
  * PlatformIO adds the test directory to the include path, so tc_cal.c finds
  * them before any ESP-IDF paths. */
 
-/* ── cJSON — path added to native build_flags in platformio.ini ──────────── */
+/* ── cJSON — vendored at vendor/cjson/ (-Ivendor/cjson in platformio.ini) ── */
 #include "cJSON.h"
-#include "/home/cbasta/.platformio/packages/framework-espidf/components/json/cJSON/cJSON.c"
+#include "cJSON.c"
 
 /* ── storage mock ────────────────────────────────────────────────────────── */
 #include "../../storage/storage.h"

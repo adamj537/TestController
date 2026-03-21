@@ -14,9 +14,9 @@
 #define NATIVE_BUILD
 #endif
 
-/* ── cJSON ───────────────────────────────────────────────────────────────── */
+/* ── cJSON — vendored at vendor/cjson/ (-Ivendor/cjson in platformio.ini) ── */
 #include "cJSON.h"
-#include "/home/cbasta/.platformio/packages/framework-espidf/components/json/cJSON/cJSON.c"
+#include "cJSON.c"
 
 /* ── ESP-IDF stubs ────────────────────────────────────────────────────────── */
 /* These headers live in this test directory and shadow real ESP-IDF headers. */
