@@ -21,6 +21,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
+#include <time.h>
 
 static const char *TAG = "tc_cal";
 static const char *KEY = "cal";
@@ -43,6 +44,9 @@ typedef struct {
     /* ADC128D818 per channel */
     float adc_gain[TC_CAL_ADC_NCH];
     int   adc_offset_mv[TC_CAL_ADC_NCH];
+
+    /* ISO-8601 UTC timestamp of last save; empty if never saved with valid clock */
+    char cal_timestamp[32];
 } cal_data_t;
 
 static cal_data_t s_cal;
@@ -67,6 +71,7 @@ static void apply_defaults(cal_data_t *c)
         c->adc_gain[i]      = 1.0f;
         c->adc_offset_mv[i] = 0;
     }
+    c->cal_timestamp[0] = '\0';
 }
 
 /* ── JSON serialization ──────────────────────────────────────────────────── */
@@ -107,6 +112,9 @@ static cJSON *cal_to_json(const cal_data_t *c)
         cJSON_AddNumberToObject(c_node, "gain",      (double)c->adc_gain[ch]);
         cJSON_AddNumberToObject(c_node, "offset_mv", c->adc_offset_mv[ch]);
     }
+
+    /* Timestamp */
+    cJSON_AddStringToObject(root, "cal_timestamp", c->cal_timestamp);
 
     return root;
 }
@@ -175,6 +183,11 @@ static void json_to_cal(const cJSON *root, cal_data_t *c)
             if (f && cJSON_IsNumber(f)) c->adc_offset_mv[ch] = (int)f->valuedouble;
         }
     }
+
+    /* Timestamp */
+    const cJSON *ts = cJSON_GetObjectItem(root, "cal_timestamp");
+    if (ts && cJSON_IsString(ts) && ts->valuestring)
+        snprintf(c->cal_timestamp, sizeof(c->cal_timestamp), "%s", ts->valuestring);
 }
 
 /* ── Lifecycle ───────────────────────────────────────────────────────────── */
@@ -234,6 +247,15 @@ int tc_cal_save(void)
     if (!s_loaded) {
         ESP_LOGW(TAG, "Calibration not loaded — cannot save");
         return -1;
+    }
+
+    /* Stamp with current UTC time if clock is synchronised (year >= 2020) */
+    time_t now = time(NULL);
+    if (now > 1577836800LL) {   /* 2020-01-01 00:00:00 UTC */
+        struct tm tm_utc;
+        gmtime_r(&now, &tm_utc);
+        strftime(s_cal.cal_timestamp, sizeof(s_cal.cal_timestamp),
+                 "%Y-%m-%dT%H:%M:%SZ", &tm_utc);
     }
 
     cJSON *root = cal_to_json(&s_cal);
@@ -345,6 +367,46 @@ int tc_cal_apply_adc(int ch, int raw_mv)
 {
     if (ch < 0 || ch >= TC_CAL_ADC_NCH) return raw_mv;
     return (int)(s_cal.adc_gain[ch] * (float)raw_mv) + s_cal.adc_offset_mv[ch];
+}
+
+/* ── Timestamp & expiry ──────────────────────────────────────────────────── */
+
+void tc_cal_get_timestamp(char *buf, size_t len)
+{
+    snprintf(buf, len, "%s", s_cal.cal_timestamp);
+}
+
+int tc_cal_is_expired(int max_age_days)
+{
+    if (s_cal.cal_timestamp[0] == '\0')
+        return -1;   /* never stamped */
+
+    /* Check if system clock is synchronised (epoch > 2020-01-01) */
+    time_t now = time(NULL);
+    if (now <= 1577836800LL)
+        return -2;   /* clock not synchronised — cannot determine age */
+
+    /* Parse stored ISO-8601: "YYYY-MM-DDTHH:MM:SSZ" */
+    int y, mo, d, h, mi, s;
+    if (sscanf(s_cal.cal_timestamp, "%d-%d-%dT%d:%d:%dZ",
+               &y, &mo, &d, &h, &mi, &s) != 6)
+        return -1;   /* parse failed — treat as no timestamp */
+
+    struct tm tm_cal = {
+        .tm_year = y - 1900,
+        .tm_mon  = mo - 1,
+        .tm_mday = d,
+        .tm_hour = h,
+        .tm_min  = mi,
+        .tm_sec  = s,
+        .tm_isdst = 0,
+    };
+    time_t cal_time = mktime(&tm_cal);
+    if (cal_time < 0)
+        return -1;
+
+    double age_days = difftime(now, cal_time) / 86400.0;
+    return (age_days > (double)max_age_days) ? 1 : 0;
 }
 
 /* ── Console commands ────────────────────────────────────────────────────── */

@@ -20,6 +20,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <stddef.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -83,6 +84,19 @@ void tc_cal_set_adc(int ch, float gain, int offset_mv);
 
 /* Apply calibration — returns corrected value in mV */
 int  tc_cal_apply_adc(int ch, int raw_mv);
+
+/* ── Timestamp & expiry ──────────────────────────────────────────────────── */
+
+/* Copy the ISO-8601 UTC timestamp of the last tc_cal_save() into buf.
+ * Returns empty string if calibration has never been saved with a valid clock. */
+void tc_cal_get_timestamp(char *buf, size_t len);
+
+/* Check whether the calibration is older than max_age_days.
+ *  0  = within limit (OK to proceed)
+ *  1  = expired (block production test)
+ * -1  = no timestamp stored — treat as expired
+ * -2  = system clock not yet synchronised — cannot determine age (allow) */
+int  tc_cal_is_expired(int max_age_days);
 
 /* ── Console ─────────────────────────────────────────────────────────────── */
 
