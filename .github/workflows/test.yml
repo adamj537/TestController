@@ -25,8 +25,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
-      with:
-        submodules: recursive
+      # No submodules: native tests include source files directly and
+      # do not depend on the common/ submodule (ESP32-specific, excluded from native build)
 
     - name: Set up Python
       uses: actions/setup-python@v5
