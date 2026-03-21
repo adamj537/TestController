@@ -1,0 +1,67 @@
+name: FW-1 TC Firmware Build
+
+on:
+  push:
+    branches: [ main, 'feat/**' ]
+    paths:
+      - 'src/**'
+      - 'common/**'
+      - 'hal/**'
+      - 'bsp/**'
+      - 'app/**'
+      - 'storage/**'
+      - 'recipes/**'
+      - 'dut/**'
+      - 'platformio.ini'
+      - 'partitions_ota.csv'
+      - '.github/workflows/build.yml'
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  firmware-build:
+    name: ESP32 firmware build (pio run)
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Create GitHub App token
+      id: app-token
+      uses: actions/create-github-app-token@v2
+      with:
+        app-id: ${{ secrets.APP_ID }}
+        private-key: ${{ secrets.APP_PRIVATE_KEY }}
+        owner: ${{ github.repository_owner }}
+
+    - name: Checkout (with common/ submodule)
+      uses: actions/checkout@v4
+      with:
+        token: ${{ steps.app-token.outputs.token }}
+        submodules: recursive
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install PlatformIO
+      run: pip install platformio
+
+    - name: Cache PlatformIO packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.platformio
+        key: ${{ runner.os }}-pio-esp32-${{ hashFiles('platformio.ini') }}
+        restore-keys: |
+          ${{ runner.os }}-pio-esp32-
+
+    - name: Build ESP32 firmware
+      run: pio run -e esp32-Devkit
+
+    - name: Upload firmware artifact
+      uses: actions/upload-artifact@v4
+      with:
+        name: firmware-${{ github.sha }}
+        path: |
+          .pio/build/esp32-Devkit/firmware.bin
+          .pio/build/esp32-Devkit/bootloader.bin
+          .pio/build/esp32-Devkit/partitions.bin
