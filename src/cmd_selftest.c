@@ -1104,6 +1104,9 @@ static void selftest_task(void *pvarg)
         tc_mqtt_publish_selftest(mode, config, s_checks, s_ncheck);
     }
 
+    /* Clear test_in_progress so the UI knows selftest is done */
+    tc_mqtt_publish_test_progress(false, 0, 0, "complete", "complete");
+
     /* Notify state machine if this run was SM-owned.
      * tc_sm_selftest_done() may vTaskDelay internally before returning. */
     if (is_sm) {
