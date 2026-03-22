@@ -32,7 +32,9 @@
 
 /* ── Forward declarations ─────────────────────────────────────────────────── */
 
-static bool adc128_read_raw_mv(uint8_t ch, int *mv_out);
+bool tie_adc128_read_raw_mv(uint8_t ch, int *mv_out);
+extern void run_swd_probe(const cJSON *params);  /* g3_primitives.c */
+static const char *detect_config_level(void);
 
 /* ── TCC carrier device map ───────────────────────────────────────────────── */
 
@@ -59,7 +61,7 @@ static void report(bool ok, const char *fmt, ...)
 
 /* ── Structured check collection (for MQTT selftest DDATA) ───────────────── */
 
-#define MAX_CHECKS 32
+#define MAX_CHECKS 128
 static tc_mqtt_check_t s_checks[MAX_CHECKS];
 static int             s_ncheck;
 
@@ -260,8 +262,8 @@ void run_adc(const cJSON *params)
      * NOTE: CH6/CH7 voltage dividers are not yet wired on TCC v1.1 — reads 0 mV
      * until the next board spin adds VDUT1Mon/VDUT2Mon connections. */
     int mv6 = -1, mv7 = -1;
-    bool ok6 = adc128_read_raw_mv(6, &mv6);
-    bool ok7 = adc128_read_raw_mv(7, &mv7);
+    bool ok6 = tie_adc128_read_raw_mv(6, &mv6);
+    bool ok7 = tie_adc128_read_raw_mv(7, &mv7);
 
     report(ok6, "ADC:  ADC128 CH6 (VDUT1Mon)  %4d mV", mv6);
     st_record_mv("adc128_ch6", ok6, mv6);
@@ -557,7 +559,7 @@ static const int s_mux_gpio[TIE_MUX_COUNT][4] = {
 
 static const uint8_t s_mux_adc128_ch[TIE_MUX_COUNT] = { 0, 1, 2, 3 };
 
-static void mux_select(int mux_idx, int ch)
+void tie_mux_select(int mux_idx, int ch)
 {
     for (int bit = 0; bit < 4; bit++) {
         gpio_num_t pin = (gpio_num_t)s_mux_gpio[mux_idx][bit];
@@ -566,13 +568,20 @@ static void mux_select(int mux_idx, int ch)
     }
 }
 
-static bool adc128_read_raw_mv(uint8_t ch, int *mv_out)
+bool tie_adc128_read_raw_mv(uint8_t ch, int *mv_out)
 {
     uint8_t buf[2];
     if (!i2c_read_reg(ADDR_ADC128D818, ADC128_REG_CH_BASE + ch, buf, 2)) return false;
     int count = ((buf[0] << 8) | buf[1]) >> 4;
     *mv_out = count * ADC128_VREF_MV / ADC128_FULL;
     return true;
+}
+
+bool tie_adc128_init(void)
+{
+    return i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x03) &&
+           i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONV_RATE, 0x01) &&
+           i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONFIG,    0x01);
 }
 
 void run_mux_scan(const cJSON *params)
@@ -591,11 +600,11 @@ void run_mux_scan(const cJSON *params)
     int err_count = 0;
     for (int m = 0; m < TIE_MUX_COUNT; m++) {
         for (int ch = 0; ch < TIE_MUX_CHANNELS; ch++) {
-            mux_select(m, ch);
+            tie_mux_select(m, ch);
             vTaskDelay(pdMS_TO_TICKS(20));
 
             int mv = 0;
-            bool ok = adc128_read_raw_mv(s_mux_adc128_ch[m], &mv);
+            bool ok = tie_adc128_read_raw_mv(s_mux_adc128_ch[m], &mv);
             if (!ok) err_count++;
             printf("  %d  %2d   %d  %d  %d  %d  %s%4d\n",
                    m, ch,
@@ -636,13 +645,13 @@ void run_dut_heartbeat(const cJSON *params)
     vTaskDelay(pdMS_TO_TICKS(150));
 
     /* Select U12 Ch2 */
-    mux_select(HEARTBEAT_MUX_IDX, HEARTBEAT_MUX_CH);
+    tie_mux_select(HEARTBEAT_MUX_IDX, HEARTBEAT_MUX_CH);
     vTaskDelay(pdMS_TO_TICKS(20));
 
     int min_mv = 9999, max_mv = 0;
     for (int i = 0; i < HEARTBEAT_SAMPLES; i++) {
         int mv = 0;
-        if (adc128_read_raw_mv(HEARTBEAT_ADC128_CH, &mv)) {
+        if (tie_adc128_read_raw_mv(HEARTBEAT_ADC128_CH, &mv)) {
             if (mv < min_mv) min_mv = mv;
             if (mv > max_mv) max_mv = mv;
         }
@@ -675,7 +684,7 @@ void run_dut_heartbeat(const cJSON *params)
 
 static bool s_uart_open = false;
 
-static bool dut_uart_open(void)
+bool dut_uart_open(void)
 {
     if (s_uart_open) return true;
     uart_config_t cfg = {
@@ -697,16 +706,18 @@ static bool dut_uart_open(void)
     return true;
 }
 
-static void dut_uart_close(void)
+void dut_uart_close(void)
 {
     if (!s_uart_open) return;
     uart_driver_delete(DUT_UART_PORT);
     s_uart_open = false;
 }
 
+bool dut_uart_is_open(void) { return s_uart_open; }
+
 /* Send cmd\r\n, read one response line into buf (stripped of \r\n).
  * Returns true if the response starts with "OK". */
-static bool dut_cmd(const char *cmd, char *buf, size_t buf_len, int timeout_ms)
+bool dut_cmd(const char *cmd, char *buf, size_t buf_len, int timeout_ms)
 {
     if (!s_uart_open || !buf || buf_len == 0) return false;
     buf[0] = '\0';
@@ -897,6 +908,7 @@ static recipe_step_t s_fixture_recipe[] = {
     { "vdut",                run_vdut,           false },  /* DISABLED — carrier-only sweep, 10V+ damages DUT */
     { "mux_scan",            run_mux_scan,       true  },
     /* ── DUT pogo-dependent — enable as pogos are loaded ─────── */
+    { "swd_probe",           run_swd_probe,      false },  /* SWD SWDIO/SWCLK pogos */
     { "dut_heartbeat",       run_dut_heartbeat,  false },  /* DUT PA9 pogo */
     { "dut_enter_test",      run_dut_enter_test, false },  /* UART TX/RX pogos */
     { "dut_version",         run_dut_version,    false },
@@ -967,10 +979,11 @@ static int do_selftest(int argc, char **argv)
         return 1;
     }
 
-    printf("\nResults: %d/%d passed\n", s_pass, s_total);
+    const char *config = detect_config_level();
+    printf("\nResults: %d/%d passed  detected_config=%s\n", s_pass, s_total, config);
 
     if (s_ncheck > 0) {
-        tc_mqtt_publish_selftest("fixture", s_checks, s_ncheck);
+        tc_mqtt_publish_selftest("fixture", config, s_checks, s_ncheck);
     }
 
     return (s_pass == s_total) ? 0 : 1;
@@ -1018,6 +1031,40 @@ static int do_mac(int argc, char **argv)
     return 0;
 }
 
+/* ── Hardware configuration level detection ───────────────────────────────── *
+ * Scans the check buffer after selftest to determine L0–L3:
+ *   L0 = ESP32 bare (no TIE, no DUT)
+ *   L1 = +TIE I2C peripherals partially present (bus OK but not all devices)
+ *   L2 = +TIE board fully present (ADC128 + INA219s respond)
+ *   L3 = +DUT present (dut_detect GPIO asserted)
+ *
+ * Must be called after selftest run while check buffer is still valid.      */
+static const char *detect_config_level(void)
+{
+    bool tie_adc128 = false;
+    bool tie_ina0   = false;
+    bool tie_ina1   = false;
+
+    for (int i = 0; i < s_ncheck; i++) {
+        if (!s_checks[i].pass) continue;
+        if (strcmp(s_checks[i].id, "i2c_adc128")   == 0) tie_adc128 = true;
+        else if (strcmp(s_checks[i].id, "i2c_ina219_0") == 0) tie_ina0 = true;
+        else if (strcmp(s_checks[i].id, "i2c_ina219_1") == 0) tie_ina1 = true;
+    }
+
+    /* L3: TIE present AND DUT detected */
+    if (tie_adc128 && dut_detect_present()) return "L3";
+
+    /* L2: TIE board fully present (all 3 I2C peripherals) */
+    if (tie_adc128 && tie_ina0 && tie_ina1) return "L2";
+
+    /* L1: at least one TIE peripheral responds */
+    if (tie_adc128 || tie_ina0 || tie_ina1) return "L1";
+
+    /* L0: nothing beyond the ESP32 */
+    return "L0";
+}
+
 /* ── Async selftest task (used by DCMD and state machine) ─────────────────── */
 
 typedef struct {
@@ -1050,10 +1097,11 @@ static void selftest_task(void *pvarg)
     }
 
     bool passed = (s_pass == s_total && s_total > 0);
-    printf("[selftest task] %d/%d passed\n", s_pass, s_total);
+    const char *config = detect_config_level();
+    printf("[selftest task] %d/%d passed  detected_config=%s\n", s_pass, s_total, config);
 
     if (s_ncheck > 0) {
-        tc_mqtt_publish_selftest(mode, s_checks, s_ncheck);
+        tc_mqtt_publish_selftest(mode, config, s_checks, s_ncheck);
     }
 
     /* Notify state machine if this run was SM-owned.
@@ -1119,10 +1167,11 @@ static void diagnostic_task(void *arg)
         return;
     }
 
-    printf("[diagnostic] %d/%d passed\n", s_pass, s_total);
+    const char *diag_config = detect_config_level();
+    printf("[diagnostic] %d/%d passed  detected_config=%s\n", s_pass, s_total, diag_config);
 
     if (s_ncheck > 0) {
-        tc_mqtt_publish_selftest(test, s_checks, s_ncheck);
+        tc_mqtt_publish_selftest(test, diag_config, s_checks, s_ncheck);
     }
 
     free(test);

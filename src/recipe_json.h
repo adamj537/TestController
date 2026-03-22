@@ -12,7 +12,7 @@ extern "C" {
 /* ── JSON recipe data structures ─────────────────────────────────────────── */
 
 #define JSON_RECIPE_ID_MAX             64
-#define JSON_RECIPE_STEPS_MAX          50
+#define JSON_RECIPE_STEPS_MAX          96
 #define JSON_STEP_ID_MAX               32
 #define JSON_STEP_LABEL_MAX            48
 #define JSON_STEP_STATUS_MAX           64

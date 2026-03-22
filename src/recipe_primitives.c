@@ -30,6 +30,21 @@ extern void run_dut_exit_test(const cJSON *params);
 extern void run_power_check(const cJSON *params);
 extern void run_dut_program(const cJSON *params);
 extern void run_dut_read_id(const cJSON *params);
+extern void run_swd_probe(const cJSON *params);
+extern void run_mux_read(const cJSON *params);
+extern void run_dut_gpio_set(const cJSON *params);
+extern void run_dut_gpio_clear(const cJSON *params);
+extern void run_dut_pin_read(const cJSON *params);
+extern void run_dut_uc_adc_read(const cJSON *params);
+extern void run_dut_peripheral_adc_read(const cJSON *params);
+extern void run_dut_pwr_enable(const cJSON *params);
+extern void run_dut_pwr_disable(const cJSON *params);
+extern void run_dut_i2c_scan(const cJSON *params);
+extern void run_branch_test(const cJSON *params);
+extern void run_short_detect(const cJSON *params);
+extern void run_sig_inject(const cJSON *params);
+extern void run_sig_release(const cJSON *params);
+extern void run_button_test(const cJSON *params);
 
 static const primitive_entry_t s_primitives[] = {
     /* TCC/TIE carrier checks */
@@ -53,6 +68,22 @@ static const primitive_entry_t s_primitives[] = {
     { "power_check",         run_power_check },
     { "dut_program",         run_dut_program },
     { "dut_read_id",         run_dut_read_id },
+    { "swd_probe",           run_swd_probe },
+    /* Phase 2: coverage matrix primitives */
+    { "mux_read",            run_mux_read },
+    { "dut_gpio_set",        run_dut_gpio_set },
+    { "dut_gpio_clear",      run_dut_gpio_clear },
+    { "dut_pin_read",        run_dut_pin_read },
+    { "dut_uc_adc_read",     run_dut_uc_adc_read },
+    { "dut_peripheral_adc_read", run_dut_peripheral_adc_read },
+    { "dut_pwr_enable",      run_dut_pwr_enable },
+    { "dut_pwr_disable",     run_dut_pwr_disable },
+    { "dut_i2c_scan",        run_dut_i2c_scan },
+    { "branch_test",         run_branch_test },
+    { "short_detect",        run_short_detect },
+    { "sig_inject",          run_sig_inject },
+    { "sig_release",         run_sig_release },
+    { "button_test",         run_button_test },
 };
 
 #define PRIMITIVE_COUNT  (sizeof(s_primitives) / sizeof(s_primitives[0]))
