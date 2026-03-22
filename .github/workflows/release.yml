@@ -1,0 +1,125 @@
+name: Release — TC Firmware
+
+# Trigger on semver tags: v1.2.0, v1.2.0-rc.1, etc.
+# Only production tags (no -rc, -dev suffix) publish to GitHub Releases.
+# Pre-release tags upload artifacts but skip the release step.
+on:
+  push:
+    tags:
+      - 'v[0-9]+.[0-9]+.[0-9]+*'
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-test:
+    name: Build + Test
+    runs-on: ubuntu-latest
+
+    steps:
+    - name: Create GitHub App token
+      id: app-token
+      uses: actions/create-github-app-token@v2
+      with:
+        app-id: ${{ secrets.APP_ID }}
+        private-key: ${{ secrets.APP_PRIVATE_KEY }}
+        owner: ${{ github.repository_owner }}
+
+    - name: Checkout (with common/ submodule)
+      uses: actions/checkout@v4
+      with:
+        token: ${{ steps.app-token.outputs.token }}
+        submodules: recursive
+
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: '3.11'
+
+    - name: Install PlatformIO
+      run: pip install platformio
+
+    - name: Cache PlatformIO packages
+      uses: actions/cache@v4
+      with:
+        path: ~/.platformio
+        key: ${{ runner.os }}-pio-esp32-${{ hashFiles('platformio.ini') }}
+        restore-keys: |
+          ${{ runner.os }}-pio-esp32-
+
+    - name: Run native test suite
+      run: pio test -e native -v
+
+    - name: Build ESP32 firmware
+      run: pio run -e esp32-Devkit
+
+    - name: Compute checksums
+      id: checksums
+      run: |
+        cd .pio/build/esp32-Devkit
+        sha256sum firmware.bin > firmware.bin.sha256
+        sha256sum bootloader.bin > bootloader.bin.sha256
+        sha256sum partitions.bin > partitions.bin.sha256
+        echo "fw_sha256=$(cat firmware.bin.sha256 | cut -d' ' -f1)" >> "$GITHUB_OUTPUT"
+        echo "fw_size=$(stat -c%s firmware.bin)" >> "$GITHUB_OUTPUT"
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: firmware-${{ github.ref_name }}
+        path: |
+          .pio/build/esp32-Devkit/firmware.bin
+          .pio/build/esp32-Devkit/firmware.bin.sha256
+          .pio/build/esp32-Devkit/bootloader.bin
+          .pio/build/esp32-Devkit/bootloader.bin.sha256
+          .pio/build/esp32-Devkit/partitions.bin
+          .pio/build/esp32-Devkit/partitions.bin.sha256
+
+    - name: Determine if production release
+      id: release-type
+      run: |
+        TAG="${{ github.ref_name }}"
+        if echo "$TAG" | grep -qE '^v[0-9]+\.[0-9]+\.[0-9]+$'; then
+          echo "is_production=true" >> "$GITHUB_OUTPUT"
+          echo "prerelease=false" >> "$GITHUB_OUTPUT"
+        else
+          echo "is_production=false" >> "$GITHUB_OUTPUT"
+          echo "prerelease=true" >> "$GITHUB_OUTPUT"
+        fi
+
+    - name: Create GitHub Release
+      uses: softprops/action-gh-release@v2
+      with:
+        tag_name: ${{ github.ref_name }}
+        name: TC Firmware ${{ github.ref_name }}
+        prerelease: ${{ steps.release-type.outputs.prerelease == 'true' }}
+        generate_release_notes: true
+        body: |
+          ## TC Firmware ${{ github.ref_name }}
+
+          **Binary:** `firmware.bin` (${{ steps.checksums.outputs.fw_size }} bytes)
+          **SHA-256:** `${{ steps.checksums.outputs.fw_sha256 }}`
+
+          ### Flash methods
+
+          **OTA (Path B — WiFi TCs):**
+          ```json
+          {"cmd": "ota", "target": "tc_firmware", "version": "${{ github.ref_name }}", "url": "https://...firmware.bin", "sha256": "${{ steps.checksums.outputs.fw_sha256 }}"}
+          ```
+
+          **OTA (Path C — LBB/metal-enclosure TCs):**
+          ```bash
+          python3 scripts/ota_chunk_send.py --port /dev/ttyUSB-chN --firmware firmware.bin
+          ```
+
+          **USB direct (partition table changes or first flash):**
+          ```bash
+          esptool.py --chip esp32s3 write_flash 0x0 bootloader.bin 0x9000 partitions.bin 0x20000 firmware.bin
+          ```
+        files: |
+          .pio/build/esp32-Devkit/firmware.bin
+          .pio/build/esp32-Devkit/firmware.bin.sha256
+          .pio/build/esp32-Devkit/bootloader.bin
+          .pio/build/esp32-Devkit/bootloader.bin.sha256
+          .pio/build/esp32-Devkit/partitions.bin
+          .pio/build/esp32-Devkit/partitions.bin.sha256
