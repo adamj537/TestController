@@ -575,3 +575,178 @@ nvs_set recipes active str g3-mb-v1
 | 1.0.0 | 2026-03-18 | Initial recipe — TC carrier steps only |
 | 1.1.0 | 2026-03-19 | Add DUT UART steps (disabled), heartbeat, dut_program |
 | 1.2.0 | 2026-03-21 | Enable 8 DUT UART steps (enter→exit); heartbeat + program remain disabled |
+
+---
+
+## Provisioning (commissioning identity)
+
+TC identity is provisioned at commissioning time via the `nvs_set` DCMD.  Once
+set, the provisioned values persist across reboots and OTA updates (NVS survives
+firmware flash).
+
+### Identity keys
+
+| NVS namespace | Key | Description |
+|---|---|---|
+| `provision` | `fixture_id` | Opaque fixture identifier (shown in NBIRTH) |
+| `provision` | `group_id` | Sparkplug B group_id — replaces `SensitMfg` in topic |
+| `provision` | `node_id` | Sparkplug B node_id — replaces TC serial in topic |
+| `provision` | `ota_root_ca` | PEM root CA for HTTPS OTA (up to ~4 KB) |
+
+### Provisioning DCMD
+
+Send as a Sparkplug B DCMD to the TC's DCMD topic (before or after provisioning
+— the `nvs_set` handler is always active):
+
+```json
+{"cmd": "nvs_set", "namespace": "provision", "key": "group_id", "value": "SensitProd"}
+{"cmd": "nvs_set", "namespace": "provision", "key": "node_id",  "value": "TC-001"}
+{"cmd": "nvs_set", "namespace": "provision", "key": "fixture_id", "value": "FX-042"}
+```
+
+**Identity keys** (`group_id`, `node_id`, `fixture_id`) take effect immediately
+in-memory and trigger an automatic **REBIRTH** — the TC republishes NBIRTH with
+the updated identity.  REBIRTH does not reset the test state machine.
+
+**`ota_root_ca`** stores the full PEM cert from the raw DCMD payload (no
+length truncation).  Requires a reboot to take effect.
+
+### NBIRTH identity metrics
+
+| Metric | Value when provisioned | Value when unprovisioned |
+|---|---|---|
+| `Properties/HwUid` | ESP32 MAC (always) | ESP32 MAC (always) |
+| `Properties/FixtureId` | provisioned `fixture_id` | `""` (empty string) |
+
+### Topic routing
+
+Provisioned TC topics use the provisioned identity:
+
+```
+spBv1.0/<group_id>/NBIRTH/<node_id>/CH<N>
+```
+
+Unprovisioned fallback:
+
+```
+spBv1.0/SensitMfg/NBIRTH/<serial>/CH<N>
+```
+
+where `<serial>` is the TC hardware serial (e.g. `G3-MB-Tester-001`).
+
+---
+
+## LBB transport (USB-Serial-JTAG)
+
+The **Local Bus Bridge (LBB)** transport exposes TC telemetry over the USB-
+Serial-JTAG port.  It is the only data path for TCs installed inside metal
+enclosures (WiFi blocked).
+
+### Enabling / disabling
+
+```
+mqtt lbb on     # enable (persists in NVS device/lbb; reboot to apply)
+mqtt lbb off    # disable
+mqtt lbb        # show current state
+```
+
+!!! note "sdkconfig"
+    For a clean NDJSON channel with no ESP-IDF log noise, set
+    `CONFIG_ESP_CONSOLE_SECONDARY_NONE=y` in `sdkconfig.esp32-Devkit`.
+    Without this, the secondary UART console output may interleave with LBB
+    frames.  This is a T1 pre-production coordination item.
+
+### Wire format
+
+**TC → T1 (outbound):** NDJSON envelope wrapping the standard Sparkplug payload:
+
+```
+{"t":"DDATA","ch":0,"p":{...}}\n
+```
+
+- `t` — message type (`DDATA`, `NBIRTH`, `NDEATH`)
+- `ch` — channel index (0–7)
+- `p` — existing JSON payload (same schema as MQTT)
+
+**T1 → TC (inbound):** Raw DCMD JSON (no envelope):
+
+```
+{"cmd":"start"}\n
+{"cmd":"nvs_set","namespace":"provision","key":"group_id","value":"SensitProd"}\n
+```
+
+All messages are newline-delimited.  Maximum inbound line length: **8192 bytes**
+(supports 4 KB base64-encoded OTA chunks).
+
+---
+
+## Path C — Chunked OTA over LBB
+
+TCs installed inside metal enclosures have no WiFi.  The standard URL-based OTA
+(`esp_https_ota`) is architecturally unavailable.  **Path C** transfers firmware
+as base64-encoded chunks over the LBB USB-Serial-JTAG port.
+
+### TC firmware receiver
+
+The `ota_chunk` DCMD handler in `common/src/cmd_ota.c` implements the receiver:
+
+```json
+{"cmd":"ota_chunk","seq":0,"offset":0,"total":131072,"data":"<base64>","sha256":"<hex>"}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `seq` | int | Zero-based chunk sequence number |
+| `offset` | int | Byte offset of this chunk in the full binary |
+| `total` | int | Total firmware size in bytes |
+| `data` | string | Base64-encoded chunk payload |
+| `sha256` | string | Full-image SHA-256 hex digest (present on last chunk only) |
+
+**Session flow:**
+
+1. First chunk (`seq=0`): calls `esp_ota_begin()` on the next OTA partition
+2. Each chunk: base64-decode, `esp_ota_write()`, accumulate SHA-256
+3. Last chunk (when `offset + decoded_len >= total`): verify SHA-256, call
+   `esp_ota_end()` + `esp_ota_set_boot_partition()`, reboot
+4. Seq mismatch or SHA-256 mismatch: abort session, rollback partition unchanged
+
+TC publishes `{"type":"ota_progress","seq":N,"written":N}` DDATA after each
+chunk and `{"type":"ota_result","result":"ok"}` before rebooting.
+
+### Pi sender script
+
+```bash
+python3 scripts/ota_chunk_send.py \
+    --port /dev/ttyUSB-ch1 \
+    --firmware .pio/build/esp32-Devkit/firmware.bin
+```
+
+Options:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--port` | required | Serial device for target TC channel |
+| `--firmware` | required | Path to firmware.bin |
+| `--chunk-size` | `3072` | Bytes per chunk (base64 ~4096 + envelope ≤ 8192) |
+| `--baud` | `115200` | Serial baud rate |
+
+The script computes the full-image SHA-256 before sending, includes it on the
+last chunk, and waits for NBIRTH after reboot to confirm the update landed.
+
+### mark_valid — LBB-only health gate
+
+Post-OTA, the firmware runs a health check before calling
+`esp_ota_mark_app_valid_cancel_rollback()`.  The standard gate polls for WiFi
++ MQTT connectivity.  LBB-only TCs (no broker configured) would always time
+out and roll back.
+
+**Fix:** On boot, if `NVS device/lbb=1` AND `NVS mqtt/broker_url` is empty,
+the health task marks valid **immediately** and exits.  No 90-second wait.
+
+### Chunk sizing
+
+| Parameter | Value | Reason |
+|---|---|---|
+| Chunk payload | 3072 bytes | Base64 = 4096 chars |
+| JSON envelope overhead | ~100 chars | `{"cmd":"ota_chunk","seq":...}` |
+| Total line length | ~4200 chars | Well within LBB_RX_LINE_MAX (8192) |
