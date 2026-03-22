@@ -6,15 +6,22 @@
  *
  * Flow:
  *   tc_sm_spawn_recipe_task(recipe_id)
- *     → spawn recipe_run_task
- *         → load active recipe from storage (ID from arg or NVS recipes/active)
- *         → recipe_engine_run()
- *         → tc_sm_recipe_done()      ← back into state machine
+ *     → spawn recipe_run_task + dut_watchdog_task (in parallel)
+ *         recipe_run_task:
+ *           → load active recipe from storage (ID from arg or NVS recipes/active)
+ *           → recipe_engine_run()
+ *           → tc_sm_recipe_done()      ← back into state machine
+ *         dut_watchdog_task (FLT-011):
+ *           → polls INA219 current every 300 ms while TESTING
+ *           → on 2 consecutive near-zero readings: checks dut_detect_present()
+ *           → DUT absent → tc_sm_cmd_dut_removed()
+ *           → exits when state leaves TC_SM_TESTING
  */
 
 #include "recipe_engine.h"
 #include "recipe_json.h"
 #include "tc_statemachine.h"
+#include "dut_detect.h"
 #include "esp_log.h"
 #include "nvs.h"
 #include "freertos/FreeRTOS.h"
@@ -23,6 +30,14 @@
 #include <stdlib.h>
 
 static const char *TAG = "recipe_task";
+
+/* Declared in g3_primitives.c — reads VDUT1 INA219 current. */
+extern bool g3_ina219_read_current_ma(int *ma_out);
+
+/* Current below this threshold triggers a DUT-absent confirmation check.
+ * Set conservatively below the PRD pre-gate minimum (5 mA) to avoid false
+ * triggers on lightly-loaded test steps.  Configurable if needed. */
+#define WATCHDOG_NEAR_ZERO_MA   2
 
 /* ── Task argument ────────────────────────────────────────────────────────── */
 
@@ -102,6 +117,52 @@ static void recipe_run_task(void *pvarg)
     vTaskDelete(NULL);
 }
 
+/* ── DUT removal watchdog (FLT-011) ──────────────────────────────────────── *
+ *
+ * Runs in parallel with recipe_run_task.  Monitors VDUT1 INA219 current;
+ * on two consecutive near-zero readings confirms via dut_detect_present().
+ * Exits cleanly when state machine leaves TC_SM_TESTING (recipe done or
+ * already faulted by another path).
+ */
+static void dut_watchdog_task(void *pvarg)
+{
+    (void)pvarg;
+    int consecutive_zero = 0;
+
+    while (tc_sm_state() == TC_SM_TESTING) {
+        vTaskDelay(pdMS_TO_TICKS(300));
+
+        if (tc_sm_state() != TC_SM_TESTING) break;
+
+        int current_ma = 0;
+        if (!g3_ina219_read_current_ma(&current_ma)) {
+            /* I2C error — reset counter, don't false-trigger */
+            consecutive_zero = 0;
+            continue;
+        }
+
+        if (current_ma < WATCHDOG_NEAR_ZERO_MA) {
+            consecutive_zero++;
+            if (consecutive_zero >= 2) {
+                /* Current has been near-zero for ≥600 ms — confirm DUT absent */
+                if (!dut_detect_present()) {
+                    ESP_LOGE("dut_wdog", "FLT-011: current=%d mA + DUT absent — triggering E-STOP",
+                             current_ma);
+                    tc_sm_cmd_dut_removed();
+                    break;
+                }
+                /* Current low but DUT still detected — reset and keep watching
+                 * (could be a test step with outputs off; not a removal event) */
+                consecutive_zero = 0;
+            }
+        } else {
+            consecutive_zero = 0;
+        }
+    }
+
+    vTaskDelete(NULL);
+}
+
 /* ── Public — called from tc_statemachine.c (via extern declaration) ──────── */
 
 void tc_sm_spawn_recipe_task(const char *recipe_id)
@@ -119,4 +180,6 @@ void tc_sm_spawn_recipe_task(const char *recipe_id)
     }
     /* 16 KB stack: recipe primitives (SWD, I2C, UART) have deep call chains */
     xTaskCreate(recipe_run_task, "recipe_run", 16384, arg, 4, NULL);
+    /* 2 KB stack: watchdog only reads INA219 + checks DUT detect cached state */
+    xTaskCreate(dut_watchdog_task, "dut_wdog", 2048, NULL, 4, NULL);
 }

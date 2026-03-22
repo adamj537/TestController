@@ -66,6 +66,16 @@ static bool ina219_read(uint8_t addr, int *vbus_mv_out, int *current_ma_out)
     return true;
 }
 
+/* Read VDUT1 current (INA219 #0) only — used by DUT removal watchdog.
+ * Returns false on I2C error; *ma_out unchanged on error. */
+bool g3_ina219_read_current_ma(int *ma_out)
+{
+    int vbus_mv = 0, current_ma = 0;
+    if (!ina219_read(ADDR_INA219_0, &vbus_mv, &current_ma)) return false;
+    *ma_out = current_ma;
+    return true;
+}
+
 /* ── g3_critical_abort ───────────────────────────────────────────────────── *
  *
  * Called by the recipe engine on a CRITICAL step failure.
