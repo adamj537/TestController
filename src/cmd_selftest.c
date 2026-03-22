@@ -168,11 +168,11 @@ static void run_temp(void)
         int  temp_int  = abs_x2 / 2;
         int  temp_frac = (abs_x2 & 1) ? 5 : 0;  /* 0 or 5 tenths */
 
-        /* Sanity: expect lab ambient -10–85°C */
-        bool sane = (temp_x2 >= -20 && temp_x2 <= 170);
-        report(sane, "ADC128: CH7  temp sensor  %s%d.%d°C  (±2°C, exp -10–85°C)",
+        /* Pass if < 75°C (mqtt-contract v2.9.0, R8.10) */
+        bool ok = (temp_x2 < 150);  /* 150 half-degrees = 75°C */
+        report(ok, "ADC128: CH7  temp sensor  %s%d.%d°C  (pass < 75°C)",
                neg ? "-" : "", temp_int, temp_frac);
-        st_record("adc_temp", sane);
+        st_record_mv("i2c_temp_adc128", ok, temp_int);
     }
 
     /* Restore Mode 1 so voltage channels work after selftest */
