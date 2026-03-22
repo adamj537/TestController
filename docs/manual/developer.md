@@ -359,8 +359,23 @@ the TC.  Once stored, use `swd flash local` to program individual boards.
 To update TC firmware instead (default when `target` is absent):
 
 ```json
-{"cmd": "ota", "url": "http://host/tc-firmware.bin"}
+{"cmd": "ota", "url": "http://host/tc-firmware.bin", "version": "1.2.0"}
 ```
+
+If the `version` field is present and matches the running firmware version, the
+TC skips the OTA and publishes `ota_progress` with `status: "skipped"`.  A
+leading `v` prefix on the version string is stripped before comparison.
+
+#### Rollback via DCMD
+
+```json
+{"cmd": "ota_rollback"}
+```
+
+Activates the alternate OTA partition and reboots.  The alternate partition must
+be in `VALID` state (i.e., a previous firmware that booted successfully).
+Publishes `ota_progress` with `status: "rolledback"` and NDEATH before
+rebooting.  Idle-gated — rejected if a test is in progress.
 
 ### `swd flash` sequence
 
