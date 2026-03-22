@@ -22,7 +22,7 @@
 typedef struct {
     char key[64];
     StorageDomain_t domain;
-    uint8_t value[4096];  /* Sized to hold Recipe_t (~2KB) plus overhead */
+    uint8_t value[32768]; /* Sized to hold recipe JSON (~16KB for g3-mb-v2) */
     uint32_t size;
     bool valid;
 } StorageEntry_t;
@@ -125,7 +125,7 @@ int32_t Storage_ListKeys(StorageDomain_t domain, const char** keys,
 int Storage_Write(StorageDomain_t domain, const char* key,
                   const uint8_t* data, size_t data_size,
                   bool backup_to_sd) {
-    if (!mock_storage.initialized || !key || !data || data_size > 4096) {
+    if (!mock_storage.initialized || !key || !data || data_size > 32768) {
         return -1;
     }
 
