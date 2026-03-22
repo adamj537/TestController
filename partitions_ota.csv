@@ -2,12 +2,16 @@
 # Board: Freenove ESP32-S3 WROOM (8 MB flash)
 # factory = initial/fallback slot (flashed via USB)
 # ota_0 / ota_1 = OTA alternating slots (2 MB each, ~1.7x current firmware size)
-# dut_fw  = PFW (test-mode firmware with UART command handler)
-# prod_fw = agency-approved production firmware (programmed after tests pass)
+# dut_fw  = PFW test stub (15 KB; UART command handler for functional test)
+# prod_fw = Sensit combined bootloader+app image (536 KB as of G3_01_00_46_FACT.bin)
 #           Both slots use dut_fw_hdr_t format {magic, size, version[16], _pad[8]}
-# recipes = LittleFS partition for JSON recipe storage (~30-50 recipes)
-# Flash used: 8.0 MB of 8 MB.
-# Note: prod_fw shrunk from 896KB to 640KB (still >> 15KB DUT fw) to make room.
+# recipes = LittleFS partition for JSON recipe storage (~80 recipes @ 4 KB avg)
+#
+# Sizing rationale (2026-03-22):
+#   prod_fw sized for Sensit's full BLE+GPS+display+sensor stack (536 KB current,
+#   includes STM32 bootloader at 0x08000000 + app at 0x08008000).
+#   896 KB gives 360 KB headroom for firmware growth.
+#   dut_fw only holds 15 KB PFW test stub; 640 KB is 42x current size.
 #
 # Name,   Type, SubType,  Offset,   Size,     Flags
 nvs,      data, nvs,      0x9000,   0x6000,
@@ -16,6 +20,6 @@ phy_init, data, phy,      0x11000,  0x1000,
 factory,  app,  factory,  0x20000,  2M,
 ota_0,    app,  ota_0,    0x220000, 2M,
 ota_1,    app,  ota_1,    0x420000, 2M,
-dut_fw,   data, 0xff,     0x620000, 0xE0000,
-prod_fw,  data, 0xff,     0x700000, 0xA0000,
+dut_fw,   data, 0xff,     0x620000, 0xA0000,
+prod_fw,  data, 0xff,     0x6C0000, 0xE0000,
 recipes,  data, spiffs,   0x7A0000, 0x60000,
