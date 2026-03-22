@@ -39,6 +39,11 @@ import socket
 import sys
 import time
 
+try:
+    import serial as pyserial
+except ImportError:
+    pyserial = None
+
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
 BUILD_DIR = os.path.join(PROJECT_DIR, ".pio", "build", "esp32-Devkit")
@@ -75,53 +80,92 @@ def run_cmd(cmd: list[str], description: str) -> bool:
 
 
 class TcConnection:
-    """TCP console connection to a TC."""
+    """Transport-agnostic connection to a TC (TCP or serial)."""
 
-    def __init__(self, host: str, port: int = TCP_PORT):
+    def __init__(self, host: str = "", port: int = TCP_PORT,
+                 serial_port: str = "", baud: int = 115200):
         self.host = host
         self.port = port
+        self.serial_port = serial_port
+        self.baud = baud
         self.sock: socket.socket | None = None
+        self.ser = None
+        self._use_serial = bool(serial_port)
 
     def connect(self, timeout: float = 10.0) -> None:
-        self.sock = socket.socket()
-        self.sock.settimeout(timeout)
-        self.sock.connect((self.host, self.port))
-        time.sleep(0.3)
-        self._drain()
+        if self._use_serial:
+            if pyserial is None:
+                raise ImportError("pyserial required for serial transport: pip install pyserial")
+            self.ser = pyserial.Serial(self.serial_port, self.baud, timeout=1)
+            time.sleep(2)  # wait for boot prompt
+            self._drain()
+        else:
+            self.sock = socket.socket()
+            self.sock.settimeout(timeout)
+            self.sock.connect((self.host, self.port))
+            time.sleep(0.3)
+            self._drain()
 
     def _drain(self, wait: float = 0.3) -> str:
         time.sleep(wait)
         buf = b""
-        self.sock.settimeout(0.2)
-        try:
-            while True:
-                buf += self.sock.recv(4096)
-        except socket.timeout:
-            pass
-        self.sock.settimeout(10)
+        if self._use_serial:
+            deadline = time.time() + wait + 0.2
+            while time.time() < deadline:
+                avail = self.ser.in_waiting
+                if avail:
+                    buf += self.ser.read(avail)
+                else:
+                    time.sleep(0.05)
+        else:
+            self.sock.settimeout(0.2)
+            try:
+                while True:
+                    buf += self.sock.recv(4096)
+            except socket.timeout:
+                pass
+            self.sock.settimeout(10)
         return buf.decode("utf-8", errors="replace")
 
     def cmd(self, command: str, wait: float = 2.0) -> str:
         """Send command, return response."""
-        self.sock.sendall((command + "\n").encode())
-        time.sleep(wait)
-        buf = b""
-        self.sock.settimeout(0.5)
-        try:
-            while True:
-                chunk = self.sock.recv(4096)
-                if not chunk:
-                    break
-                buf += chunk
-        except socket.timeout:
-            pass
-        self.sock.settimeout(10)
-        return buf.decode("utf-8", errors="replace")
+        if self._use_serial:
+            self.ser.write((command + "\n").encode())
+            self.ser.flush()
+            time.sleep(wait)
+            buf = b""
+            deadline = time.time() + 0.5
+            while time.time() < deadline:
+                avail = self.ser.in_waiting
+                if avail:
+                    buf += self.ser.read(avail)
+                    deadline = time.time() + 0.2  # extend if data still arriving
+                else:
+                    time.sleep(0.05)
+            return buf.decode("utf-8", errors="replace")
+        else:
+            self.sock.sendall((command + "\n").encode())
+            time.sleep(wait)
+            buf = b""
+            self.sock.settimeout(0.5)
+            try:
+                while True:
+                    chunk = self.sock.recv(4096)
+                    if not chunk:
+                        break
+                    buf += chunk
+            except socket.timeout:
+                pass
+            self.sock.settimeout(10)
+            return buf.decode("utf-8", errors="replace")
 
     def close(self) -> None:
         if self.sock:
             self.sock.close()
             self.sock = None
+        if self.ser:
+            self.ser.close()
+            self.ser = None
 
 
 def wait_for_tcp(host: str, timeout: float = BOOT_TIMEOUT) -> bool:
@@ -323,35 +367,56 @@ def main() -> None:
             print("\n✗ Flash failed — aborting")
             sys.exit(1)
 
-    # ── Step 2: Wait for boot + WiFi ──
-    if not args.host:
-        print("\n  ⚠ No --host specified. After flash, TC needs WiFi to get an IP.")
-        print("    If this is a fresh module, provision WiFi via USB serial first:")
-        print(f"    python3 scripts/wifi_provision.py --port {args.port}")
-        print("    Then re-run with --host <ip> --skip-flash")
+    # ── Step 2: Connect to TC console ──
+    if args.lbb:
+        # LBB mode: no WiFi, no TCP — use USB serial console
+        print(f"\n  LBB mode: using serial console on {args.port}")
         if not args.skip_flash:
-            print("\n  Waiting 15s for boot...")
-            time.sleep(15)
-            print("  Cannot proceed without TCP console IP. Exiting.")
+            print("  Waiting 10s for boot after flash...")
+            time.sleep(10)
+        tc = TcConnection(serial_port=args.port)
+        try:
+            tc.connect()
+            resp = tc.cmd("help", wait=2)
+            ok = "selftest" in resp
+            results.append(("Serial console reachable", ok))
+            if not ok:
+                print("  ✗ Serial console not responding")
+                sys.exit(1)
+            print("  ✓ Serial console reachable")
+        except Exception as e:
+            results.append(("Serial console reachable", False))
+            print(f"  ✗ Serial console error: {e}")
+            sys.exit(1)
+    else:
+        # WiFi mode: TCP console
+        if not args.host:
+            print("\n  ⚠ No --host specified. TC needs WiFi to get an IP.")
+            print("    Provision WiFi via USB serial first:")
+            print(f"    python3 scripts/wifi_provision.py --port {args.port}")
+            print("    Then re-run with --host <ip> --skip-flash")
+            if not args.skip_flash:
+                print("\n  Waiting 15s for boot...")
+                time.sleep(15)
+            print("  ✗ --host required for WiFi mode")
             sys.exit(1)
 
-    host = args.host
-    if not host:
-        print("  ✗ --host required for configuration steps")
-        sys.exit(1)
+        if not wait_for_tcp(args.host):
+            results.append(("TCP console reachable", False))
+            print("\n✗ TC not reachable — aborting")
+            sys.exit(1)
+        results.append(("TCP console reachable", True))
 
-    if not wait_for_tcp(host):
-        results.append(("TCP console reachable", False))
-        print("\n✗ TC not reachable — aborting")
-        sys.exit(1)
-    results.append(("TCP console reachable", True))
+        tc = TcConnection(host=args.host)
+        tc.connect()
 
-    tc = TcConnection(host)
-    tc.connect()
-
-    # ── Step 2b: WiFi ──
-    ok = step_wifi(tc, args.wifi_ssid, args.wifi_pw)
-    results.append(("WiFi connected", ok))
+    # ── Step 2b: WiFi (single-channel only — LBB TCs have no WiFi) ──
+    if not args.lbb:
+        ok = step_wifi(tc, args.wifi_ssid, args.wifi_pw)
+        results.append(("WiFi connected", ok))
+    else:
+        print("  ✓ LBB mode — WiFi skipped (no credentials, no antenna)")
+        results.append(("WiFi skipped (LBB)", True))
 
     # ── Step 3: Push DUT PFW ──
     if args.pfw:
