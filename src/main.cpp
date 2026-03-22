@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include "nvs_flash.h"
+#include "nvs.h"
 #include "esp_console.h"
 #include "esp_log.h"
 #include "esp_ota_ops.h"
@@ -77,6 +78,31 @@ static void ota_health_check_task(void *arg)
     ESP_LOGW(TAG, "OTA: partition '%s' PENDING VERIFY — health check starting (%ds timeout)",
              running->label, OTA_HEALTH_TIMEOUT_S);
     printf("OTA health check: %ds to validate (WiFi + MQTT) or rollback\n", OTA_HEALTH_TIMEOUT_S);
+
+    /* LBB-only mode: TC has no MQTT broker; USB connectivity is the health signal.
+     * If LBB is enabled and no broker URL configured, mark valid immediately —
+     * the firmware booted and is running; USB is always connected in multi-channel fixtures. */
+    {
+        bool lbb_only = false;
+        {
+            char broker_url[128] = {};
+            nvs_handle_t nh;
+            if (nvs_open("mqtt", NVS_READONLY, &nh) == ESP_OK) {
+                size_t url_len = sizeof(broker_url);
+                nvs_get_str(nh, "broker_url", broker_url, &url_len);
+                nvs_close(nh);
+            }
+            lbb_only = (tc_mqtt_lbb_enabled() && broker_url[0] == '\0');
+        }
+
+        if (lbb_only) {
+            ESP_LOGI(TAG, "OTA health: LBB-only mode — marking valid immediately (no broker configured)");
+            printf("OTA health: PASSED (LBB-only) — firmware validated\n");
+            esp_ota_mark_app_valid_cancel_rollback();
+            vTaskDelete(NULL);
+            return;
+        }
+    }
 
     int64_t deadline = esp_timer_get_time() + (int64_t)OTA_HEALTH_TIMEOUT_S * 1000000LL;
     bool wifi_ok = false;
