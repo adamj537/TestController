@@ -366,6 +366,41 @@ static int do_recipe(int argc, char **argv)
         return rc;
     }
 
+#ifdef ESP_PLATFORM
+    if (strcmp(argv[1], "select") == 0) {
+        if (argc < 3) { printf("Usage: recipe select <id>\n"); return 1; }
+        const char *id = argv[2];
+        /* Verify recipe exists */
+        int32_t sz = Storage_GetSize(STORAGE_DOMAIN_RECIPES, id);
+        if (sz <= 0) { printf("Recipe '%s' not found\n", id); return 1; }
+        /* Set as active in NVS */
+        nvs_handle_t h;
+        if (nvs_open("recipes", NVS_READWRITE, &h) != ESP_OK) {
+            printf("NVS open failed\n"); return 1;
+        }
+        nvs_set_str(h, "active", id);
+        /* Extract version from stored JSON */
+        char *json = recipe_json_load_nvs(id);
+        if (json) {
+            const char *vp = strstr(json, "\"recipeVersion\":\"");
+            if (vp) {
+                vp += 17;
+                char ver[32] = {};
+                for (int vi = 0; vp[vi] && vp[vi] != '"' && vi < 31; vi++)
+                    ver[vi] = vp[vi];
+                nvs_set_str(h, "active_ver", ver);
+                printf("Active recipe: %s v%s\n", id, ver);
+            } else {
+                printf("Active recipe: %s (no version)\n", id);
+            }
+            free(json);
+        }
+        nvs_commit(h);
+        nvs_close(h);
+        return 0;
+    }
+#endif
+
     if (strcmp(argv[1], "run") == 0) {
         const char *id = (argc >= 3) ? argv[2] : "default";
 
@@ -437,6 +472,7 @@ usage:
            "  recipe load [id]         load recipe from flash and print\n"
            "  recipe list              list all stored recipes\n"
            "  recipe delete <id>       delete recipe from flash\n"
+           "  recipe select <id>       set active recipe in NVS\n"
            "  recipe run [id]          run recipe (from flash or hardcoded fallback)\n");
     return 1;
 }
