@@ -7,16 +7,21 @@ Sequence:
   3. Enable VDUT at 3300 mV via calibrated vdac_voltage (both channels)
   4. Assert PB-A (mux select 0 0 — active low)
   5. Wait for DUT boot + PA9 toggle to stabilise (--boot-wait, default 2.0 s)
-  6. Run selftest heartbeat (2.5 s sample window)
-  7. Teardown: mux release, vdac off
-  8. Report pass/fail
+  6. [--keepalive] Release PB-A (mux release) — DUT KEEPALIVE must take over
+  7. Run selftest heartbeat (2.5 s sample window)
+  8. Teardown: mux release, vdac off
+  9. Report pass/fail
 
 This script was written to validate the fix for the power-sequencing bug where
 power_check (recipe step 7) disabled VDUT before the heartbeat step (step 8)
 could run, leaving PA9 with no drive.
 
+Use --keepalive to additionally verify the DUT firmware holds power on its own
+after TC releases PB-A (DUT PD14 KEEPALIVE latch test).
+
 Usage:
     python3 scripts/test_dut_heartbeat.py [--host 10.0.0.244] [--boot-wait 2.0]
+    python3 scripts/test_dut_heartbeat.py --keepalive   # release PB-A before heartbeat
 
 Prerequisites:
     - DUT physically seated in fixture
@@ -127,9 +132,9 @@ class Results:
         print(line)
         return condition
 
-    def summary(self) -> bool:
+    def summary(self, label: str = "DUT heartbeat test") -> bool:
         total = self.passed + self.failed
-        print(f"\nDUT heartbeat test: {self.passed}/{total} passed, {self.failed} failed")
+        print(f"\n{label}: {self.passed}/{total} passed, {self.failed} failed")
         return self.failed == 0
 
 
@@ -150,6 +155,10 @@ def main() -> None:
     parser.add_argument(
         "--boot-wait", type=float, default=DEFAULT_BOOT_WAIT,
         help=f"Seconds to wait after VDUT enable for DUT to boot (default: {DEFAULT_BOOT_WAIT})",
+    )
+    parser.add_argument(
+        "--keepalive", action="store_true",
+        help="Release PB-A after boot-wait, then verify DUT holds power via KEEPALIVE latch",
     )
     args = parser.parse_args()
 
@@ -212,9 +221,22 @@ def main() -> None:
     print(f"\n[5] Waiting {args.boot_wait:.1f} s for DUT firmware to boot and start PA9 toggle...")
     time.sleep(args.boot_wait)
 
-    # ── 6. Run selftest heartbeat ─────────────────────────────────────────────
+    # ── 6. [optional] Release PB-A — DUT KEEPALIVE must take over ───────────
+    if args.keepalive:
+        print("\n[6] Release PB-A (mux release) — DUT KEEPALIVE must hold power")
+        resp = tc.cmd("mux release", wait=2)
+        released = "released" in resp.lower()
+        if not r.check("PB-A released", released, resp.strip().splitlines()[0] if resp.strip() else ""):
+            teardown(tc)
+            tc.close()
+            sys.exit(1)
+        # Brief settle — DUT PD14 KEEPALIVE must assert before power latch drops
+        time.sleep(0.3)
+
+    # ── 7. Run selftest heartbeat ─────────────────────────────────────────────
     # selftest heartbeat runs for 2.5 s (25 × 100 ms samples), then prints Results:
-    print("\n[6] selftest heartbeat  (2.5 s sample window)")
+    step = 7 if args.keepalive else 6
+    print(f"\n[{step}] selftest heartbeat  (2.5 s sample window)")
     resp = tc.cmd_long("selftest heartbeat", stop_marker="Results:", timeout=8.0)
     print(resp.strip())
 
@@ -230,13 +252,15 @@ def main() -> None:
 
     r.check("DUT heartbeat (PA9 toggling)", hb_pass and not hb_fail, detail)
 
-    # ── 7. Teardown ──────────────────────────────────────────────────────────
-    print("\n[7] Teardown")
+    # ── Teardown ─────────────────────────────────────────────────────────────
+    td_step = 8 if args.keepalive else 7
+    print(f"\n[{td_step}] Teardown")
     teardown(tc)
     tc.close()
 
-    # ── 8. Summary ───────────────────────────────────────────────────────────
-    ok = r.summary()
+    # ── Summary ───────────────────────────────────────────────────────────────
+    label = "DUT keepalive+heartbeat test" if args.keepalive else "DUT heartbeat test"
+    ok = r.summary(label)
     sys.exit(0 if ok else 1)
 
 
