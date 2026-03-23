@@ -209,6 +209,10 @@ void dut_detect_stop(void)
     /* Task will self-delete on next loop iteration */
 }
 
+/* SM bridge — called by tc_statemachine.c via extern when SM enters/leaves IDLE */
+void tc_sm_dut_detect_on_idle(void)  { dut_detect_start(); }
+void tc_sm_dut_detect_off_idle(void) { dut_detect_stop(); }
+
 bool dut_detect_present(void)
 {
     return s_dut_present;
