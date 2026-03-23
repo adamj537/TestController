@@ -230,10 +230,9 @@ extern "C" void app_main(void)
      * If timeout, rolls back to previous partition automatically. */
     xTaskCreate(ota_health_check_task, "ota_health", 4096, NULL, 3, NULL);
 
-    /* DUT presence detection — disabled at auto-start until I2C bus gets
-     * a mutex (i2c_reinit is not thread-safe with HMI/INA219 tasks).
-     * Start manually via: dut detect start */
-    /* dut_detect_start(); */
+    /* DUT presence detection — auto-starts on boot.
+     * dut_detect_sample() acquires i2c_lock() to avoid bus contention. */
+    dut_detect_start();
 
     /* TCP console server — listens on port 4242, accepts when WiFi is up.
      * All stdout/stderr is tee'd to the connected client via __wrap__write_r. */

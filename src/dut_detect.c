@@ -88,12 +88,15 @@ static bool adc128_read_raw_mv(uint8_t ch, int *mv_out)
  * No i2c_reinit() needed. */
 bool dut_detect_sample(int *mv_out)
 {
+    if (!i2c_lock(500)) return false;
+
     /* 1. Inject signal: U8 ch3, SIG HIGH */
     mux_select(DUT_DETECT_U8_CH, 1);
 
     /* 2. Ensure ADC128 is running */
     if (!i2c_ensure_initialized()) {
         mux_release();
+        i2c_unlock();
         return false;
     }
     bool ok = i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x02) &&
@@ -101,6 +104,7 @@ bool dut_detect_sample(int *mv_out)
               i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONFIG,    0x01);
     if (!ok) {
         mux_release();
+        i2c_unlock();
         return false;
     }
 
@@ -113,6 +117,7 @@ bool dut_detect_sample(int *mv_out)
 
     /* 5. Release U8 SIG */
     mux_release();
+    i2c_unlock();
 
     return ok;
 }
