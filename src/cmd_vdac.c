@@ -76,12 +76,15 @@ static bool vdac_ledc_init(void)
     return true;
 }
 
-/* ledc_channel_config re-routes the IOMUX to LEDC on each call. */
+/* ledc_channel_config re-routes the IOMUX to LEDC on each call.
+ * gpio_reset_pin() clears any prior ADC or analog claim on the pad (HW-014)
+ * so the LEDC driver can take ownership without emitting a warning. */
 bool vdac_set_duty(int ch_idx, int duty_pct)
 {
     if (!s_timer_ready && !vdac_ledc_init()) return false;
     ledc_channel_t ch = (ch_idx == 0) ? VDAC_CH1 : VDAC_CH2;
     int gpio          = (ch_idx == 0) ? VDUT1_PWM_GPIO : VDUT2_PWM_GPIO;
+    gpio_reset_pin((gpio_num_t)gpio);
     uint32_t duty     = (uint32_t)(duty_pct * 4095) / 100;
     ledc_channel_config_t ch_cfg = {
         .gpio_num   = gpio,
