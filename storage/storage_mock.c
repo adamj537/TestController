@@ -4,7 +4,11 @@
  *
  * Simulates NVS and SD card storage in RAM for off-board testing.
  * Includes test helpers for verification.
+ *
+ * NOT compiled for embedded targets — guard prevents 1MB BSS from landing
+ * in firmware. Included directly by test files via #include.
  */
+#ifndef ESP_PLATFORM
 
 #include "storage.h"
 #include <string.h>
@@ -18,7 +22,7 @@
 typedef struct {
     char key[64];
     StorageDomain_t domain;
-    uint8_t value[4096];  /* Sized to hold Recipe_t (~2KB) plus overhead */
+    uint8_t value[32768]; /* Sized to hold recipe JSON (~16KB for g3-mb-v2) */
     uint32_t size;
     bool valid;
 } StorageEntry_t;
@@ -121,7 +125,7 @@ int32_t Storage_ListKeys(StorageDomain_t domain, const char** keys,
 int Storage_Write(StorageDomain_t domain, const char* key,
                   const uint8_t* data, size_t data_size,
                   bool backup_to_sd) {
-    if (!mock_storage.initialized || !key || !data || data_size > 4096) {
+    if (!mock_storage.initialized || !key || !data || data_size > 32768) {
         return -1;
     }
 
@@ -261,3 +265,5 @@ void Storage_Mock_GetStats(uint32_t* used_bytes, uint32_t* total_bytes) {
 uint32_t Storage_Mock_GetEntryCount(void) {
     return mock_storage.entry_count;
 }
+
+#endif /* ESP_PLATFORM */

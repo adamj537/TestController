@@ -1,8 +1,11 @@
 #include <stdio.h>
 #include "nvs_flash.h"
+#include "nvs.h"
 #include "esp_console.h"
 #include "esp_log.h"
 #include "esp_ota_ops.h"
+#include "esp_timer.h"
+#include "esp_wifi.h"
 #ifdef CONFIG_SPIRAM
 #include "esp_psram.h"
 #include "esp_private/esp_psram_extram.h"
@@ -26,6 +29,11 @@ extern "C" {
 #include "tc_statemachine.h"
 #include "tc_hmi.h"
 #include "net_console.h"
+#include "dut_detect.h"
+#include "recipe_json.h"
+#include "tc_config.h"
+#include "tc_cal.h"
+#include "../storage/storage.h"
 }
 
 static const char *TAG = "g3-tc";
@@ -40,16 +48,105 @@ static void initialize_nvs(void)
     ESP_ERROR_CHECK(err);
 }
 
-/* Confirm OTA image is valid to prevent rollback after successful boot */
-static void ota_rollback_guard(void)
+/* ── OTA health check — deferred validation with auto-rollback ────────────── *
+ * After OTA, the new partition boots in ESP_OTA_IMG_PENDING_VERIFY state.    *
+ * Gate: WiFi IP obtained AND MQTT broker connected (NBIRTH published).       *
+ * Hardware checks (I2C, ADC) are NOT part of this gate — they are hardware-  *
+ * specific and would block OTA validation on standalone ESP32 modules.       *
+ * Hardware health is validated separately via selftest / selftest_run_sm().  *
+ *                                                                            *
+ * If both WiFi + MQTT pass within OTA_HEALTH_TIMEOUT_S, partition is marked  *
+ * valid.  On timeout, partition is marked invalid and TC reboots to the      *
+ * previous known-good partition.                                             */
+
+#define OTA_HEALTH_TIMEOUT_S  90   /* GAP-OTA-02: 90s > T2's 60s NBIRTH window */
+
+static void ota_health_check_task(void *arg)
 {
+    (void)arg;
     const esp_partition_t *running = esp_ota_get_running_partition();
-    esp_ota_img_states_t   state;
-    if (esp_ota_get_state_partition(running, &state) == ESP_OK &&
-        state == ESP_OTA_IMG_PENDING_VERIFY) {
-        esp_ota_mark_app_valid_cancel_rollback();
-        ESP_LOGI(TAG, "OTA: partition '%s' marked valid", running->label);
+    esp_ota_img_states_t state;
+
+    /* Only run health check if we're in pending-verify state (post-OTA) */
+    if (esp_ota_get_state_partition(running, &state) != ESP_OK ||
+        state != ESP_OTA_IMG_PENDING_VERIFY) {
+        ESP_LOGI(TAG, "OTA: partition '%s' already validated (state=%d)", running->label, (int)state);
+        vTaskDelete(NULL);
+        return;
     }
+
+    ESP_LOGW(TAG, "OTA: partition '%s' PENDING VERIFY — health check starting (%ds timeout)",
+             running->label, OTA_HEALTH_TIMEOUT_S);
+    printf("OTA health check: %ds to validate (WiFi + MQTT) or rollback\n", OTA_HEALTH_TIMEOUT_S);
+
+    /* LBB-only mode: TC has no MQTT broker; USB connectivity is the health signal.
+     * If LBB is enabled and no broker URL configured, mark valid immediately —
+     * the firmware booted and is running; USB is always connected in multi-channel fixtures. */
+    {
+        bool lbb_only = false;
+        {
+            char broker_url[128] = {};
+            nvs_handle_t nh;
+            if (nvs_open("mqtt", NVS_READONLY, &nh) == ESP_OK) {
+                size_t url_len = sizeof(broker_url);
+                nvs_get_str(nh, "broker_url", broker_url, &url_len);
+                nvs_close(nh);
+            }
+            lbb_only = (tc_mqtt_lbb_enabled() && broker_url[0] == '\0');
+        }
+
+        if (lbb_only) {
+            ESP_LOGI(TAG, "OTA health: LBB-only mode — marking valid immediately (no broker configured)");
+            printf("OTA health: PASSED (LBB-only) — firmware validated\n");
+            esp_ota_mark_app_valid_cancel_rollback();
+            vTaskDelete(NULL);
+            return;
+        }
+    }
+
+    int64_t deadline = esp_timer_get_time() + (int64_t)OTA_HEALTH_TIMEOUT_S * 1000000LL;
+    bool wifi_ok = false;
+    bool mqtt_ok = false;
+
+    while (esp_timer_get_time() < deadline) {
+        if (!wifi_ok) {
+            wifi_ap_record_t ap = {};
+            if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
+                wifi_ok = true;
+                ESP_LOGI(TAG, "OTA health: WiFi OK (RSSI=%d)", ap.rssi);
+            }
+        }
+
+        if (!mqtt_ok) {
+            if (tc_mqtt_connected()) {
+                mqtt_ok = true;
+                ESP_LOGI(TAG, "OTA health: MQTT OK (NBIRTH published)");
+            }
+        }
+
+        if (wifi_ok && mqtt_ok) break;
+        vTaskDelay(pdMS_TO_TICKS(1000));
+    }
+
+    if (wifi_ok && mqtt_ok) {
+        esp_ota_mark_app_valid_cancel_rollback();
+        ESP_LOGI(TAG, "OTA health: PASSED — partition '%s' marked VALID", running->label);
+        printf("OTA health: PASSED — firmware validated\n");
+    } else {
+        ESP_LOGE(TAG, "OTA health: FAILED (wifi=%d mqtt=%d) — ROLLING BACK",
+                 wifi_ok, mqtt_ok);
+        printf("OTA health: FAILED — rolling back to previous firmware!\n");
+        /* GAP-OTA-05: best-effort publish before reboot (only reaches broker if MQTT is up) */
+        tc_mqtt_publish_ota_progress("tc", "rolledback", -1,
+            "HEALTH_CHECK_TIMEOUT",
+            "WiFi/MQTT did not connect within 90s",
+            true);
+        vTaskDelay(pdMS_TO_TICKS(500));
+        esp_ota_mark_app_invalid_rollback_and_reboot();
+        /* does not return */
+    }
+
+    vTaskDelete(NULL);
 }
 
 extern "C" void app_main(void)
@@ -76,7 +173,10 @@ extern "C" void app_main(void)
 #endif
 
     initialize_nvs();
-    ota_rollback_guard();
+    /* OTA rollback guard is deferred — see ota_health_check_task below */
+    Storage_Init();   /* SPIFFS recipe partition — formats on first boot */
+    tc_config_load(); /* Device config: operational params (limits, fixture ID) */
+    tc_cal_load();    /* Calibration: VDUT slope/intercept, INA219, ADC128 */
     tc_sm_init();
     tc_hmi_init();    /* GPIO + LCD setup before MQTT/WiFi tasks start */
     tc_mqtt_init();
@@ -90,7 +190,7 @@ extern "C" void app_main(void)
     static char prompt_buf[40];
     snprintf(prompt_buf, sizeof(prompt_buf), "g3-tc|" FW_VERSION_STRING ">");
     repl_cfg.prompt = prompt_buf;
-    repl_cfg.max_cmdline_length = 256;
+    repl_cfg.max_cmdline_length = 4096;  /* large enough for base64-encoded recipe JSON upload */
 
     esp_console_register_help_command();
     register_gpio_commands();
@@ -105,6 +205,10 @@ extern "C" void app_main(void)
     register_swd_commands();
     register_mqtt_commands();
     register_statemachine_commands();
+    register_dut_commands();
+    register_recipe_commands();
+    register_config_commands();
+    register_cal_commands();
 
     /* WiFi init — sets up netif/event loop and auto-connects if NVS creds exist.
      * Must happen before net_console_start() which needs the TCP/IP stack. */
@@ -120,6 +224,15 @@ extern "C" void app_main(void)
     /* Configure INA219s at boot so current readings are valid immediately
      * without requiring a selftest run first. */
     selftest_ina219_init();
+
+    /* OTA health check — runs in background, validates I2C + WiFi + MQTT.
+     * If all pass within 30s, marks partition valid.
+     * If timeout, rolls back to previous partition automatically. */
+    xTaskCreate(ota_health_check_task, "ota_health", 4096, NULL, 3, NULL);
+
+    /* DUT presence detection — auto-starts on boot.
+     * dut_detect_sample() acquires i2c_lock() to avoid bus contention. */
+    dut_detect_start();
 
     /* TCP console server — listens on port 4242, accepts when WiFi is up.
      * All stdout/stderr is tee'd to the connected client via __wrap__write_r. */

@@ -1,0 +1,158 @@
+{
+  "recipeId": "g3-mb-v1",
+  "recipeVersion": "1.2.0",
+  "name": "G3 Main Board — Production Test",
+  "timeoutMs": 120000,
+  "steps": [
+    {
+      "id": "i2c",
+      "primitive": "i2c",
+      "label": "I2C Bus & Rail Check",
+      "criticality": "CRITICAL",
+      "onError": "abort",
+      "enabled": true
+    },
+    {
+      "id": "adc",
+      "primitive": "adc",
+      "label": "ESP32 ADC Sanity",
+      "criticality": "OPTIONAL",
+      "onError": "skip",
+      "enabled": true
+    },
+    {
+      "id": "wifi",
+      "primitive": "wifi",
+      "label": "WiFi Connected",
+      "criticality": "REQUIRED",
+      "onError": "skip",
+      "enabled": true
+    },
+    {
+      "id": "ota",
+      "primitive": "ota",
+      "label": "OTA Partition Valid",
+      "criticality": "REQUIRED",
+      "onError": "skip",
+      "enabled": true
+    },
+    {
+      "id": "dut_read_id",
+      "primitive": "dut_read_id",
+      "label": "DUT Serial Read",
+      "criticality": "REQUIRED",
+      "onError": "skip",
+      "enabled": true,
+      "params": {
+        "timeout_ms": 3000
+      }
+    },
+    {
+      "id": "dut_program",
+      "primitive": "dut_program",
+      "label": "Program PFW (local NVS)",
+      "criticality": "CRITICAL",
+      "onError": "abort",
+      "enabled": false,
+      "params": {
+        "target": "pfw",
+        "verify": true,
+        "timeout_s": 60
+      }
+    },
+    {
+      "id": "power_check",
+      "primitive": "power_check",
+      "label": "DUT Power Delivery",
+      "criticality": "CRITICAL",
+      "onError": "abort",
+      "enabled": true,
+      "params": {
+        "v_nominal_mv": 3300,
+        "v_tolerance_pct": 5,
+        "i_min_ma": 5,
+        "i_max_ma": 250
+      }
+    },
+    {
+      "id": "dut_heartbeat",
+      "primitive": "dut_heartbeat",
+      "label": "DUT Heartbeat PA9 @ 1Hz",
+      "criticality": "CRITICAL",
+      "onError": "abort",
+      "enabled": false
+    },
+    {
+      "id": "dut_enter_test",
+      "primitive": "dut_enter_test",
+      "label": "DUT Enter Test Mode",
+      "criticality": "CRITICAL",
+      "onError": "abort",
+      "enabled": true
+    },
+    {
+      "id": "dut_version",
+      "primitive": "dut_version",
+      "label": "DUT Firmware Version",
+      "criticality": "REQUIRED",
+      "onError": "skip",
+      "enabled": true
+    },
+    {
+      "id": "dut_hw_rev",
+      "primitive": "dut_hw_rev",
+      "label": "DUT Hardware Rev",
+      "criticality": "REQUIRED",
+      "onError": "skip",
+      "enabled": true
+    },
+    {
+      "id": "dut_uc_adc_vref",
+      "primitive": "dut_uc_adc_vref",
+      "label": "DUT uC ADC Vref (2400-2600 mV)",
+      "criticality": "REQUIRED",
+      "onError": "skip",
+      "enabled": true
+    },
+    {
+      "id": "dut_uc_adc_3v_rail",
+      "primitive": "dut_uc_adc_3v_rail",
+      "label": "DUT uC ADC 3V Rail (2850-3150 mV)",
+      "criticality": "REQUIRED",
+      "onError": "skip",
+      "enabled": true
+    },
+    {
+      "id": "dut_flash_test",
+      "primitive": "dut_flash_test",
+      "label": "DUT Flash Self-Test",
+      "criticality": "REQUIRED",
+      "onError": "skip",
+      "enabled": true
+    },
+    {
+      "id": "dut_rtc_read",
+      "primitive": "dut_rtc_read",
+      "label": "DUT RTC Battery (1550-3600 mV)",
+      "criticality": "REQUIRED",
+      "onError": "skip",
+      "enabled": true
+    },
+    {
+      "id": "dut_exit_test",
+      "primitive": "dut_exit_test",
+      "label": "DUT Exit Test Mode",
+      "criticality": "REQUIRED",
+      "onError": "skip",
+      "enabled": true
+    },
+    {
+      "id": "mux_scan",
+      "primitive": "mux_scan",
+      "label": "TIE MUX Scan (4 mux × 16 ch)",
+      "criticality": "REQUIRED",
+      "onError": "skip",
+      "enabled": true
+    }
+  ]
+}

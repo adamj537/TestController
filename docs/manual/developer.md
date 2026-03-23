@@ -359,8 +359,23 @@ the TC.  Once stored, use `swd flash local` to program individual boards.
 To update TC firmware instead (default when `target` is absent):
 
 ```json
-{"cmd": "ota", "url": "http://host/tc-firmware.bin"}
+{"cmd": "ota", "url": "http://host/tc-firmware.bin", "version": "1.2.0"}
 ```
+
+If the `version` field is present and matches the running firmware version, the
+TC skips the OTA and publishes `ota_progress` with `status: "skipped"`.  A
+leading `v` prefix on the version string is stripped before comparison.
+
+#### Rollback via DCMD
+
+```json
+{"cmd": "ota_rollback"}
+```
+
+Activates the alternate OTA partition and reboots.  The alternate partition must
+be in `VALID` state (i.e., a previous firmware that booted successfully).
+Publishes `ota_progress` with `status: "rolledback"` and NDEATH before
+rebooting.  Idle-gated — rejected if a test is in progress.
 
 ### `swd flash` sequence
 
@@ -409,3 +424,344 @@ the target drives ACK starting at TRN (consistent with the read frame).
 | KEYR unlock sequence | `0x45670123`, `0xCDEF89AB` |
 | DHCSR address | `0xE000EDF0` |
 | Halt value | `0xA05F0003` (DBGKEY | C_DEBUGEN | C_HALT) |
+
+---
+
+## Calibration (`tc_cal`)
+
+All measurement channels use a linear correction model:
+
+```
+corrected = gain × raw + offset
+```
+
+VDUT uses an inverting regulator model:
+
+```
+V_mv = slope_mv_per_pct × duty_pct + intercept_mv
+duty_pct = (target_mv − intercept_mv) / slope_mv_per_pct
+```
+
+Calibration data is stored in NVS (namespace `cal`, key `cal`, JSON blob).  It
+survives OTA updates.  Factory defaults are `gain=1.0`, `offset=0` (passthrough)
+for all channels; VDUT `slope=0` is the **uncalibrated sentinel** — the TC
+refuses to enable VDUT until a calibration run sets a non-zero slope.
+
+### Channels
+
+| Channel | Quantity | Keys |
+|---|---|---|
+| VDUT PWM DAC | Duty → voltage | `vdut.slope`, `vdut.intercept` |
+| INA219 ch0 (VDUT1) | Bus voltage | `ina0.v.gain`, `ina0.v.offset_mv` |
+| INA219 ch0 (VDUT1) | Current | `ina0.i.gain`, `ina0.i.offset_ma` |
+| INA219 ch1 (VDUT2) | Bus voltage | `ina1.v.gain`, `ina1.v.offset_mv` |
+| INA219 ch1 (VDUT2) | Current | `ina1.i.gain`, `ina1.i.offset_ma` |
+| ADC128D818 ch0–7 | Rail voltages | `adc.N.gain`, `adc.N.offset_mv` |
+
+### Console commands
+
+```
+cal show                          # print all coefficients
+cal load                          # reload from NVS
+cal save                          # persist in-RAM cal to NVS
+cal reset                         # reset to factory defaults (does not save)
+cal vdut <slope> <intercept>      # set VDUT coefficients and save
+cal vdut-duty <mv>                # compute duty for target mV (dry run)
+cal ina <0|1> v <gain> <offset>   # set INA219 voltage coefficients
+cal ina <0|1> i <gain> <offset>   # set INA219 current coefficients
+cal adc <0-7> <gain> <offset>     # set ADC128D818 channel coefficients
+```
+
+### VDUT calibration workflow
+
+The `vdac char` command performs the hardware sweep and writes calibration:
+
+```
+vdac char    # sweeps 0–100 % duty, reads ADC128 at each step,
+             # fits linear model, writes slope+intercept to tc_cal, saves
+```
+
+After `vdac char` the fixture is calibrated and `cal show` confirms the values.
+No manual `cal save` is needed — `vdac char` saves automatically.
+
+### MQTT interface
+
+Calibration is readable/writable over MQTT by an `engineer`-role session:
+
+| DCMD | Payload | Effect |
+|---|---|---|
+| `cal_get` | *(none)* | TC publishes DDATA with all `Cal/*` metrics |
+| `cal_set` | `{"key":"vdut.slope","value":-87}` | Write one coefficient, persist immediately |
+
+See the [MQTT contract](../design/architecture/mqtt-contract.md) for the full
+payload schema and all supported `cal_set` keys.
+
+`NBIRTH Properties/CalProfileVersion` is `"set"` when VDUT is calibrated
+(slope ≠ 0), `"none"` otherwise.
+
+### NVS storage details
+
+- **Namespace**: `cal`
+- **Key**: `cal` (single JSON blob; atomic write)
+- **Domain**: `STORAGE_DOMAIN_CALIBRATION` → routed to NVS in `storage_spiffs.c`
+- **Blob format**: JSON object with sub-objects `vdut`, `ina219`, `adc128`
+
+The blob survives OTA because NVS is a separate flash partition from the
+firmware image.
+
+---
+
+## Production recipe — g3-mb-v1
+
+The production test recipe is defined in `recipes/g3-mb-v1.json`.  It runs
+when the state machine starts and loads the recipe from LittleFS by ID
+(`g3-mb-v1`).  Steps execute in order; a CRITICAL failure aborts immediately
+and (where applicable) cuts VDUT power.
+
+### Step summary
+
+| # | Step ID | Criticality | Enabled | Description |
+|---|---------|-------------|---------|-------------|
+| 1 | `i2c` | CRITICAL | ✅ | I²C bus scan + rail check |
+| 2 | `adc` | OPTIONAL | ✅ | ESP32 internal ADC sanity |
+| 3 | `wifi` | REQUIRED | ✅ | WiFi connected |
+| 4 | `ota` | REQUIRED | ✅ | OTA partition valid |
+| 5 | `dut_read_id` | REQUIRED | ✅ | DUT STM32 UID96 via UART |
+| 6 | `dut_program` | CRITICAL | ❌ | Flash PFW via SWD — disabled until PFW binary in NVS |
+| 7 | `power_check` | CRITICAL | ✅ | DUT 3.3 V ± 5 %, 5–250 mA (INA219) |
+| 8 | `dut_heartbeat` | CRITICAL | ❌ | PA9 1 Hz toggle via ADC128 — disabled until PFW running |
+| 9 | `dut_enter_test` | CRITICAL | ✅ | UART: `ENTER_TEST` → `OK TEST_MODE_ACTIVE` |
+| 10 | `dut_version` | REQUIRED | ✅ | UART: `VERSION` → `OK <fw-string>` |
+| 11 | `dut_hw_rev` | REQUIRED | ✅ | UART: `HW_REV` → `OK <rev-string>` |
+| 12 | `dut_uc_adc_vref` | REQUIRED | ✅ | UART: `UC_ADC_READ VREF` → 2400–2600 mV |
+| 13 | `dut_uc_adc_3v_rail` | REQUIRED | ✅ | UART: `UC_ADC_READ 3V_RAIL` → 2850–3150 mV |
+| 14 | `dut_flash_test` | REQUIRED | ✅ | UART: `FLASH_TEST` → response contains `PASS` |
+| 15 | `dut_rtc_read` | REQUIRED | ✅ | UART: `RTC_READ` → 1550–3600 mV (coin cell) |
+| 16 | `dut_exit_test` | REQUIRED | ✅ | UART: `EXIT_TEST` → `OK` |
+| 17 | `mux_scan` | REQUIRED | ✅ | TIE MUX scan (4 mux × 16 ch) |
+
+### DUT UART interface
+
+Steps 9–16 communicate with the DUT over UART_NUM_1 (TC GPIO43 TX → DUT RX,
+GPIO44 RX ← DUT TX) at 115200 8N1.  All commands follow the protocol:
+
+```
+TC → DUT:  CMD [ARGS]\r\n
+DUT → TC:  OK [DATA]\r\n   (or ERR [CODE]\r\n on failure)
+```
+
+The UART driver is opened once in `dut_enter_test` and closed in
+`dut_exit_test`.  If `ENTER_TEST` fails, the driver closes immediately and all
+subsequent UART steps skip via the `s_uart_open` gate — no spurious UART
+errors propagate.
+
+**Blocker:** Steps 9–16 require the DUT PFW UART command handler (FW-2) to be
+flashed.  Until FW-2 is implemented and flashed, all UART steps will time out
+and record as FAIL.
+
+### Uploading the recipe
+
+The recipe JSON lives in the repo at `recipes/g3-mb-v1.json`.  After an OTA
+firmware update, upload the recipe to LittleFS with:
+
+```bash
+python3 scripts/upload_recipe.py recipes/g3-mb-v1.json
+```
+
+This uses the `recipe set-b64 <id> <base64>` console command (requires
+firmware with `max_cmdline_length = 4096`, set since v1.2.0).
+
+To run the recipe manually from the TCP console:
+
+```
+recipe run g3-mb-v1
+```
+
+To set it as the active recipe (run automatically on `sm start`):
+
+```
+nvs_set recipes active str g3-mb-v1
+```
+
+### Recipe version history
+
+| Version | Date | Change |
+|---------|------|--------|
+| 1.0.0 | 2026-03-18 | Initial recipe — TC carrier steps only |
+| 1.1.0 | 2026-03-19 | Add DUT UART steps (disabled), heartbeat, dut_program |
+| 1.2.0 | 2026-03-21 | Enable 8 DUT UART steps (enter→exit); heartbeat + program remain disabled |
+
+---
+
+## Provisioning (commissioning identity)
+
+TC identity is provisioned at commissioning time via the `nvs_set` DCMD.  Once
+set, the provisioned values persist across reboots and OTA updates (NVS survives
+firmware flash).
+
+### Identity keys
+
+| NVS namespace | Key | Description |
+|---|---|---|
+| `provision` | `fixture_id` | Opaque fixture identifier (shown in NBIRTH) |
+| `provision` | `group_id` | Sparkplug B group_id — replaces `SensitMfg` in topic |
+| `provision` | `node_id` | Sparkplug B node_id — replaces TC serial in topic |
+| `provision` | `ota_root_ca` | PEM root CA for HTTPS OTA (up to ~4 KB) |
+
+### Provisioning DCMD
+
+Send as a Sparkplug B DCMD to the TC's DCMD topic (before or after provisioning
+— the `nvs_set` handler is always active):
+
+```json
+{"cmd": "nvs_set", "namespace": "provision", "key": "group_id", "value": "SensitProd"}
+{"cmd": "nvs_set", "namespace": "provision", "key": "node_id",  "value": "TC-001"}
+{"cmd": "nvs_set", "namespace": "provision", "key": "fixture_id", "value": "FX-042"}
+```
+
+**Identity keys** (`group_id`, `node_id`, `fixture_id`) take effect immediately
+in-memory and trigger an automatic **REBIRTH** — the TC republishes NBIRTH with
+the updated identity.  REBIRTH does not reset the test state machine.
+
+**`ota_root_ca`** stores the full PEM cert from the raw DCMD payload (no
+length truncation).  Requires a reboot to take effect.
+
+### NBIRTH identity metrics
+
+| Metric | Value when provisioned | Value when unprovisioned |
+|---|---|---|
+| `Properties/HwUid` | ESP32 MAC (always) | ESP32 MAC (always) |
+| `Properties/FixtureId` | provisioned `fixture_id` | `""` (empty string) |
+
+### Topic routing
+
+Provisioned TC topics use the provisioned identity:
+
+```
+spBv1.0/<group_id>/NBIRTH/<node_id>/CH<N>
+```
+
+Unprovisioned fallback:
+
+```
+spBv1.0/SensitMfg/NBIRTH/<serial>/CH<N>
+```
+
+where `<serial>` is the TC hardware serial (e.g. `G3-MB-Tester-001`).
+
+---
+
+## LBB transport (USB-Serial-JTAG)
+
+The **Local Bus Bridge (LBB)** transport exposes TC telemetry over the USB-
+Serial-JTAG port.  It is the only data path for TCs installed inside metal
+enclosures (WiFi blocked).
+
+### Enabling / disabling
+
+```
+mqtt lbb on     # enable (persists in NVS device/lbb; reboot to apply)
+mqtt lbb off    # disable
+mqtt lbb        # show current state
+```
+
+!!! note "sdkconfig"
+    For a clean NDJSON channel with no ESP-IDF log noise, set
+    `CONFIG_ESP_CONSOLE_SECONDARY_NONE=y` in `sdkconfig.esp32-Devkit`.
+    Without this, the secondary UART console output may interleave with LBB
+    frames.  This is a T1 pre-production coordination item.
+
+### Wire format
+
+**TC → T1 (outbound):** NDJSON envelope wrapping the standard Sparkplug payload:
+
+```
+{"t":"DDATA","ch":0,"p":{...}}\n
+```
+
+- `t` — message type (`DDATA`, `NBIRTH`, `NDEATH`)
+- `ch` — channel index (0–7)
+- `p` — existing JSON payload (same schema as MQTT)
+
+**T1 → TC (inbound):** Raw DCMD JSON (no envelope):
+
+```
+{"cmd":"start"}\n
+{"cmd":"nvs_set","namespace":"provision","key":"group_id","value":"SensitProd"}\n
+```
+
+All messages are newline-delimited.  Maximum inbound line length: **8192 bytes**
+(supports 4 KB base64-encoded OTA chunks).
+
+---
+
+## Path C — Chunked OTA over LBB
+
+TCs installed inside metal enclosures have no WiFi.  The standard URL-based OTA
+(`esp_https_ota`) is architecturally unavailable.  **Path C** transfers firmware
+as base64-encoded chunks over the LBB USB-Serial-JTAG port.
+
+### TC firmware receiver
+
+The `ota_chunk` DCMD handler in `common/src/cmd_ota.c` implements the receiver:
+
+```json
+{"cmd":"ota_chunk","seq":0,"offset":0,"total":131072,"data":"<base64>","sha256":"<hex>"}
+```
+
+| Field | Type | Description |
+|---|---|---|
+| `seq` | int | Zero-based chunk sequence number |
+| `offset` | int | Byte offset of this chunk in the full binary |
+| `total` | int | Total firmware size in bytes |
+| `data` | string | Base64-encoded chunk payload |
+| `sha256` | string | Full-image SHA-256 hex digest (present on last chunk only) |
+
+**Session flow:**
+
+1. First chunk (`seq=0`): calls `esp_ota_begin()` on the next OTA partition
+2. Each chunk: base64-decode, `esp_ota_write()`, accumulate SHA-256
+3. Last chunk (when `offset + decoded_len >= total`): verify SHA-256, call
+   `esp_ota_end()` + `esp_ota_set_boot_partition()`, reboot
+4. Seq mismatch or SHA-256 mismatch: abort session, rollback partition unchanged
+
+TC publishes `{"type":"ota_progress","seq":N,"written":N}` DDATA after each
+chunk and `{"type":"ota_result","result":"ok"}` before rebooting.
+
+### Pi sender script
+
+```bash
+python3 scripts/ota_chunk_send.py \
+    --port /dev/ttyUSB-ch1 \
+    --firmware .pio/build/esp32-Devkit/firmware.bin
+```
+
+Options:
+
+| Flag | Default | Description |
+|---|---|---|
+| `--port` | required | Serial device for target TC channel |
+| `--firmware` | required | Path to firmware.bin |
+| `--chunk-size` | `3072` | Bytes per chunk (base64 ~4096 + envelope ≤ 8192) |
+| `--baud` | `115200` | Serial baud rate |
+
+The script computes the full-image SHA-256 before sending, includes it on the
+last chunk, and waits for NBIRTH after reboot to confirm the update landed.
+
+### mark_valid — LBB-only health gate
+
+Post-OTA, the firmware runs a health check before calling
+`esp_ota_mark_app_valid_cancel_rollback()`.  The standard gate polls for WiFi
++ MQTT connectivity.  LBB-only TCs (no broker configured) would always time
+out and roll back.
+
+**Fix:** On boot, if `NVS device/lbb=1` AND `NVS mqtt/broker_url` is empty,
+the health task marks valid **immediately** and exits.  No 90-second wait.
+
+### Chunk sizing
+
+| Parameter | Value | Reason |
+|---|---|---|
+| Chunk payload | 3072 bytes | Base64 = 4096 chars |
+| JSON envelope overhead | ~100 chars | `{"cmd":"ota_chunk","seq":...}` |
+| Total line length | ~4200 chars | Well within LBB_RX_LINE_MAX (8192) |

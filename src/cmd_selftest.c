@@ -20,11 +20,21 @@
 #include "cmd_adc.h"
 #include "cmd_vdac.h"
 #include "cmd_selftest.h"
+#include "tc_cal.h"
 #include "tc_mqtt.h"
+#include "recipe_primitives.h"
+#include "dut_detect.h"
 #include "tc_statemachine.h"
 #include "driver/uart.h"
 #include "esp_timer.h"
 #include "tie_pinmap.h"
+#include "cJSON.h"
+
+/* ── Forward declarations ─────────────────────────────────────────────────── */
+
+bool tie_adc128_read_raw_mv(uint8_t ch, int *mv_out);
+extern void run_swd_probe(const cJSON *params);  /* g3_primitives.c */
+static const char *detect_config_level(void);
 
 /* ── TCC carrier device map ───────────────────────────────────────────────── */
 
@@ -51,7 +61,7 @@ static void report(bool ok, const char *fmt, ...)
 
 /* ── Structured check collection (for MQTT selftest DDATA) ───────────────── */
 
-#define MAX_CHECKS 32
+#define MAX_CHECKS 128
 static tc_mqtt_check_t s_checks[MAX_CHECKS];
 static int             s_ncheck;
 
@@ -80,12 +90,17 @@ static void st_record_mv(const char *id, bool pass, int mv)
     s_ncheck++;
 }
 
+/* ── Public check buffer API (used by primitive modules) ─────────────────── */
+
+void selftest_check_record(const char *id, bool pass)    { st_record(id, pass); }
+void selftest_check_record_mv(const char *id, bool pass, int mv) { st_record_mv(id, pass, mv); }
+
 /* ── ADC128D818 register map (subset) ────────────────────────────────────── */
 
 #define ADC128_REG_CONFIG    0x00  /* bit0=START, bit7=INIT(resets all regs, self-clearing) */
 #define ADC128_REG_CONV_RATE 0x07  /* 0=low-power (~728ms/scan), 1=high-rate (~12ms/ch) */
 #define ADC128_REG_CH_DIS    0x08  /* bit N = disable channel N */
-#define ADC128_REG_ADV_CFG   0x0B  /* bit0=ext-VREF-en, bits[2:1]=mode: 0x02=Mode1(all 8 pins voltage) */
+#define ADC128_REG_ADV_CFG   0x0B  /* bit0=ext-VREF-en, bits[2:1]=mode: 0x03=Mode1+ext-VREF */
 #define ADC128_REG_CH_BASE  0x20  /* CH0=0x20 … CH7=0x27, 2 bytes each   */
                                   /* value = ((b0<<8)|b1)>>4, Vref=2560mV */
 
@@ -97,7 +112,7 @@ static void st_record_mv(const char *id, bool pass, int mv)
 #define ADC128_CH5_NUM  8       /* numerator   of inverse divider (CH5 = /3V3_MON) */
 #define ADC128_CH5_DEN  5       /* denominator of inverse divider */
 
-#define ADC128_VREF_MV  2560
+#define ADC128_VREF_MV  3000    /* MAX6103 external reference */
 #define ADC128_FULL     4096
 
 /* Pass/fail window ±5 % on reconstructed rail voltage */
@@ -107,18 +122,19 @@ static bool adc128_read_channel(uint8_t ch, int *rail_mv_out)
 {
     uint8_t buf[2];
     if (!i2c_read_reg(ADDR_ADC128D818, ADC128_REG_CH_BASE + ch, buf, 2)) return false;
-    int count    = ((buf[0] << 8) | buf[1]) >> 4;
-    int adc_mv   = count * ADC128_VREF_MV / ADC128_FULL;
-    /* scale back to rail voltage using per-channel divider ratio */
-    if (ch == 4) *rail_mv_out = adc_mv * ADC128_CH4_NUM / ADC128_CH4_DEN;
-    else         *rail_mv_out = adc_mv * ADC128_CH5_NUM / ADC128_CH5_DEN;
+    int count  = ((buf[0] << 8) | buf[1]) >> 4;
+    int adc_mv = count * ADC128_VREF_MV / ADC128_FULL;
+    /* scale back to rail voltage using per-channel divider ratio, then apply calibration */
+    int raw_mv;
+    if (ch == 4) raw_mv = adc_mv * ADC128_CH4_NUM / ADC128_CH4_DEN;
+    else         raw_mv = adc_mv * ADC128_CH5_NUM / ADC128_CH5_DEN;
+    *rail_mv_out = tc_cal_apply_adc(ch, raw_mv);
     return true;
 }
 
 /* ── Individual test groups ───────────────────────────────────────────────── */
 
-/* Called while bus is already on swapped orientation (SDA=16, SCL=15).
- * Reads ADC128D818 CH7 (internal temperature diode) by temporarily switching
+/* Reads ADC128D818 CH7 (internal temperature diode) by temporarily switching
  * to Mode 0 (IN7 → temp diode), then restoring Mode 1 (all voltage inputs).
  *
  * Conversion per SNAS483F Table 16, Equations 2 & 3:
@@ -127,7 +143,7 @@ static bool adc128_read_channel(uint8_t ch, int *rail_mv_out)
  *   If DOUT[8]=0 (positive): Temp = DOUT / 2           (Eq 2)
  *   If DOUT[8]=1 (negative): Temp = (DOUT − 512) / 2  (Eq 3)
  *   Accuracy: ±2°C over −25°C to 100°C. */
-static void run_temp_on_swapped_bus(void)
+static void run_temp(void)
 {
     if (!i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x00) ||
         !i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONV_RATE, 0x01) ||
@@ -152,37 +168,25 @@ static void run_temp_on_swapped_bus(void)
         int  temp_int  = abs_x2 / 2;
         int  temp_frac = (abs_x2 & 1) ? 5 : 0;  /* 0 or 5 tenths */
 
-        /* Sanity: expect lab ambient -10–85°C */
-        bool sane = (temp_x2 >= -20 && temp_x2 <= 170);
-        report(sane, "ADC128: CH7  temp sensor  %s%d.%d°C  (±2°C, exp -10–85°C)",
+        /* Pass if < 75°C (mqtt-contract v2.9.0, R8.10) */
+        bool ok = (temp_x2 < 150);  /* 150 half-degrees = 75°C */
+        report(ok, "ADC128: CH7  temp sensor  %s%d.%d°C  (pass < 75°C)",
                neg ? "-" : "", temp_int, temp_frac);
-        st_record("adc_temp", sane);
+        st_record_mv("i2c_temp_adc128", ok, temp_int);
     }
 
     /* Restore Mode 1 so voltage channels work after selftest */
-    i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x02);
+    i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x03);
     i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONV_RATE, 0x01);
     i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONFIG,    0x01);
 }
 
-/* Standalone temperature read — handles bus setup itself. */
-static void run_temp(void)
-{
-    if (!i2c_reinit(16, 15)) {
-        report(false, "ADC128: CH7  temp sensor  (bus reinit failed)");
-        return;
-    }
-    run_temp_on_swapped_bus();
-    i2c_reinit(15, 16);  /* restore default */
-}
-
-/* Called while bus is already on swapped orientation (SDA=16, SCL=15). */
 static void run_adc128(void)
 {
     /* Mode 1: all 8 pins as voltage inputs (default Mode 0 maps IN7 to temp sensor).
      * ADV_CFG and CONV_RATE must be written before START bit.
      * At high rate: ~12ms/channel × 8 channels ≈ 100ms for first full scan. */
-    if (!i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x02) ||
+    if (!i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x03) ||
         !i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONV_RATE, 0x01) ||
         !i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONFIG,    0x01)) {
         report(false, "ADC128: init failed");
@@ -217,17 +221,13 @@ static void run_adc128(void)
         st_record_mv("adc_rail_3v3", ok, rail_mv);
     }
 
-    /* Append temperature read on the same (swapped) bus while it's active. */
-    run_temp_on_swapped_bus();
+    /* Append temperature read on the same bus */
+    run_temp();
 }
 
-/* TCC carrier v1 errata: ADC128D818 SDA/SCL are swapped relative to the INA219s.
- * INA219s live on GPIO15(SDA)/GPIO16(SCL); ADC128D818 on GPIO16(SDA)/GPIO15(SCL).
- * Workaround: probe each group on its own bus orientation, then restore default.
- * TODO(hw-fix): swap bus wires on carrier at next board spin (multi-channel). */
-static void run_i2c(void)
+/* HW-012: I2C swap errata resolved — all devices on same bus (SDA=15, SCL=16). */
+void run_i2c(const cJSON *params)
 {
-    /* Pass 1: default orientation — INA219s */
     bool bus_ok = i2c_ensure_initialized();
     report(bus_ok, "I2C: bus init  (SDA=GPIO15  SCL=GPIO16  400kHz)");
     st_record("i2c_bus", bus_ok);
@@ -248,37 +248,31 @@ static void run_i2c(void)
     report(ina1_ok, "I2C: INA219 #1  @ 0x%02X", ADDR_INA219_1);
     st_record("i2c_ina219_1", ina1_ok);
 
-    /* Pass 2: swapped orientation — ADC128D818 */
-    bool swap_ok = i2c_reinit(16, 15);
-    if (!swap_ok) {
-        report(false, "I2C: ADC128D818 @ 0x%02X  (skipped — bus reinit failed)", ADDR_ADC128D818);
-        st_record("i2c_adc128", false);
-    } else {
-        bool adc128_ok = i2c_probe(ADDR_ADC128D818);
-        report(adc128_ok, "I2C: ADC128D818 @ 0x%02X", ADDR_ADC128D818);
-        st_record("i2c_adc128", adc128_ok);
-        run_adc128();
-        i2c_reinit(15, 16);  /* restore default */
-    }
+    bool adc128_ok = i2c_probe(ADDR_ADC128D818);
+    report(adc128_ok, "I2C: ADC128D818 @ 0x%02X", ADDR_ADC128D818);
+    st_record("i2c_adc128", adc128_ok);
+    if (adc128_ok) run_adc128();
 }
 
-static void run_adc(void)
+void run_adc(const cJSON *params)
 {
-    int raw = 0, mv = -1;
-    bool ok = adc_selftest_read(0, &raw, &mv);
-    if (ok && mv >= 0) {
-        report(true,  "ADC:  CH0 (GPIO1) raw=%-5d  %4d mV", raw, mv);
-        st_record_mv("adc_gpio1", true, mv);
-    } else if (ok) {
-        report(true,  "ADC:  CH0 (GPIO1) raw=%-5d  (no calibration)", raw);
-        st_record("adc_gpio1", true);
-    } else {
-        report(false, "ADC:  CH0 (GPIO1) read failed");
-        st_record("adc_gpio1", false);
-    }
+    /* GPIO1 (ADC1_CH0) and GPIO2 (ADC1_CH1) are now dedicated to LEDC/VDUT PWM
+     * (HW-013 rework, HW-014 fix).  Reading ADC1_CH0 puts GPIO1 in analog mode
+     * which suppresses LEDC output on that pin.  Read ADC128 CH6/CH7 instead.
+     * NOTE: CH6/CH7 voltage dividers are not yet wired on TCC v1.1 — reads 0 mV
+     * until the next board spin adds VDUT1Mon/VDUT2Mon connections. */
+    int mv6 = -1, mv7 = -1;
+    bool ok6 = tie_adc128_read_raw_mv(6, &mv6);
+    bool ok7 = tie_adc128_read_raw_mv(7, &mv7);
+
+    report(ok6, "ADC:  ADC128 CH6 (VDUT1Mon)  %4d mV", mv6);
+    st_record_mv("adc128_ch6", ok6, mv6);
+
+    report(ok7, "ADC:  ADC128 CH7 (VDUT2Mon)  %4d mV", mv7);
+    st_record_mv("adc128_ch7", ok7, mv7);
 }
 
-static void run_wifi(void)
+void run_wifi(const cJSON *params)
 {
     wifi_ap_record_t ap;
     if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
@@ -290,7 +284,7 @@ static void run_wifi(void)
     }
 }
 
-static void run_ota(void)
+void run_ota(const cJSON *params)
 {
     const esp_partition_t *p   = esp_ota_get_running_partition();
     const esp_app_desc_t  *d   = esp_app_get_description();
@@ -316,8 +310,9 @@ static void run_ota(void)
  * Sweeps VDUT1 and VDUT2 through three duty-cycle setpoints.  INA219 V_BUS
  * is the primary voltage measurement (±0.5% max at room temp, measured at
  * the DUT connector — after the 0.1Ω shunt, which drops <0.1mV at 1mA).
- * ADC128 CH6/CH7 are no longer used here; those channels are reserved for
- * DUT_VIN and ISO_POWER_IN monitoring on the next board spin.
+ * ADC128 CH6/CH7 carry VDUT1Mon/VDUT2Mon (planned — not yet wired on TCC v1.1).
+ * The selftest adc step reads CH6/CH7 instead of ADC1_CH0/CH1 to keep GPIO1/2
+ * in digital mode for LEDC (HW-014 fix).
  *
  * Pass criteria:
  *   1. INA219 V_BUS within the per-point sanity window.
@@ -358,8 +353,27 @@ void selftest_ina219_init(void)
     i2c_write_reg16(ADDR_INA219_1, INA219_REG_CAL,    INA219_CAL_PGA1);
 }
 
-static void run_vdut(void)
+void run_vdut(const cJSON *params)
 {
+    /* ── SAFETY: VDUT voltage sweep must NEVER run with DUT connected ──── *
+     * The sweep drives 10V+ (10% duty) into a ~4V-rated DUT board.        *
+     * Check DUT presence BEFORE enabling any VDUT output.                  *
+     *                                                                       *
+     * NOTE: dut_detect_sample() uses U8 ch3 signal injection + ADC128 read.*
+     * It must run before VDUT is enabled to avoid interference.            */
+    {
+        int mv = 0;
+        bool sampled = dut_detect_sample(&mv);
+        printf("VDUT safety: DUT detect = %d mV (%s)\n",
+               mv, sampled ? (mv < 1500 ? "PRESENT" : "ABSENT") : "SAMPLE FAILED");
+        if (sampled && mv < 1500) {
+            report(false, "VDUT: BLOCKED — DUT detected (%d mV). "
+                   "Remove DUT before running voltage sweep.", mv);
+            st_record("vdut_safety", false);
+            return;
+        }
+    }
+
     /* ── 1. LEDC at 0 %, enable both regulators ────────────────────────── */
     if (!vdac_set_duty(0, 0) || !vdac_set_duty(1, 0)) {
         report(false, "VDUT: LEDC init failed"); return;
@@ -389,7 +403,8 @@ static void run_vdut(void)
 
         uint8_t buf[2];
         if (i2c_read_reg(ADDR_INA219_0, INA219_REG_BUS_V, buf, 2)) {
-            bus0[p] = (((int16_t)((buf[0] << 8) | buf[1])) >> 3) * 4;
+            bus0[p] = tc_cal_apply_ina_v(TC_CAL_INA_CH0,
+                          (((int16_t)((buf[0] << 8) | buf[1])) >> 3) * 4);
             iok[p][0] = true;
         }
         if (i2c_read_reg(ADDR_INA219_0, INA219_REG_CURRENT, buf, 2))
@@ -398,7 +413,8 @@ static void run_vdut(void)
             pwr0[p] = (buf[0] << 8) | buf[1];
 
         if (i2c_read_reg(ADDR_INA219_1, INA219_REG_BUS_V, buf, 2)) {
-            bus1[p] = (((int16_t)((buf[0] << 8) | buf[1])) >> 3) * 4;
+            bus1[p] = tc_cal_apply_ina_v(TC_CAL_INA_CH1,
+                          (((int16_t)((buf[0] << 8) | buf[1])) >> 3) * 4);
             iok[p][1] = true;
         }
         if (i2c_read_reg(ADDR_INA219_1, INA219_REG_CURRENT, buf, 2))
@@ -543,7 +559,7 @@ static const int s_mux_gpio[TIE_MUX_COUNT][4] = {
 
 static const uint8_t s_mux_adc128_ch[TIE_MUX_COUNT] = { 0, 1, 2, 3 };
 
-static void mux_select(int mux_idx, int ch)
+void tie_mux_select(int mux_idx, int ch)
 {
     for (int bit = 0; bit < 4; bit++) {
         gpio_num_t pin = (gpio_num_t)s_mux_gpio[mux_idx][bit];
@@ -552,7 +568,7 @@ static void mux_select(int mux_idx, int ch)
     }
 }
 
-static bool adc128_read_raw_mv(uint8_t ch, int *mv_out)
+bool tie_adc128_read_raw_mv(uint8_t ch, int *mv_out)
 {
     uint8_t buf[2];
     if (!i2c_read_reg(ADDR_ADC128D818, ADC128_REG_CH_BASE + ch, buf, 2)) return false;
@@ -561,18 +577,19 @@ static bool adc128_read_raw_mv(uint8_t ch, int *mv_out)
     return true;
 }
 
-static void run_mux_scan(void)
+bool tie_adc128_init(void)
 {
-    if (!i2c_reinit(16, 15)) {
-        report(false, "MUX: ADC128 bus reinit failed");
-        return;
-    }
+    return i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x03) &&
+           i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONV_RATE, 0x01) &&
+           i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONFIG,    0x01);
+}
 
-    if (!i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x02) ||
+void run_mux_scan(const cJSON *params)
+{
+    if (!i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x03) ||
         !i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONV_RATE, 0x01) ||
         !i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONFIG,    0x01)) {
         report(false, "MUX: ADC128 init failed");
-        i2c_reinit(15, 16);
         return;
     }
     vTaskDelay(pdMS_TO_TICKS(150));
@@ -583,11 +600,11 @@ static void run_mux_scan(void)
     int err_count = 0;
     for (int m = 0; m < TIE_MUX_COUNT; m++) {
         for (int ch = 0; ch < TIE_MUX_CHANNELS; ch++) {
-            mux_select(m, ch);
+            tie_mux_select(m, ch);
             vTaskDelay(pdMS_TO_TICKS(20));
 
             int mv = 0;
-            bool ok = adc128_read_raw_mv(s_mux_adc128_ch[m], &mv);
+            bool ok = tie_adc128_read_raw_mv(s_mux_adc128_ch[m], &mv);
             if (!ok) err_count++;
             printf("  %d  %2d   %d  %d  %d  %d  %s%4d\n",
                    m, ch,
@@ -601,7 +618,6 @@ static void run_mux_scan(void)
         for (int bit = 0; bit < 4; bit++)
             gpio_set_direction((gpio_num_t)s_mux_gpio[m][bit], GPIO_MODE_INPUT);
 
-    i2c_reinit(15, 16);
     report(err_count == 0, "MUX: scan complete  %d read errors", err_count);
     st_record("mux_scan", err_count == 0);
 }
@@ -618,30 +634,24 @@ static void run_mux_scan(void)
 #define HEARTBEAT_THRESH_MV 1500
 #define HEARTBEAT_SAMPLES   25  /* 25 × 100 ms = 2.5 s */
 
-static void run_dut_heartbeat(void)
+void run_dut_heartbeat(const cJSON *params)
 {
-    if (!i2c_reinit(16, 15)) {
-        report(false, "DUT heartbeat: ADC128 bus reinit failed");
-        return;
-    }
-
-    if (!i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x02) ||
+    if (!i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x03) ||
         !i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONV_RATE, 0x01) ||
         !i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONFIG,    0x01)) {
         report(false, "DUT heartbeat: ADC128 init failed");
-        i2c_reinit(15, 16);
         return;
     }
     vTaskDelay(pdMS_TO_TICKS(150));
 
     /* Select U12 Ch2 */
-    mux_select(HEARTBEAT_MUX_IDX, HEARTBEAT_MUX_CH);
+    tie_mux_select(HEARTBEAT_MUX_IDX, HEARTBEAT_MUX_CH);
     vTaskDelay(pdMS_TO_TICKS(20));
 
     int min_mv = 9999, max_mv = 0;
     for (int i = 0; i < HEARTBEAT_SAMPLES; i++) {
         int mv = 0;
-        if (adc128_read_raw_mv(HEARTBEAT_ADC128_CH, &mv)) {
+        if (tie_adc128_read_raw_mv(HEARTBEAT_ADC128_CH, &mv)) {
             if (mv < min_mv) min_mv = mv;
             if (mv > max_mv) max_mv = mv;
         }
@@ -651,8 +661,6 @@ static void run_dut_heartbeat(void)
     /* Release address GPIOs */
     for (int bit = 0; bit < 4; bit++)
         gpio_set_direction((gpio_num_t)s_mux_gpio[HEARTBEAT_MUX_IDX][bit], GPIO_MODE_INPUT);
-
-    i2c_reinit(15, 16);
 
     bool saw_low  = min_mv < HEARTBEAT_THRESH_MV;
     bool saw_high = max_mv > HEARTBEAT_THRESH_MV;
@@ -676,7 +684,7 @@ static void run_dut_heartbeat(void)
 
 static bool s_uart_open = false;
 
-static bool dut_uart_open(void)
+bool dut_uart_open(void)
 {
     if (s_uart_open) return true;
     uart_config_t cfg = {
@@ -698,16 +706,18 @@ static bool dut_uart_open(void)
     return true;
 }
 
-static void dut_uart_close(void)
+void dut_uart_close(void)
 {
     if (!s_uart_open) return;
     uart_driver_delete(DUT_UART_PORT);
     s_uart_open = false;
 }
 
+bool dut_uart_is_open(void) { return s_uart_open; }
+
 /* Send cmd\r\n, read one response line into buf (stripped of \r\n).
  * Returns true if the response starts with "OK". */
-static bool dut_cmd(const char *cmd, char *buf, size_t buf_len, int timeout_ms)
+bool dut_cmd(const char *cmd, char *buf, size_t buf_len, int timeout_ms)
 {
     if (!s_uart_open || !buf || buf_len == 0) return false;
     buf[0] = '\0';
@@ -732,7 +742,7 @@ static bool dut_cmd(const char *cmd, char *buf, size_t buf_len, int timeout_ms)
 
 /* ── DUT UART recipe steps ────────────────────────────────────────────────── */
 
-static void run_dut_enter_test(void)
+void run_dut_enter_test(const cJSON *params)
 {
     char resp[128] = {0};
     if (!dut_uart_open()) {
@@ -748,7 +758,18 @@ static void run_dut_enter_test(void)
     if (!ok) dut_uart_close();   /* leave closed so subsequent steps skip cleanly */
 }
 
-static void run_dut_version(void)
+/* Cached PFW version string — populated by run_dut_version on success.
+ * Format: "x.y.z+N" (FW_VERSION_STRING from PFW build).
+ * Empty string if not yet read or last read failed. */
+static char s_pfw_version[48] = {};
+
+void selftest_get_pfw_version(char *buf, size_t len)
+{
+    strncpy(buf, s_pfw_version, len - 1);
+    buf[len - 1] = '\0';
+}
+
+void run_dut_version(const cJSON *params)
 {
     char resp[128] = {0};
     if (!s_uart_open) {
@@ -759,9 +780,23 @@ static void run_dut_version(void)
     bool ok = dut_cmd("VERSION", resp, sizeof(resp), 500);
     report(ok, "DUT: VERSION  %s", resp);
     st_record("dut_version", ok);
+
+    if (ok) {
+        /* Parse "OK FW_VERSION:x.y.z+N HW_REV:..." — extract version token */
+        const char *tag = strstr(resp, "FW_VERSION:");
+        if (tag) {
+            tag += 11; /* skip "FW_VERSION:" */
+            size_t i = 0;
+            while (tag[i] && tag[i] != ' ' && i < sizeof(s_pfw_version) - 1) {
+                s_pfw_version[i] = tag[i];
+                i++;
+            }
+            s_pfw_version[i] = '\0';
+        }
+    }
 }
 
-static void run_dut_hw_rev(void)
+void run_dut_hw_rev(const cJSON *params)
 {
     char resp[128] = {0};
     if (!s_uart_open) {
@@ -775,7 +810,7 @@ static void run_dut_hw_rev(void)
 }
 
 /* UC_ADC_READ VREF — expect 2.5 V ± 4 % (2400–2600 mV) */
-static void run_dut_vref(void)
+void run_dut_vref(const cJSON *params)
 {
     char resp[128] = {0};
     if (!s_uart_open) {
@@ -792,7 +827,7 @@ static void run_dut_vref(void)
 }
 
 /* UC_ADC_READ 3V_RAIL — expect 3.0 V ± 5 % (2850–3150 mV) */
-static void run_dut_3v_rail(void)
+void run_dut_3v_rail(const cJSON *params)
 {
     char resp[128] = {0};
     if (!s_uart_open) {
@@ -809,7 +844,7 @@ static void run_dut_3v_rail(void)
 }
 
 /* FLASH_TEST — expect "OK FLASH_TEST PASS ..." */
-static void run_dut_flash_test(void)
+void run_dut_flash_test(const cJSON *params)
 {
     char resp[128] = {0};
     if (!s_uart_open) {
@@ -824,7 +859,7 @@ static void run_dut_flash_test(void)
 }
 
 /* RTC_READ — expect battery voltage 1550–3600 mV */
-static void run_dut_rtc_read(void)
+void run_dut_rtc_read(const cJSON *params)
 {
     char resp[128] = {0};
     if (!s_uart_open) {
@@ -840,7 +875,7 @@ static void run_dut_rtc_read(void)
     st_record_mv("dut_rtc_read", in_range, mv);
 }
 
-static void run_dut_exit_test(void)
+void run_dut_exit_test(const cJSON *params)
 {
     if (!s_uart_open) return;   /* ENTER_TEST failed earlier — skip silently */
     char resp[128] = {0};
@@ -860,7 +895,7 @@ static void run_dut_exit_test(void)
 
 typedef struct {
     const char *id;
-    void        (*fn)(void);
+    void        (*fn)(const cJSON *params);
     bool         enabled;
 } recipe_step_t;
 
@@ -870,9 +905,10 @@ static recipe_step_t s_fixture_recipe[] = {
     { "adc",                 run_adc,            true  },
     { "wifi",                run_wifi,           true  },
     { "ota",                 run_ota,            true  },
-    { "vdut",                run_vdut,           true  },
+    { "vdut",                run_vdut,           false },  /* DISABLED — carrier-only sweep, 10V+ damages DUT */
     { "mux_scan",            run_mux_scan,       true  },
     /* ── DUT pogo-dependent — enable as pogos are loaded ─────── */
+    { "swd_probe",           run_swd_probe,      false },  /* SWD SWDIO/SWCLK pogos */
     { "dut_heartbeat",       run_dut_heartbeat,  false },  /* DUT PA9 pogo */
     { "dut_enter_test",      run_dut_enter_test, false },  /* UART TX/RX pogos */
     { "dut_version",         run_dut_version,    false },
@@ -889,13 +925,28 @@ static recipe_step_t s_fixture_recipe[] = {
 static void run_fixture_recipe(void)
 {
     s_uart_open = false;   /* ensure clean UART state at recipe start */
+
+    /* Count enabled steps for progress reporting */
+    int enabled_total = 0;
+    for (size_t i = 0; i < RECIPE_LEN; i++)
+        if (s_fixture_recipe[i].enabled) enabled_total++;
+
+    int step_num = 0;
     for (size_t i = 0; i < RECIPE_LEN; i++) {
         recipe_step_t *step = &s_fixture_recipe[i];
         if (!step->enabled) {
             printf("[SKIP] %s\n", step->id);
             continue;
         }
-        step->fn();
+        /* Resolve primitive via dispatch table (Phase 1 recipe engine) */
+        primitive_fn_t fn = recipe_primitives_lookup(step->id);
+        if (!fn) {
+            printf("[SKIP] %s (primitive not found)\n", step->id);
+            continue;
+        }
+        step_num++;
+        tc_mqtt_publish_test_progress(true, step_num, enabled_total, step->id, step->id);
+        fn(NULL);  /* legacy internal table has no params */
     }
     /* Safety: ensure UART is closed even if dut_exit_test was skipped or failed */
     if (s_uart_open) dut_uart_close();
@@ -913,14 +964,14 @@ static int do_selftest(int argc, char **argv)
     if (run_all) {
         printf("=== G3-TC Fixture Recipe ===\n");
         run_fixture_recipe();
-    } else if (strcmp(argv[1], "i2c")       == 0) { run_i2c();          }
-    else if  (strcmp(argv[1], "adc")       == 0) { run_adc();          }
-    else if  (strcmp(argv[1], "wifi")      == 0) { run_wifi();         }
-    else if  (strcmp(argv[1], "ota")       == 0) { run_ota();          }
-    else if  (strcmp(argv[1], "temp")      == 0) { run_temp();         }
-    else if  (strcmp(argv[1], "vdut")      == 0) { run_vdut();         }
-    else if  (strcmp(argv[1], "mux")       == 0) { run_mux_scan();     }
-    else if  (strcmp(argv[1], "heartbeat") == 0) { run_dut_heartbeat();}
+    } else if (strcmp(argv[1], "i2c")       == 0) { run_i2c(NULL);          }
+    else if  (strcmp(argv[1], "adc")       == 0) { run_adc(NULL);          }
+    else if  (strcmp(argv[1], "wifi")      == 0) { run_wifi(NULL);         }
+    else if  (strcmp(argv[1], "ota")       == 0) { run_ota(NULL);          }
+    else if  (strcmp(argv[1], "temp")      == 0) { run_temp();             }
+    else if  (strcmp(argv[1], "vdut")      == 0) { run_vdut(NULL);         }
+    else if  (strcmp(argv[1], "mux")       == 0) { run_mux_scan(NULL);     }
+    else if  (strcmp(argv[1], "heartbeat") == 0) { run_dut_heartbeat(NULL);}
     else if  (strcmp(argv[1], "char")      == 0) { run_char(); return 0; }
     else {
         printf("Unknown test '%s'\n", argv[1]);
@@ -928,10 +979,11 @@ static int do_selftest(int argc, char **argv)
         return 1;
     }
 
-    printf("\nResults: %d/%d passed\n", s_pass, s_total);
+    const char *config = detect_config_level();
+    printf("\nResults: %d/%d passed  detected_config=%s\n", s_pass, s_total, config);
 
     if (s_ncheck > 0) {
-        tc_mqtt_publish_selftest("fixture", s_checks, s_ncheck);
+        tc_mqtt_publish_selftest("fixture", config, s_checks, s_ncheck);
     }
 
     return (s_pass == s_total) ? 0 : 1;
@@ -979,6 +1031,40 @@ static int do_mac(int argc, char **argv)
     return 0;
 }
 
+/* ── Hardware configuration level detection ───────────────────────────────── *
+ * Scans the check buffer after selftest to determine L0–L3:
+ *   L0 = ESP32 bare (no TIE, no DUT)
+ *   L1 = +TIE I2C peripherals partially present (bus OK but not all devices)
+ *   L2 = +TIE board fully present (ADC128 + INA219s respond)
+ *   L3 = +DUT present (dut_detect GPIO asserted)
+ *
+ * Must be called after selftest run while check buffer is still valid.      */
+static const char *detect_config_level(void)
+{
+    bool tie_adc128 = false;
+    bool tie_ina0   = false;
+    bool tie_ina1   = false;
+
+    for (int i = 0; i < s_ncheck; i++) {
+        if (!s_checks[i].pass) continue;
+        if (strcmp(s_checks[i].id, "i2c_adc128")   == 0) tie_adc128 = true;
+        else if (strcmp(s_checks[i].id, "i2c_ina219_0") == 0) tie_ina0 = true;
+        else if (strcmp(s_checks[i].id, "i2c_ina219_1") == 0) tie_ina1 = true;
+    }
+
+    /* L3: TIE present AND DUT detected */
+    if (tie_adc128 && dut_detect_present()) return "L3";
+
+    /* L2: TIE board fully present (all 3 I2C peripherals) */
+    if (tie_adc128 && tie_ina0 && tie_ina1) return "L2";
+
+    /* L1: at least one TIE peripheral responds */
+    if (tie_adc128 || tie_ina0 || tie_ina1) return "L1";
+
+    /* L0: nothing beyond the ESP32 */
+    return "L0";
+}
+
 /* ── Async selftest task (used by DCMD and state machine) ─────────────────── */
 
 typedef struct {
@@ -1001,19 +1087,25 @@ static void selftest_task(void *pvarg)
     if (strcmp(mode, "quick") == 0) {
         /* Quick precheck: I2C bus + INA219 probes + rail voltages + WiFi.
          * Skips VDUT sweep (~6s) and mux scan — fast enough for SM precheck. */
-        run_i2c();
-        run_wifi();
+        tc_mqtt_publish_test_progress(true, 1, 2, "i2c_scan", "I2C scan");
+        run_i2c(NULL);
+        tc_mqtt_publish_test_progress(true, 2, 2, "wifi", "WiFi check");
+        run_wifi(NULL);
     } else {
         /* fixture: execute recipe (same table as interactive 'selftest all') */
         run_fixture_recipe();
     }
 
     bool passed = (s_pass == s_total && s_total > 0);
-    printf("[selftest task] %d/%d passed\n", s_pass, s_total);
+    const char *config = detect_config_level();
+    printf("[selftest task] %d/%d passed  detected_config=%s\n", s_pass, s_total, config);
 
     if (s_ncheck > 0) {
-        tc_mqtt_publish_selftest(mode, s_checks, s_ncheck);
+        tc_mqtt_publish_selftest(mode, config, s_checks, s_ncheck);
     }
+
+    /* Clear test_in_progress so the UI knows selftest is done */
+    tc_mqtt_publish_test_progress(false, 0, 0, "complete", "complete");
 
     /* Notify state machine if this run was SM-owned.
      * tc_sm_selftest_done() may vTaskDelay internally before returning. */
@@ -1055,24 +1147,21 @@ static void diagnostic_task(void *arg)
     printf("[diagnostic] test=%s\n", test);
 
     if (strcmp(test, "i2c") == 0) {
-        run_i2c();
+        run_i2c(NULL);
     } else if (strcmp(test, "adc") == 0 || strcmp(test, "adc128") == 0) {
-        if (i2c_reinit(16, 15)) {
-            run_adc128();
-            i2c_reinit(15, 16);
-        }
+        run_adc128();
     } else if (strcmp(test, "wifi") == 0) {
-        run_wifi();
+        run_wifi(NULL);
     } else if (strcmp(test, "ota") == 0) {
-        run_ota();
+        run_ota(NULL);
     } else if (strcmp(test, "temp") == 0) {
         run_temp();
     } else if (strcmp(test, "vdut") == 0) {
-        run_vdut();
+        run_vdut(NULL);
     } else if (strcmp(test, "mux") == 0) {
-        run_mux_scan();
+        run_mux_scan(NULL);
     } else if (strcmp(test, "heartbeat") == 0) {
-        run_dut_heartbeat();
+        run_dut_heartbeat(NULL);
     } else {
         printf("[diagnostic] unknown test '%s'\n", test);
         printf("[diagnostic] valid: i2c adc wifi ota temp vdut mux heartbeat\n");
@@ -1081,10 +1170,11 @@ static void diagnostic_task(void *arg)
         return;
     }
 
-    printf("[diagnostic] %d/%d passed\n", s_pass, s_total);
+    const char *diag_config = detect_config_level();
+    printf("[diagnostic] %d/%d passed  detected_config=%s\n", s_pass, s_total, diag_config);
 
     if (s_ncheck > 0) {
-        tc_mqtt_publish_selftest(test, s_checks, s_ncheck);
+        tc_mqtt_publish_selftest(test, diag_config, s_checks, s_ncheck);
     }
 
     free(test);
@@ -1099,6 +1189,20 @@ const char *selftest_first_failed_check(void)
         if (!s_checks[i].pass) return s_checks[i].id;
     }
     return NULL;
+}
+
+/* ── Check buffer accessors (used by recipe_engine) ──────────────────────── */
+
+int selftest_get_ncheck(void) { return s_ncheck; }
+int selftest_get_pass(void)   { return s_pass; }
+int selftest_get_total(void)  { return s_total; }
+const tc_mqtt_check_t *selftest_get_checks(void) { return s_checks; }
+
+void selftest_reset_checks(void)
+{
+    s_pass = 0;
+    s_total = 0;
+    st_reset();
 }
 
 void selftest_run_diagnostic(const char *test)

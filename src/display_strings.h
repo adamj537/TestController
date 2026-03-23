@@ -20,6 +20,7 @@
 /* ── Line 1 strings ── */
 #define DISP_L1_IDLE          "READY"
 #define DISP_L1_PRECHECK      "CHECKING..."
+#define DISP_L1_PRE_GATE      "PRE-TEST..."
 #define DISP_L1_FLASH_DUT     "FLASHING DUT..."
 #define DISP_L1_TESTING       "TESTING..."
 #define DISP_L1_PASS          "**** PASS ****"
