@@ -106,7 +106,7 @@ int recipe_engine_run(const json_recipe_t *recipe, recipe_run_result_t *result)
         const char *step_status = step->status_msg[0] ? step->status_msg
                                 : (step->label[0]     ? step->label
                                 :                       step->id);
-        tc_mqtt_publish_test_progress(true, step_num, enabled_total,
+        tc_mqtt_publish_test_progress("test_progress", true, step_num, enabled_total,
                                       step->label[0] ? step->label : step->id,
                                       step_status);
 
