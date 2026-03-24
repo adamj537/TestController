@@ -43,8 +43,8 @@ static const char *TAG = "dut_det";
 #define ADC128_REG_CONV_RATE 0x07
 #define ADC128_REG_ADV_CFG 0x0B
 #define ADC128_REG_CH_BASE 0x20
-#define ADC128_VREF_MV     2560
-#define ADC128_FULL        4095
+#define ADC128_VREF_MV     3000    /* MAX6103 external reference — must match ext-VREF-en in ADV_CFG */
+#define ADC128_FULL        4096
 
 /* TIE MUX1 (U11) address GPIOs */
 static const int s_mux1_gpio[4] = {
@@ -55,6 +55,7 @@ static const int s_mux1_gpio[4] = {
 /* ── Module state ──────────────────────────────────────────────────────────── */
 
 static bool    s_running;
+static bool    s_autostart_paused;
 static bool    s_dut_present;
 static bool    s_first_report = true;
 static int     s_last_mv;
@@ -99,7 +100,7 @@ bool dut_detect_sample(int *mv_out)
         i2c_unlock();
         return false;
     }
-    bool ok = i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x02) &&
+    bool ok = i2c_write_reg(ADDR_ADC128D818, ADC128_REG_ADV_CFG,   0x03) &&
               i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONV_RATE, 0x01) &&
               i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONFIG,    0x01);
     if (!ok) {
@@ -130,7 +131,7 @@ static void publish_dut_presence(bool present, int mv)
     tc_mqtt_publish_dut_presence(present, mv);
     /* Auto-start: trigger selftest-only cycle on DUT insert (if SM is idle).
      * Config key autostart/enabled (default 1) can disable this per-fixture. */
-    if (present && tc_sm_state() == TC_SM_IDLE) {
+    if (present && !s_autostart_paused && tc_sm_state() == TC_SM_IDLE) {
         tc_sm_cmd_start_selftest_only();
     }
 }
@@ -209,6 +210,18 @@ void dut_detect_stop(void)
     /* Task will self-delete on next loop iteration */
 }
 
+void dut_detect_pause(void)
+{
+    s_autostart_paused = true;
+    ESP_LOGI(TAG, "DUT detect: auto-start paused");
+}
+
+void dut_detect_resume(void)
+{
+    s_autostart_paused = false;
+    ESP_LOGI(TAG, "DUT detect: auto-start resumed");
+}
+
 /* SM bridge — called by tc_statemachine.c via extern when SM enters/leaves IDLE */
 void tc_sm_dut_detect_on_idle(void)  { dut_detect_start(); }
 void tc_sm_dut_detect_off_idle(void) { dut_detect_stop(); }
@@ -242,10 +255,21 @@ static int do_dut(int argc, char **argv)
         return 0;
     }
     if (strcmp(argv[1], "status") == 0) {
-        printf("DUT detect: %s  present=%s  last=%d mV\n",
+        printf("DUT detect: %s  present=%s  autostart=%s  last=%d mV\n",
                s_running ? "running" : "stopped",
                s_dut_present ? "true" : "false",
+               s_autostart_paused ? "paused" : "enabled",
                s_last_mv);
+        return 0;
+    }
+    if (strcmp(argv[1], "pause") == 0) {
+        dut_detect_pause();
+        printf("DUT detect: auto-start paused\n");
+        return 0;
+    }
+    if (strcmp(argv[1], "resume") == 0) {
+        dut_detect_resume();
+        printf("DUT detect: auto-start resumed\n");
         return 0;
     }
     if (strcmp(argv[1], "sample") == 0) {
@@ -265,6 +289,8 @@ usage:
     printf("Usage:\n"
            "  dut start    start background detection task\n"
            "  dut stop     stop detection task\n"
+           "  dut pause    suppress auto-start (keep detection running)\n"
+           "  dut resume   re-enable auto-start\n"
            "  dut status   show current state\n"
            "  dut sample   take one reading now\n");
     return 1;

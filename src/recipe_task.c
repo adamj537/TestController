@@ -45,6 +45,12 @@ typedef struct {
     char recipe_id[64];   /* empty → read from NVS recipes/active */
 } recipe_task_arg_t;
 
+/* Static recipe/result — only one recipe runs at a time.  Avoids heap
+ * fragmentation failures: json_recipe_t is ~26 KB, too large for a
+ * contiguous malloc after many precheck cycles. */
+static json_recipe_t      s_recipe;
+static recipe_run_result_t s_result;
+
 /* ── Task ─────────────────────────────────────────────────────────────────── */
 
 static void recipe_run_task(void *pvarg)
@@ -72,18 +78,8 @@ static void recipe_run_task(void *pvarg)
 
     /* Load recipe JSON from storage */
     char *json = recipe_json_load_nvs(recipe_id);
-    json_recipe_t *recipe = malloc(sizeof(json_recipe_t));
-    recipe_run_result_t *result = malloc(sizeof(recipe_run_result_t));
-
-    if (!recipe || !result) {
-        ESP_LOGE(TAG, "malloc failed");
-        free(json);
-        free(recipe);
-        free(result);
-        tc_sm_recipe_done(2 /* ABORT */, "malloc_failed", 0, 0, 0);
-        vTaskDelete(NULL);
-        return;
-    }
+    json_recipe_t *recipe = &s_recipe;
+    recipe_run_result_t *result = &s_result;
 
     int parse_ok = 0;
     if (json) {
@@ -110,8 +106,6 @@ static void recipe_run_task(void *pvarg)
     int total      = result->total_count;
 
     recipe_json_free(recipe);
-    free(recipe);
-    free(result);
 
     tc_sm_recipe_done(outcome, step, dur, pass_count, total);
     vTaskDelete(NULL);

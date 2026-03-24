@@ -973,9 +973,16 @@ static int do_selftest(int argc, char **argv)
     else if  (strcmp(argv[1], "mux")       == 0) { run_mux_scan(NULL);     }
     else if  (strcmp(argv[1], "heartbeat") == 0) { run_dut_heartbeat(NULL);}
     else if  (strcmp(argv[1], "char")      == 0) { run_char(); return 0; }
+    else if  (strcmp(argv[1], "dut_version") == 0) {
+        /* Read DUT firmware version via UART (enter_test → VERSION → exit_test).
+         * Assumes DUT is already powered (VDUT on, PB-A asserted). */
+        run_dut_enter_test(NULL);
+        run_dut_version(NULL);
+        run_dut_exit_test(NULL);
+    }
     else {
         printf("Unknown test '%s'\n", argv[1]);
-        printf("Usage: selftest <i2c|adc|wifi|ota|temp|vdut|mux|heartbeat|char|all>\n");
+        printf("Usage: selftest <i2c|adc|wifi|ota|temp|vdut|mux|heartbeat|char|dut_version|all>\n");
         return 1;
     }
 

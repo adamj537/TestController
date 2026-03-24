@@ -404,17 +404,19 @@ static int do_recipe(int argc, char **argv)
     if (strcmp(argv[1], "run") == 0) {
         const char *id = (argc >= 3) ? argv[2] : "default";
 
+        /* Static structs — avoids heap fragmentation for ~26 KB json_recipe_t.
+         * Only one recipe runs at a time (console or task, not both). */
+        static json_recipe_t       s_con_recipe;
+        static recipe_run_result_t s_con_result;
+        json_recipe_t       *recipe = &s_con_recipe;
+        recipe_run_result_t *result = &s_con_result;
+
         /* Load recipe JSON from NVS */
         char *json = recipe_json_load_nvs(id);
         if (!json) {
             /* If no stored recipe, use hardcoded */
             printf("Recipe '%s' not in NVS — using hardcoded\n", id);
-            json_recipe_t *recipe = malloc(sizeof(json_recipe_t));
-            if (!recipe) { printf("malloc failed\n"); return 1; }
             recipe_json_from_hardcoded(recipe);
-
-            recipe_run_result_t *result = malloc(sizeof(recipe_run_result_t));
-            if (!result) { free(recipe); printf("malloc failed\n"); return 1; }
 
             recipe_engine_run(recipe, result);
 
@@ -427,24 +429,16 @@ static int do_recipe(int argc, char **argv)
             if (result->failed_step[0])
                 printf("Failed step: %s\n", result->failed_step);
 
-            int rc_hc = (result->outcome == RECIPE_RESULT_PASS) ? 0 : 1;
-            free(result);
-            free(recipe);
-            return rc_hc;
+            return (result->outcome == RECIPE_RESULT_PASS) ? 0 : 1;
         }
 
         /* Parse stored JSON */
-        json_recipe_t *recipe = malloc(sizeof(json_recipe_t));
-        if (!recipe) { free(json); printf("malloc failed\n"); return 1; }
         if (recipe_json_parse(json, strlen(json), recipe) != 0) {
-            free(json); free(recipe);
+            free(json);
             printf("Parse failed\n");
             return 1;
         }
         free(json);  /* raw JSON string no longer needed — tree is in recipe->_root */
-
-        recipe_run_result_t *result = malloc(sizeof(recipe_run_result_t));
-        if (!result) { recipe_json_free(recipe); free(recipe); printf("malloc failed\n"); return 1; }
 
         recipe_engine_run(recipe, result);
 
@@ -458,9 +452,7 @@ static int do_recipe(int argc, char **argv)
             printf("Failed step: %s\n", result->failed_step);
 
         int rc = (result->outcome == RECIPE_RESULT_PASS) ? 0 : 1;
-        free(result);
         recipe_json_free(recipe);
-        free(recipe);
         return rc;
     }
 

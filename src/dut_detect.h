@@ -14,6 +14,11 @@ void dut_detect_start(void);
 /* Stop the detection task. */
 void dut_detect_stop(void);
 
+/* Suppress auto-start trigger without stopping detection (for manual testing).
+ * dut_detect_resume() re-enables auto-start. */
+void dut_detect_pause(void);
+void dut_detect_resume(void);
+
 /* Current DUT presence state (valid after first sample). */
 bool dut_detect_present(void);
 

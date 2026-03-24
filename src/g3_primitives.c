@@ -142,10 +142,9 @@ void run_power_check(const cJSON *params)
     int vbus_mv = 0, current_ma = 0;
     bool read_ok = ina219_read(ADDR_INA219_0, &vbus_mv, &current_ma);
 
-    /* Disable VDUT and release PB-A before pass/fail recording */
+    /* Release PB-A — DUT KEEPALIVE must hold power.
+     * VDUT stays on for subsequent steps (e.g. dut_heartbeat). */
     mux_release();   /* SIG=1 — DUT KEEPALIVE must take over */
-    vdac_disable(0);
-    vdac_disable(1);
 
     if (!read_ok) {
         selftest_check_record("power_v", false);

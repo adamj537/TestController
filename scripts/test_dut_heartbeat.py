@@ -139,10 +139,11 @@ class Results:
 
 
 def teardown(tc: TC) -> None:
-    """Always release PB-A and disable VDUT regardless of test outcome."""
+    """Always release PB-A, disable VDUT, and resume DUT auto-start."""
     tc.cmd("mux release", wait=2)
     tc.cmd("vdac off", wait=2)
-    print("  [teardown] PB-A released, VDUT disabled")
+    tc.cmd("dut resume", wait=2)
+    print("  [teardown] PB-A released, VDUT disabled, auto-start resumed")
 
 
 def main() -> None:
@@ -173,6 +174,10 @@ def main() -> None:
     except Exception as e:
         r.check("TCP connect", False, str(e))
         sys.exit(1)
+
+    # ── 1b. Pause DUT auto-start so precheck loops don't interfere ──────────
+    print("\n[1b] Pause DUT auto-start")
+    tc.cmd("dut pause", wait=2)
 
     # ── 2. Verify DUT is present ─────────────────────────────────────────────
     print("\n[2] DUT presence check")
