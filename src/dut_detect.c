@@ -58,6 +58,8 @@ static bool    s_running;
 static bool    s_autostart_paused;
 static bool    s_dut_present;
 static bool    s_first_report = true;
+static bool    s_boot_delay_done;       /* skip 5s init delay on re-starts */
+static int64_t s_selftest_cooldown_us;  /* suppress auto-start until this time */
 static int     s_last_mv;
 static TaskHandle_t s_task_handle;
 
@@ -130,8 +132,10 @@ static void publish_dut_presence(bool present, int mv)
     printf("DUT detect: %s  (%d mV)\n", present ? "PRESENT" : "ABSENT", mv);
     tc_mqtt_publish_dut_presence(present, mv);
     /* Auto-start: trigger selftest-only cycle on DUT insert (if SM is idle).
-     * Config key autostart/enabled (default 1) can disable this per-fixture. */
-    if (present && !s_autostart_paused && tc_sm_state() == TC_SM_IDLE) {
+     * Config key autostart/enabled (default 1) can disable this per-fixture.
+     * Cooldown prevents re-triggering immediately after a selftest-only cycle. */
+    if (present && !s_autostart_paused && tc_sm_state() == TC_SM_IDLE
+        && esp_timer_get_time() >= s_selftest_cooldown_us) {
         tc_sm_cmd_start_selftest_only();
     }
 }
@@ -144,8 +148,12 @@ static void dut_detect_task(void *pvarg)
     int debounce_count = 0;
     bool pending_state = false;
 
-    /* Wait for I2C, WiFi, and MQTT to finish initializing before first sample */
-    vTaskDelay(pdMS_TO_TICKS(5000));
+    /* Wait for I2C, WiFi, and MQTT to finish initializing before first sample.
+     * Only on first boot — subsequent SM-driven restarts skip this delay. */
+    if (!s_boot_delay_done) {
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        s_boot_delay_done = true;
+    }
 
     ESP_LOGI(TAG, "DUT detect task started (threshold=%d mV, interval=%d ms)",
              DUT_DETECT_THRESHOLD_MV, DUT_DETECT_INTERVAL_MS);
@@ -199,8 +207,10 @@ static void dut_detect_task(void *pvarg)
 void dut_detect_start(void)
 {
     if (s_running) return;
-    s_running      = true;
-    s_first_report = true;
+    s_running = true;
+    /* s_first_report stays true from static init for the boot-time first sample.
+     * SM-driven restarts (on_idle) leave it false so the DUT-present state
+     * is carried over and doesn't re-trigger selftest-only. */
     xTaskCreate(dut_detect_task, "dut_detect", 8192, NULL, 4, &s_task_handle);
 }
 
@@ -223,7 +233,11 @@ void dut_detect_resume(void)
 }
 
 /* SM bridge — called by tc_statemachine.c via extern when SM enters/leaves IDLE */
-void tc_sm_dut_detect_on_idle(void)  { dut_detect_start(); }
+void tc_sm_dut_detect_on_idle(void)  {
+    /* 10s cooldown after selftest-only to avoid re-triggering immediately */
+    s_selftest_cooldown_us = esp_timer_get_time() + 10 * 1000000LL;
+    dut_detect_start();
+}
 void tc_sm_dut_detect_off_idle(void) { dut_detect_stop(); }
 
 bool dut_detect_present(void)

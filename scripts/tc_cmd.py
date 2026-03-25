@@ -12,7 +12,7 @@ import socket
 import sys
 import time
 
-HOST = "10.0.0.244"
+HOST = "192.168.50.30"
 PORT = 4242
 
 def main():
