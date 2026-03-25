@@ -253,14 +253,25 @@ def main():
     # ── 16. selftest all (full fixture recipe) ───────────────────────────
     print("\n[16] selftest all (full fixture recipe)")
     tc.reconnect()
-    resp = tc.cmd_long("selftest all", stop_marker="Results:", timeout=35)
-    pass_lines = [l for l in resp.split("\n") if "[PASS]" in l]
-    fail_lines = [l for l in resp.split("\n") if "[FAIL]" in l]
-    results_line = [l for l in resp.split("\n") if "Results:" in l]
-    r.check("selftest all: no failures", len(fail_lines) == 0,
-            f"{len(pass_lines)} pass, {len(fail_lines)} fail")
-    if results_line:
-        r.check("selftest all: results printed", True, results_line[0].strip())
+
+    # DUT presence guard — selftest vdut sweeps > 10V and is only disabled in
+    # the fixture recipe by an enabled=false flag.  If a DUT is detected,
+    # run 'selftest quick' (rails + wifi, no VDUT sweep) to avoid damage.
+    dut_resp = tc.cmd("dut status", wait=3)
+    dut_present = "present=true" in dut_resp.lower() or ("present" in dut_resp.lower() and "false" not in dut_resp.lower())
+    if dut_present:
+        print("  [WARN] DUT detected — running selftest quick instead of selftest all (VDUT protection)")
+        resp = tc.cmd_long("selftest quick", stop_marker="Results:", timeout=25)
+        r.skip("selftest all: no failures", "DUT present — ran selftest quick instead")
+    else:
+        resp = tc.cmd_long("selftest all", stop_marker="Results:", timeout=35)
+        pass_lines = [l for l in resp.split("\n") if "[PASS]" in l]
+        fail_lines = [l for l in resp.split("\n") if "[FAIL]" in l]
+        results_line = [l for l in resp.split("\n") if "Results:" in l]
+        r.check("selftest all: no failures", len(fail_lines) == 0,
+                f"{len(pass_lines)} pass, {len(fail_lines)} fail")
+        if results_line:
+            r.check("selftest all: results printed", True, results_line[0].strip())
 
     # ── 17. sm start (full production cycle) ─────────────────────────────
     print("\n[17] sm start (full production cycle)")

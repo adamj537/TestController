@@ -271,6 +271,15 @@ static int do_vdac_duty(int argc, char **argv)
     int duty = atoi(argv[2]);
     if (duty < 0 || duty > 100) { printf("duty_pct must be 0-100\n"); return 1; }
 
+    /* DUT over-voltage protection.
+     * Slope is negative: higher duty → lower voltage.
+     * duty < 75% drives > ~5V which can damage a seated DUT (~4V rating). */
+    if (duty < 75 && dut_detect_present()) {
+        printf("ERR: duty %d%% rejected — DUT present. Minimum 75%% when DUT is seated (duty < 75%% drives > 5V).\n",
+               duty);
+        return 1;
+    }
+
     bool do1 = (strcmp(argv[1], "1")    == 0 || strcmp(argv[1], "both") == 0);
     bool do2 = (strcmp(argv[1], "2")    == 0 || strcmp(argv[1], "both") == 0);
     if (!do1 && !do2) { printf("channel must be 1, 2, or both\n"); return 1; }
