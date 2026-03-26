@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <fcntl.h>
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "esp_console.h"
@@ -171,6 +172,15 @@ extern "C" void app_main(void)
             }
         }
     }
+#endif
+
+    /* USB Serial JTAG console deadlock prevention.
+     * With CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y, the VFS write path blocks when
+     * the CDC TX FIFO is full and no host is draining it (terminal not open).
+     * Setting O_NONBLOCK on stdout makes writes return immediately rather than
+     * spinning/blocking, so the console task never deadlocks on cold boot. */
+#if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
+    fcntl(fileno(stdout), F_SETFL, fcntl(fileno(stdout), F_GETFL) | O_NONBLOCK);
 #endif
 
     initialize_nvs();
