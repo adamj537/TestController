@@ -220,6 +220,15 @@ void dut_detect_stop(void)
     /* Task will self-delete on next loop iteration */
 }
 
+void dut_detect_wait_stopped(void)
+{
+    /* Spin until task has fully exited and released the mux.
+     * Worst case: 1000ms poll interval + 200ms ADC sample + margin. */
+    int retries = 40;  /* 40 × 50ms = 2s max */
+    while (s_task_handle != NULL && retries-- > 0)
+        vTaskDelay(pdMS_TO_TICKS(50));
+}
+
 void dut_detect_pause(void)
 {
     s_autostart_paused = true;

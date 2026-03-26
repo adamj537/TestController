@@ -12,6 +12,7 @@
 #include "nvs.h"
 #include "esp_log.h"
 #include "esp_console.h"
+#include "esp_heap_caps.h"
 #include "mbedtls/base64.h"
 #include <stdio.h>
 #include <string.h>
@@ -224,7 +225,9 @@ char *recipe_json_load_nvs(const char *recipe_id)
     int32_t sz = Storage_GetSize(STORAGE_DOMAIN_RECIPES, recipe_id);
     if (sz <= 0) return NULL;
 
-    char *buf = malloc((size_t)sz + 1);
+    /* Prefer PSRAM to avoid exhausting internal heap on large recipes */
+    char *buf = heap_caps_malloc((size_t)sz + 1, MALLOC_CAP_SPIRAM);
+    if (!buf) buf = malloc((size_t)sz + 1);   /* internal fallback */
     if (!buf) return NULL;
 
     int32_t n = Storage_Read(STORAGE_DOMAIN_RECIPES, recipe_id,

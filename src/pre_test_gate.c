@@ -26,6 +26,7 @@
 #include "cmd_swd.h"
 #include "cmd_i2c.h"
 #include "cmd_vdac.h"
+#include "dut_detect.h"
 
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -72,6 +73,12 @@ static void pre_gate_task(void *pvarg)
     bool pfw_loaded = false;
     char uid_full[25] = "";
     char fail_reason[32] = "pre_gate";
+
+    /* ── Step 0: Wait for dut_detect to fully stop ───────────────────────── */
+    /* dut_detect_stop() is called by SM on off_idle, but the task may still be
+     * mid-sample (mux_select + ADC128 read + mux_release).  If we assert PB-A
+     * before it finishes, dut_detect's mux_release() undoes our PB-A. */
+    dut_detect_wait_stopped();
 
     /* ── Step 1: Enable VDUT (calibrated) + assert PB-A ─────────────────── */
     /* Set voltage BEFORE enable: vdac_set_voltage() configures LEDC on the PWM

@@ -14,6 +14,10 @@ void dut_detect_start(void);
 /* Stop the detection task. */
 void dut_detect_stop(void);
 
+/* Block until the detection task has fully exited (mux released).
+ * Call after dut_detect_stop() before taking mux ownership. */
+void dut_detect_wait_stopped(void);
+
 /* Suppress auto-start trigger without stopping detection (for manual testing).
  * dut_detect_resume() re-enables auto-start. */
 void dut_detect_pause(void);

@@ -200,9 +200,9 @@ def main() -> None:
         tc.close()
         sys.exit(1)
 
-    # ── 3. Enable VDUT at 3300 mV ────────────────────────────────────────────
-    print("\n[3] Enable VDUT at 3300 mV")
-    resp = tc.cmd("vdac_voltage both 3300", wait=3)
+    # ── 3. Enable VDUT1 at 3300 mV (VDUT1 only — VDUT2 does not power DUT)
+    print("\n[3] Enable VDUT1 at 3300 mV")
+    resp = tc.cmd("vdac_voltage 1 3300", wait=5)  # VDAC_INIT_SETTLE_MS=2000 single ch + margin
     vdut_ok = "VDUT1: 3300 mV" in resp or "3300" in resp
     if not r.check("VDUT enabled at 3300 mV", vdut_ok, resp.strip().replace("\n", " ")[:80]):
         # Calibration might not be set; print guidance
