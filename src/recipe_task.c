@@ -96,6 +96,8 @@ static void recipe_run_task(void *pvarg)
     ESP_LOGI(TAG, "Running recipe: %s v%s (%d steps)",
              recipe->recipe_id, recipe->recipe_version, recipe->step_count);
 
+    tc_sm_set_recipe_version(recipe->recipe_version);
+
     recipe_engine_run(recipe, result);
 
     int outcome    = (int)result->outcome;
