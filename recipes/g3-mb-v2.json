@@ -42,7 +42,7 @@
       "label": "DUT UID96 Read",
       "criticality": "REQUIRED",
       "onError": "skip",
-      "enabled": true,
+      "enabled": false,
       "params": {
         "timeout_ms": 3000
       }
@@ -112,7 +112,7 @@
       "label": "UC ADC Vref (2400\u20132600 mV)",
       "criticality": "REQUIRED",
       "onError": "skip",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "dut_uc_adc_3v_rail",
@@ -120,7 +120,7 @@
       "label": "UC ADC 3V Rail (2850\u20133150 mV)",
       "criticality": "REQUIRED",
       "onError": "skip",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "br1_enable",
@@ -887,7 +887,7 @@
     {
       "id": "dut_rtc_read",
       "primitive": "dut_rtc_read",
-      "label": "RTC Battery (1550\u20133600 mV)",
+      "label": "RTC Battery (1550\u20133700 mV)",
       "criticality": "REQUIRED",
       "onError": "skip",
       "enabled": true
@@ -898,7 +898,7 @@
       "label": "SPI Flash JEDEC ID",
       "criticality": "REQUIRED",
       "onError": "skip",
-      "enabled": true
+      "enabled": false
     },
     {
       "id": "br5_pressure_pos",

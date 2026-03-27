@@ -189,12 +189,34 @@ void test_v2_no_recovery_branches(void)
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
- * All steps enabled in v2 (unlike v1 which had disabled dut_program/heartbeat)
+ * Steps that require unconfirmed pin assignments are disabled until
+ * schematic verification is complete.
  * ═══════════════════════════════════════════════════════════════════════════ */
+
+static const char *s_deferred_steps[] = {
+    "dut_read_id",          /* passive UART listener — redundant with cmd-based UART steps */
+    "dut_uc_adc_vref",      /* ADC pin assignment unconfirmed */
+    "dut_uc_adc_3v_rail",   /* ADC pin assignment unconfirmed */
+    "dut_flash_test",       /* flash uses QUADSPI, not SPI1 */
+};
+#define NUM_DEFERRED (sizeof(s_deferred_steps) / sizeof(s_deferred_steps[0]))
+
+static bool is_deferred(const char *id)
+{
+    for (size_t i = 0; i < NUM_DEFERRED; i++) {
+        if (strcmp(id, s_deferred_steps[i]) == 0) return true;
+    }
+    return false;
+}
 
 void test_v2_all_steps_enabled(void)
 {
     for (int i = 0; i < s_recipe.step_count; i++) {
+        if (is_deferred(s_recipe.steps[i].id)) {
+            TEST_ASSERT_FALSE_MESSAGE(s_recipe.steps[i].enabled,
+                "Deferred step should be disabled");
+            continue;
+        }
         char msg[128];
         snprintf(msg, sizeof(msg), "Step '%s' must be enabled in v2",
                  s_recipe.steps[i].id);

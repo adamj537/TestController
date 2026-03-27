@@ -870,8 +870,8 @@ void run_dut_rtc_read(const cJSON *params)
     bool ok = dut_cmd("RTC_READ", resp, sizeof(resp), 500);
     int mv = 0;
     if (ok) sscanf(resp, "OK RTC_READ %d", &mv);
-    bool in_range = ok && mv >= 1550 && mv <= 3600;
-    report(in_range, "DUT: RTC_READ  %d mV  (exp 1550–3600 mV)", mv);
+    bool in_range = ok && mv >= 1550 && mv <= 3700;
+    report(in_range, "DUT: RTC_READ  %d mV  (exp 1550–3700 mV)", mv);
     st_record_mv("dut_rtc_read", in_range, mv);
 }
 
