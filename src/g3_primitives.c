@@ -127,14 +127,20 @@ void run_power_check(const cJSON *params)
     int settle_ms = param_int(params, "settle_ms",
                     tc_config_get_int("vdut.settle_ms", 300));
 
-    /* Enable VDUT at calibrated voltage.
-     * Assert PB-A (ch0, SIG=0 active low) to latch DUT power — required alongside VDUT. */
-    if (!vdac_set_voltage(0, v_nominal_mv) || !vdac_set_voltage(1, v_nominal_mv)) {
-        printf("[FAIL] power_check: VDUT not calibrated — "
-               "set vdut.slope_mv_per_pct and vdut.intercept_mv in config\n");
-        selftest_check_record("power_v", false);
-        selftest_check_record("power_i", false);
-        return;
+    /* Enable VDUT1 at calibrated voltage only if not already on.
+     * Calling vdac_set_voltage() while the regulator is running calls
+     * gpio_reset_pin() on the feedback GPIO, which briefly floats the
+     * MP2315 feedback pin and can trip its over-voltage protection.
+     * Pre-gate and dut_program leave VDUT1 on at the correct setpoint. */
+    if (!vdac_is_enabled(0)) {
+        if (!vdac_set_voltage(0, v_nominal_mv)) {
+            printf("[FAIL] power_check: VDUT1 not calibrated — "
+                   "set vdut.slope_mv_per_pct and vdut.intercept_mv in config\n");
+            selftest_check_record("power_v", false);
+            selftest_check_record("power_i", false);
+            return;
+        }
+        vdac_set_enable(0, true);
     }
     mux_select(0, 0);            /* PB-A assert: ch0, SIG=0 */
     vTaskDelay(pdMS_TO_TICKS(settle_ms));

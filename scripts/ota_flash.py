@@ -7,12 +7,22 @@ Usage:
 
 import argparse
 import socket
+import subprocess
 import sys
 import time
 
-HOST = "10.0.0.244"
-PORT = 4242
-DEFAULT_URL = "http://10.0.0.100:8080/firmware.bin"
+import sys, os
+sys.path.insert(0, os.path.dirname(__file__))
+from tc_config import HOST, PORT
+
+def _wsl_ip():
+    try:
+        out = subprocess.check_output(["hostname", "-I"], text=True).split()
+        return out[0] if out else "127.0.0.1"
+    except Exception:
+        return "127.0.0.1"
+
+DEFAULT_URL = f"http://{_wsl_ip()}:8080/firmware.bin"
 
 
 def cmd(sock, command, wait=3.0):

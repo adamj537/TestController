@@ -116,6 +116,11 @@ bool vdac_set_voltage(int ch_idx, int voltage_mv)
     return vdac_set_duty(ch_idx, duty);
 }
 
+bool vdac_is_enabled(int ch_idx)
+{
+    return (ch_idx == 0 || ch_idx == 1) && s_enabled[ch_idx];
+}
+
 bool vdac_disable(int ch_idx)
 {
     vdac_set_duty(ch_idx, 0);

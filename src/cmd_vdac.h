@@ -20,6 +20,7 @@ bool vdac_set_duty(int ch_idx, int duty_pct);             /* 0–100 %; use only
 bool vdac_set_voltage(int ch_idx, int voltage_mv);        /* converts via calibration; false if uncalibrated */
 bool vdac_disable(int ch_idx);                            /* set duty 0 + disable enable GPIO */
 bool vdac_set_enable(int ch_idx, bool enable);
+bool vdac_is_enabled(int ch_idx);                         /* true if enable GPIO was asserted */
 
 /* ADC128D818 helpers — all devices on same bus after HW-012 rework */
 bool adc128_ensure_running(void);                /* arm Mode-1 conversions */
