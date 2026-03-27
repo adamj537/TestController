@@ -16,7 +16,7 @@
  * Power rail GPIO mapping for DUT power domains.
  * Each rail has an enable GPIO pin connected to the DUT.
  */
-static const struct {
+static struct {
     HAL_GPIO_Port_t port;
     uint8_t pin;
     bool enabled;
@@ -34,39 +34,32 @@ static bool bsp_initialized = false;
 int BSP_PowerRailEnable(BSP_PowerRail_t rail) {
     if (rail < 0 || rail >= 4) return -1;
 
-    const struct {
-        HAL_GPIO_Port_t port;
-        uint8_t pin;
-    } *rail_config = (const void *)&power_rail_map[rail];
-
     /* Initialize GPIO if not already done */
-    if (HAL_GPIO_Init(rail_config->port, rail_config->pin, HAL_GPIO_MODE_OUTPUT) != 0) {
+    if (HAL_GPIO_Init(power_rail_map[rail].port, power_rail_map[rail].pin,
+                      HAL_GPIO_MODE_OUTPUT) != 0) {
         return -1;
     }
 
     /* Enable the power rail */
-    if (HAL_GPIO_WritePin(rail_config->port, rail_config->pin, HAL_GPIO_PIN_SET) != 0) {
+    if (HAL_GPIO_WritePin(power_rail_map[rail].port, power_rail_map[rail].pin,
+                          HAL_GPIO_PIN_SET) != 0) {
         return -1;
     }
 
-    ((bool *)&power_rail_map[rail].enabled)[0] = true;
+    power_rail_map[rail].enabled = true;
     return 0;
 }
 
 int BSP_PowerRailDisable(BSP_PowerRail_t rail) {
     if (rail < 0 || rail >= 4) return -1;
 
-    const struct {
-        HAL_GPIO_Port_t port;
-        uint8_t pin;
-    } *rail_config = (const void *)&power_rail_map[rail];
-
     /* Disable the power rail */
-    if (HAL_GPIO_WritePin(rail_config->port, rail_config->pin, HAL_GPIO_PIN_RESET) != 0) {
+    if (HAL_GPIO_WritePin(power_rail_map[rail].port, power_rail_map[rail].pin,
+                          HAL_GPIO_PIN_RESET) != 0) {
         return -1;
     }
 
-    ((bool *)&power_rail_map[rail].enabled)[0] = false;
+    power_rail_map[rail].enabled = false;
     return 0;
 }
 
@@ -74,12 +67,7 @@ int BSP_PowerRailIsEnabled(BSP_PowerRail_t rail) {
     if (rail < 0 || rail >= 4) return -1;
 
     /* Read current state from GPIO */
-    const struct {
-        HAL_GPIO_Port_t port;
-        uint8_t pin;
-    } *rail_config = (const void *)&power_rail_map[rail];
-
-    int state = HAL_GPIO_ReadPin(rail_config->port, rail_config->pin);
+    int state = HAL_GPIO_ReadPin(power_rail_map[rail].port, power_rail_map[rail].pin);
     return (state == 1) ? 1 : 0;
 }
 
@@ -96,17 +84,14 @@ int BSP_G3_TC_Init(void) {
 
     /* Initialize all power rail GPIO pins as outputs */
     for (int i = 0; i < 4; i++) {
-        const struct {
-            HAL_GPIO_Port_t port;
-            uint8_t pin;
-        } *rail_config = (const void *)&power_rail_map[i];
-
-        if (HAL_GPIO_Init(rail_config->port, rail_config->pin, HAL_GPIO_MODE_OUTPUT) != 0) {
+        if (HAL_GPIO_Init(power_rail_map[i].port, power_rail_map[i].pin,
+                          HAL_GPIO_MODE_OUTPUT) != 0) {
             return -1;
         }
 
         /* Disable all power rails by default */
-        if (HAL_GPIO_WritePin(rail_config->port, rail_config->pin, HAL_GPIO_PIN_RESET) != 0) {
+        if (HAL_GPIO_WritePin(power_rail_map[i].port, power_rail_map[i].pin,
+                              HAL_GPIO_PIN_RESET) != 0) {
             return -1;
         }
     }
