@@ -281,7 +281,7 @@ def main():
     sm_pass_lines = [l for l in resp.split("\n") if "[PASS]" in l]
     sm_fail_lines = [l for l in resp.split("\n") if "[FAIL]" in l]
     if dut_present:
-        r.check("sm start: Testing entered", "Testing" in resp)
+        r.check("sm start: PreGate entered", "PreGate" in resp)
         r.check("sm start: no failures", len(sm_fail_lines) == 0,
                 f"{len(sm_pass_lines)} pass, {len(sm_fail_lines)} fail")
         r.check("sm start: result published", "outcome=pass" in resp or "result DDATA" in resp)
