@@ -2,8 +2,8 @@
 gen_version.py — PlatformIO pre-build version generator
 
 Reads fw_version.txt (manual semver) and derives the build number from git:
-  build = commit_count        (clean working tree)
-  build = commit_count + 1   (dirty — uncommitted changes present)
+  build = commit_count (always)
+  dirty = "-dev" suffix appended when working tree has uncommitted changes
 
 Outputs:
   src/version.h   — C header with #define constants (gitignored)
@@ -46,7 +46,7 @@ except ValueError:
     commit_count = 0
 
 is_dirty = bool(dirty_files)
-build_num = commit_count + (1 if is_dirty else 0)
+build_num = commit_count
 
 # --- Build version strings ---
 version_str = f"{major}.{minor}.{patch}+{build_num}"
