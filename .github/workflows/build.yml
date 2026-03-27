@@ -2,9 +2,10 @@ name: FW-1 TC Firmware Build
 
 on:
   push:
-    branches: [ main, 'feat/**' ]
+    branches: [ main, 'feat/**', 'feature/**' ]
     paths:
       - 'src/**'
+      - 'common'
       - 'common/**'
       - 'hal/**'
       - 'bsp/**'
@@ -12,11 +13,13 @@ on:
       - 'storage/**'
       - 'recipes/**'
       - 'dut/**'
+      - 'test/**'
       - 'platformio.ini'
       - 'partitions_ota.csv'
       - '.github/workflows/build.yml'
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   firmware-build:

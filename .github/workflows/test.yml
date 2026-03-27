@@ -2,9 +2,10 @@ name: FW-1 TC Firmware Unit Tests
 
 on:
   push:
-    branches: [ main, 'feat/**' ]
+    branches: [ main, 'feat/**', 'feature/**' ]
     paths:
       - 'src/**'
+      - 'common'
       - 'common/**'
       - 'hal/**'
       - 'bsp/**'
@@ -17,6 +18,7 @@ on:
       - '.github/workflows/test.yml'
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
 
 jobs:
   native-tests:
