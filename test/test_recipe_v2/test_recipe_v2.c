@@ -510,7 +510,7 @@ void test_v2_power_check_params(void)
     TEST_ASSERT_NOT_NULL(s->params);
     TEST_ASSERT_EQUAL_INT(3300, cJSON_GetObjectItem(s->params, "v_nominal_mv")->valueint);
     TEST_ASSERT_EQUAL_INT(5, cJSON_GetObjectItem(s->params, "v_tolerance_pct")->valueint);
-    TEST_ASSERT_EQUAL_INT(5, cJSON_GetObjectItem(s->params, "i_min_ma")->valueint);
+    TEST_ASSERT_EQUAL_INT(2, cJSON_GetObjectItem(s->params, "i_min_ma")->valueint);
     TEST_ASSERT_EQUAL_INT(250, cJSON_GetObjectItem(s->params, "i_max_ma")->valueint);
 }
 
