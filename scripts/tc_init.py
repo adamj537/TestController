@@ -49,8 +49,8 @@ PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
 BUILD_DIR = os.path.join(PROJECT_DIR, ".pio", "build", "esp32-Devkit")
 
 # Default WiFi credentials for lab/factory network
-WIFI_SSID = "CatsAndDogs2"
-WIFI_PW = "FADCADBAD1"
+WIFI_SSID = "FixtureOpsGateway"
+WIFI_PW = "gateway123"
 
 # TCP console settings
 TCP_PORT = 4242
