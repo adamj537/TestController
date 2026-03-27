@@ -51,14 +51,26 @@ static bool run_recovery_branch(const json_recovery_branch_t *branch)
             return false;
         }
 
-        int checks_before = selftest_get_total();
-        int passes_before = selftest_get_pass();
+        int ncheck_rb_before = selftest_get_ncheck();
+        int checks_before    = selftest_get_total();
+        int passes_before    = selftest_get_pass();
 
         fn(rs->params);
 
-        int step_checks = selftest_get_total() - checks_before;
-        int step_passes = selftest_get_pass()  - passes_before;
-        bool step_ok = (step_checks > 0) ? (step_passes == step_checks) : true;
+        int ncheck_rb_delta = selftest_get_ncheck() - ncheck_rb_before;
+        bool step_ok;
+        if (ncheck_rb_delta > 0) {
+            const tc_mqtt_check_t *rb_checks = selftest_get_checks();
+            int rb_passes = 0;
+            for (int i = ncheck_rb_before; i < ncheck_rb_before + ncheck_rb_delta; i++) {
+                if (rb_checks[i].pass) rb_passes++;
+            }
+            step_ok = (rb_passes == ncheck_rb_delta);
+        } else {
+            int step_checks = selftest_get_total() - checks_before;
+            int step_passes = selftest_get_pass()  - passes_before;
+            step_ok = (step_checks > 0) ? (step_passes == step_checks) : true;
+        }
 
         if (!step_ok) {
             ESP_LOGW(TAG, "Recovery step '%s' failed — branch aborted", rs->id);
@@ -139,9 +151,21 @@ int recipe_engine_run(const json_recipe_t *recipe, recipe_run_result_t *result)
             int pass_after     = selftest_get_pass();
             int total_after    = selftest_get_total();
 
-            int step_checks = total_after  - total_before;
-            int step_passes = pass_after   - pass_before;
-            step_ok = (step_checks > 0) ? (step_passes == step_checks) : true;
+            int ncheck_delta = ncheck_after - ncheck_before;
+            if (ncheck_delta > 0) {
+                /* Primitive used selftest_check_record() — evaluate from check buffer */
+                const tc_mqtt_check_t *checks = selftest_get_checks();
+                int check_passes = 0;
+                for (int i = ncheck_before; i < ncheck_after; i++) {
+                    if (checks[i].pass) check_passes++;
+                }
+                step_ok = (check_passes == ncheck_delta);
+            } else {
+                /* Step used report() or registered no checks — fall back */
+                int step_checks = total_after - total_before;
+                int step_passes = pass_after  - pass_before;
+                step_ok = (step_checks > 0) ? (step_passes == step_checks) : true;
+            }
 
             /* Capture last measured value from check buffer */
             if (ncheck_after > ncheck_before) {
