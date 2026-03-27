@@ -21,10 +21,13 @@ except ImportError:
     print("paho-mqtt required: pip install paho-mqtt")
     sys.exit(1)
 
-BROKER = "10.0.0.59"
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(__file__))
+from tc_config import BROKER, TC_SERIAL
+
 PORT = 1883
 GROUP = "SensitMfg"
-NODE = "G3-MB-Tester-000"
+NODE = TC_SERIAL
 CHANNEL = 0
 
 

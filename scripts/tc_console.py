@@ -18,8 +18,9 @@ import socket
 import sys
 import time
 
-TCC_IP   = '10.0.0.244'
-TCC_PORT = 4242
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(__file__))
+from tc_config import HOST as TCC_IP, PORT as TCC_PORT
 
 
 class TcConsole:

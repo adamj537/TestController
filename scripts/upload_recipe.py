@@ -24,8 +24,9 @@ import socket
 import time
 import argparse
 
-TCC_IP   = "10.0.0.244"
-TCC_PORT = 4242
+import sys as _sys, os as _os
+_sys.path.insert(0, _os.path.dirname(__file__))
+from tc_config import HOST as TCC_IP, PORT as TCC_PORT
 
 
 def connect(ip: str = TCC_IP, port: int = TCC_PORT) -> socket.socket:

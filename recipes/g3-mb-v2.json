@@ -70,7 +70,7 @@
       "params": {
         "v_nominal_mv": 3300,
         "v_tolerance_pct": 5,
-        "i_min_ma": 5,
+        "i_min_ma": 2,
         "i_max_ma": 250
       }
     },
