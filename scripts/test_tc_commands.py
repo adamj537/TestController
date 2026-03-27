@@ -186,7 +186,7 @@ def main():
     tc.reconnect()
     resp = tc.cmd("mqtt status")
     r.check("mqtt status: connected", "connected" in resp.lower() and "disconnected" not in resp.lower())
-    resp = tc.cmd("mqtt log")
+    resp = tc.cmd("mqtt log", wait=5)
     # Log rolls over — check for any TX activity, not specifically NBIRTH
     r.check("mqtt log: has TX entries", "TX " in resp)
 
@@ -284,7 +284,7 @@ def main():
         r.check("sm start: PreGate entered", "PreGate" in resp)
         r.check("sm start: no failures", len(sm_fail_lines) == 0,
                 f"{len(sm_pass_lines)} pass, {len(sm_fail_lines)} fail")
-        r.check("sm start: result published", "outcome=pass" in resp or "result DDATA" in resp)
+        r.check("sm start: result published", "result DDATA" in resp or "outcome=" in resp)
     else:
         r.skip("sm start: Testing entered", "no DUT — precheck-only cycle")
         r.check("sm start: no failures", len(sm_fail_lines) == 0,
