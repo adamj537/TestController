@@ -48,12 +48,8 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 PROJECT_DIR = os.path.dirname(SCRIPT_DIR)
 BUILD_DIR = os.path.join(PROJECT_DIR, ".pio", "build", "esp32-Devkit")
 
-# Default WiFi credentials — override in scripts/local_config.py
-try:
-    from local_config import WIFI_SSID, WIFI_PASS as WIFI_PW
-except ImportError:
-    WIFI_SSID = "FixtureOpsGateway"
-    WIFI_PW   = "gateway123"
+# WiFi credentials — edit scripts/local_config.py to override
+from tc_config import WIFI_SSID, WIFI_PASS as WIFI_PW
 
 # TCP console settings
 TCP_PORT = 4242

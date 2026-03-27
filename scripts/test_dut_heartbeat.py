@@ -38,8 +38,7 @@ import socket
 import sys
 import time
 
-HOST = "10.0.0.244"
-PORT = 4242
+from tc_config import HOST, PORT
 
 # Minimum time after VDUT+PB-A enable for DUT firmware to boot and start
 # toggling PA9 at 1 Hz.  selftest heartbeat needs at least one full toggle

@@ -16,10 +16,9 @@ import time
 
 import paho.mqtt.client as mqtt
 
-BROKER = "10.0.0.178"
+from tc_config import BROKER, TC_SERIAL as NODE
 PORT = 1883
 GROUP = "SensitMfg"
-NODE = "G3-MB-Tester-000"
 CHANNEL = 0
 
 DCMD_TOPIC = f"spBv1.0/{GROUP}/DCMD/{NODE}/CH{CHANNEL}"

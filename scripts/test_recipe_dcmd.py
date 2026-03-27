@@ -19,8 +19,7 @@ except ImportError:
     print("paho-mqtt required: pip install paho-mqtt")
     sys.exit(1)
 
-BROKER = "10.0.0.59"
-SERIAL = "G3-MB-Tester-001"
+from tc_config import BROKER, TC_SERIAL as SERIAL
 DCMD_TOPIC = f"spBv1.0/SensitMfg/DCMD/{SERIAL}/CH0"
 DDATA_TOPIC = f"spBv1.0/SensitMfg/DDATA/{SERIAL}/CH0"
 
