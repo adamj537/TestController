@@ -2,13 +2,11 @@
 """
 swd_flash_dut.py — Flash DUT PFW via TCC 'swd flash' command.
 
-Serves DUT firmware over HTTP on port 8080, asserts VDUT+PB-A, issues
-'swd flash <url>' over TCP console, monitors for [PASS]/[FAIL].
+Serves DUT firmware over HTTP, sends 'swd flash <url> --store' to the TC
+via TCP console, and monitors for [PASS]/[FAIL].  The TC firmware handles
+PB-A assertion, VDUT power cycling, and SWD programming internally.
 
-Issue: S5/S6 — SWD bit-bang programming of STM32L476 DUT after open-drain
-hi-Z bug was resolved. Standard workflow for flashing DUT PFW.
-
-Transport: TCP console 10.0.0.244:4242 + HTTP server (WSL → ESP32)
+Transport: TCP console 192.168.50.30:4242 + HTTP server (WSL → ESP32)
 
 Usage:
   python3 scripts/swd_flash_dut.py [--fw path/to/firmware.bin]
@@ -20,25 +18,25 @@ import subprocess
 import sys
 import time
 
-TCC_IP       = '10.0.0.244'
+TCC_IP       = '192.168.50.30'
 HTTP_PORT    = 8080
 DEFAULT_FW   = 'embedded/dut-firmware/.pio/build/g3-dut/firmware.bin'
 FLASH_TIMEOUT = 120  # seconds
 
 
 def get_wsl_ip() -> str:
-    """Best-effort: return WSL ethernet IP for ESP32 to reach."""
+    """Return WSL IP on the same subnet as the TC (192.168.50.x)."""
     try:
         import subprocess
         r = subprocess.run(['hostname', '-I'], capture_output=True, text=True)
         ips = r.stdout.strip().split()
-        # prefer 10.x.x.x (local LAN)
+        # prefer same subnet as TC (192.168.50.x)
         for ip in ips:
-            if ip.startswith('10.'):
+            if ip.startswith('192.168.50.'):
                 return ip
-        return ips[0] if ips else '10.0.0.139'
+        return ips[0] if ips else TCC_IP
     except Exception:
-        return '10.0.0.139'
+        return TCC_IP
 
 
 def connect() -> socket.socket:
@@ -94,22 +92,12 @@ def main(fw_path: str = DEFAULT_FW) -> None:
     try:
         s = connect()
 
-        # Apply VDUT power and assert PB-A
-        for pin_cmd in [
-            'gpio mode 17 out', 'gpio mode 18 out', 'gpio mode 21 out',
-            'gpio mode 35 out', 'gpio mode 36 out',
-            'gpio set 17 0',    'gpio set 18 0',    'gpio set 21 0',
-            'gpio set 35 0',    'gpio set 36 0',
-            'vdac set 1 80',
-        ]:
-            cmd(s, pin_cmd, 0.1)
-        print('VDUT1 on, PB-A asserted')
-        time.sleep(1)
-
-        # Flash DUT
-        print(f'Flashing DUT: swd flash {url}')
+        # TC firmware handles PB-A assertion + VDUT power cycling internally.
+        # --store saves to dut_fw partition for future 'swd flash local' use.
+        flash_cmd = f'swd flash {url} --store'
+        print(f'Sending: {flash_cmd}')
         s.settimeout(FLASH_TIMEOUT)
-        s.sendall(f'swd flash {url}\n'.encode())
+        s.sendall(f'{flash_cmd}\n'.encode())
 
         buf = b''
         start = time.time()

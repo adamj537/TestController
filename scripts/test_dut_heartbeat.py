@@ -38,8 +38,7 @@ import socket
 import sys
 import time
 
-HOST = "10.0.0.244"
-PORT = 4242
+from tc_config import HOST, PORT
 
 # Minimum time after VDUT+PB-A enable for DUT firmware to boot and start
 # toggling PA9 at 1 Hz.  selftest heartbeat needs at least one full toggle
@@ -139,10 +138,11 @@ class Results:
 
 
 def teardown(tc: TC) -> None:
-    """Always release PB-A and disable VDUT regardless of test outcome."""
+    """Always release PB-A, disable VDUT, and resume DUT auto-start."""
     tc.cmd("mux release", wait=2)
     tc.cmd("vdac off", wait=2)
-    print("  [teardown] PB-A released, VDUT disabled")
+    tc.cmd("dut resume", wait=2)
+    print("  [teardown] PB-A released, VDUT disabled, auto-start resumed")
 
 
 def main() -> None:
@@ -174,6 +174,10 @@ def main() -> None:
         r.check("TCP connect", False, str(e))
         sys.exit(1)
 
+    # ── 1b. Pause DUT auto-start so precheck loops don't interfere ──────────
+    print("\n[1b] Pause DUT auto-start")
+    tc.cmd("dut pause", wait=2)
+
     # ── 2. Verify DUT is present ─────────────────────────────────────────────
     print("\n[2] DUT presence check")
     resp = tc.cmd("dut sample", wait=5)
@@ -195,9 +199,9 @@ def main() -> None:
         tc.close()
         sys.exit(1)
 
-    # ── 3. Enable VDUT at 3300 mV ────────────────────────────────────────────
-    print("\n[3] Enable VDUT at 3300 mV")
-    resp = tc.cmd("vdac_voltage both 3300", wait=3)
+    # ── 3. Enable VDUT1 at 3300 mV (VDUT1 only — VDUT2 does not power DUT)
+    print("\n[3] Enable VDUT1 at 3300 mV")
+    resp = tc.cmd("vdac_voltage 1 3300", wait=5)  # VDAC_INIT_SETTLE_MS=2000 single ch + margin
     vdut_ok = "VDUT1: 3300 mV" in resp or "3300" in resp
     if not r.check("VDUT enabled at 3300 mV", vdut_ok, resp.strip().replace("\n", " ")[:80]):
         # Calibration might not be set; print guidance

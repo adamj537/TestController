@@ -4,7 +4,7 @@
  * inserted and that PFW is loaded before committing to a test cycle.
  *
  * Gate sequence:
- *   1. Enable VDUT (calibrated duty from tc_config) + assert PB-A
+ *   1. Preset VDUT voltage (LEDC configured on PWM GPIO), then enable + assert PB-A
  *   2. Wait for DUT power-up and INA219 settle
  *   3. INA219 current draw: min threshold (open-circuit guard) + max (short guard)
  *   4. SWD UID96 read — identifies DUT; failure = absent or unpowered
@@ -26,6 +26,7 @@
 #include "cmd_swd.h"
 #include "cmd_i2c.h"
 #include "cmd_vdac.h"
+#include "dut_detect.h"
 
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -73,15 +74,25 @@ static void pre_gate_task(void *pvarg)
     char uid_full[25] = "";
     char fail_reason[32] = "pre_gate";
 
+    /* ── Step 0: Wait for dut_detect to fully stop ───────────────────────── */
+    /* dut_detect_stop() is called by SM on off_idle, but the task may still be
+     * mid-sample (mux_select + ADC128 read + mux_release).  If we assert PB-A
+     * before it finishes, dut_detect's mux_release() undoes our PB-A. */
+    dut_detect_wait_stopped();
+
     /* ── Step 1: Enable VDUT (calibrated) + assert PB-A ─────────────────── */
+    /* Set voltage BEFORE enable: vdac_set_voltage() configures LEDC on the PWM
+     * GPIO (gpio_reset_pin + ledc_channel_config).  If enable is asserted first,
+     * the MP2315 starts with the FB pin floating → regulates to max → protection
+     * fires → 0 mA output.  Match the SWD flash sequence: preset duty → enable. */
     int vdut_mv = tc_config_get_int("pre_gate.vdut_mv", 3300);
     ESP_LOGI(TAG, "enabling VDUT %d mV + PB-A", vdut_mv);
-    vdac_set_enable(0, true);
     if (!vdac_set_voltage(0, vdut_mv)) {
         ESP_LOGE(TAG, "VDUT calibration missing (slope=0) — gate cannot run");
         strlcpy(fail_reason, "vdut_uncalibrated", sizeof(fail_reason));
         goto done;
     }
+    vdac_set_enable(0, true);
     mux_select(MUX_PBA_CH, MUX_PBA_SIG);   /* PB-A assert: ch0, SIG=0 */
 
     /* Wait for DUT to power up and INA219 conversion to settle */

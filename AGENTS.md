@@ -91,3 +91,21 @@ Useful for command interaction and log capture without a serial cable.
 ## Partition Table
 
 Uses `partitions_ota.csv` (OTA + LittleFS recipe storage). Do not use the default partition table.
+
+## Non-Destructive USB Flash
+
+`pio run -t upload` writes ONLY bootloader (0x0), partition table (0x8000), and factory app slot (0x20000). All provisioning data survives: NVS (WiFi, broker_url, calibration, device UID @ 0x9000), dut_fw (0x620000), prod_fw (0x6C0000), recipes LittleFS (0x7A0000). Nothing needs re-provisioning if partition table offsets are unchanged.
+
+After USB flash, otadata **must be erased** so the bootloader falls back to factory instead of a stale OTA slot:
+
+```bash
+# Pre-flash: check current OTA state
+python3 ~/.platformio/packages/tool-esptoolpy/esptool.py --port /dev/ttyACM0 read_flash 0xf000 0x2000 /tmp/otadata.bin
+python3 scripts/decode_otadata.py /tmp/otadata.bin
+# Flash factory slot
+pio run -t upload
+# Clear OTA state so bootloader boots factory
+python3 ~/.platformio/packages/tool-esptoolpy/esptool.py --port /dev/ttyACM0 erase_region 0xf000 0x2000
+```
+
+`esptool.py --erase-all` or full chip erase destroys NVS (WiFi, broker_url, calibration, device UID) — never use before USB flash.

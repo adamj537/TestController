@@ -15,8 +15,7 @@ import socket
 import sys
 import time
 
-HOST = "10.0.0.244"
-PORT = 4242
+from tc_config import HOST, PORT
 
 
 class TC:

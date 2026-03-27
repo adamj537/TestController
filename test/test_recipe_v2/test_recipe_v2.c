@@ -168,7 +168,7 @@ void test_v2_recipe_id(void)
 
 void test_v2_recipe_version(void)
 {
-    TEST_ASSERT_EQUAL_STRING("2.0.0", s_recipe.recipe_version);
+    TEST_ASSERT_EQUAL_STRING("2.1.0", s_recipe.recipe_version);
 }
 
 void test_v2_timeout_300s(void)
@@ -510,7 +510,7 @@ void test_v2_power_check_params(void)
     TEST_ASSERT_NOT_NULL(s->params);
     TEST_ASSERT_EQUAL_INT(3300, cJSON_GetObjectItem(s->params, "v_nominal_mv")->valueint);
     TEST_ASSERT_EQUAL_INT(5, cJSON_GetObjectItem(s->params, "v_tolerance_pct")->valueint);
-    TEST_ASSERT_EQUAL_INT(5, cJSON_GetObjectItem(s->params, "i_min_ma")->valueint);
+    TEST_ASSERT_EQUAL_INT(2, cJSON_GetObjectItem(s->params, "i_min_ma")->valueint);
     TEST_ASSERT_EQUAL_INT(250, cJSON_GetObjectItem(s->params, "i_max_ma")->valueint);
 }
 
@@ -544,7 +544,7 @@ void test_v2_mux_read_params(void)
     TEST_ASSERT_NOT_NULL(s);
     TEST_ASSERT_NOT_NULL(s->params);
     TEST_ASSERT_EQUAL_INT(3, cJSON_GetObjectItem(s->params, "mux")->valueint);
-    TEST_ASSERT_EQUAL_INT(11, cJSON_GetObjectItem(s->params, "ch")->valueint);
+    TEST_ASSERT_EQUAL_INT(10, cJSON_GetObjectItem(s->params, "ch")->valueint);
     TEST_ASSERT_EQUAL_INT(2400, cJSON_GetObjectItem(s->params, "min_mv")->valueint);
     TEST_ASSERT_EQUAL_INT(3600, cJSON_GetObjectItem(s->params, "max_mv")->valueint);
 }

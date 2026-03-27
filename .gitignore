@@ -20,3 +20,20 @@ sdkconfig.esp32-Devkit.old
 # Auto-generated version files
 version.txt
 src/version.h
+
+# IDF Component Manager — downloaded at build time, not committed
+managed_components/
+
+# Backup files
+*.bak
+
+# Python cache
+scripts/__pycache__/
+__pycache__/
+
+# Machine-local config (credentials, IPs) — copy from *.example
+scripts/local_config.py
+
+# Extra sdkconfig variants
+sdkconfig.esp32-Devkit-Debug
+sdkconfig.esp32-Devkit.broken

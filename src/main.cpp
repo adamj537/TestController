@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <fcntl.h>
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "esp_console.h"
@@ -33,6 +34,7 @@ extern "C" {
 #include "recipe_json.h"
 #include "tc_config.h"
 #include "tc_cal.h"
+#include "conn_log.h"
 #include "../storage/storage.h"
 }
 
@@ -172,7 +174,17 @@ extern "C" void app_main(void)
     }
 #endif
 
+    /* USB Serial JTAG console deadlock prevention.
+     * With CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG=y, the VFS write path blocks when
+     * the CDC TX FIFO is full and no host is draining it (terminal not open).
+     * Setting O_NONBLOCK on stdout makes writes return immediately rather than
+     * spinning/blocking, so the console task never deadlocks on cold boot. */
+#if CONFIG_ESP_CONSOLE_USB_SERIAL_JTAG
+    fcntl(fileno(stdout), F_SETFL, fcntl(fileno(stdout), F_GETFL) | O_NONBLOCK);
+#endif
+
     initialize_nvs();
+    conn_log_init();
     /* OTA rollback guard is deferred — see ota_health_check_task below */
     Storage_Init();   /* SPIFFS recipe partition — formats on first boot */
     tc_config_load(); /* Device config: operational params (limits, fixture ID) */
@@ -209,6 +221,7 @@ extern "C" void app_main(void)
     register_recipe_commands();
     register_config_commands();
     register_cal_commands();
+    register_conn_log_commands();
 
     /* WiFi init — sets up netif/event loop and auto-connects if NVS creds exist.
      * Must happen before net_console_start() which needs the TCP/IP stack. */

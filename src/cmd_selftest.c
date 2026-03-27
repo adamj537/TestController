@@ -945,7 +945,7 @@ static void run_fixture_recipe(void)
             continue;
         }
         step_num++;
-        tc_mqtt_publish_test_progress(true, step_num, enabled_total, step->id, step->id);
+        tc_mqtt_publish_test_progress("selftest_progress", true, step_num, enabled_total, step->id, step->id);
         fn(NULL);  /* legacy internal table has no params */
     }
     /* Safety: ensure UART is closed even if dut_exit_test was skipped or failed */
@@ -973,9 +973,16 @@ static int do_selftest(int argc, char **argv)
     else if  (strcmp(argv[1], "mux")       == 0) { run_mux_scan(NULL);     }
     else if  (strcmp(argv[1], "heartbeat") == 0) { run_dut_heartbeat(NULL);}
     else if  (strcmp(argv[1], "char")      == 0) { run_char(); return 0; }
+    else if  (strcmp(argv[1], "dut_version") == 0) {
+        /* Read DUT firmware version via UART (enter_test → VERSION → exit_test).
+         * Assumes DUT is already powered (VDUT on, PB-A asserted). */
+        run_dut_enter_test(NULL);
+        run_dut_version(NULL);
+        run_dut_exit_test(NULL);
+    }
     else {
         printf("Unknown test '%s'\n", argv[1]);
-        printf("Usage: selftest <i2c|adc|wifi|ota|temp|vdut|mux|heartbeat|char|all>\n");
+        printf("Usage: selftest <i2c|adc|wifi|ota|temp|vdut|mux|heartbeat|char|dut_version|all>\n");
         return 1;
     }
 
@@ -1086,13 +1093,17 @@ static void selftest_task(void *pvarg)
 
     if (strcmp(mode, "quick") == 0) {
         /* Quick precheck: I2C bus + INA219 probes + rail voltages + WiFi.
-         * Skips VDUT sweep (~6s) and mux scan — fast enough for SM precheck. */
-        tc_mqtt_publish_test_progress(true, 1, 2, "i2c_scan", "I2C scan");
+         * Skips VDUT sweep (~6s) and mux scan — fast enough for SM precheck.
+         * No test_progress DDATA — background health checks must not appear
+         * as test steps in the UI data stream. */
         run_i2c(NULL);
-        tc_mqtt_publish_test_progress(true, 2, 2, "wifi", "WiFi check");
         run_wifi(NULL);
     } else {
         /* fixture: execute recipe (same table as interactive 'selftest all') */
+        tc_mqtt_publish_test_progress("selftest_progress", true, 1, 2, "i2c_scan", "I2C scan");
+        run_i2c(NULL);
+        tc_mqtt_publish_test_progress("selftest_progress", true, 2, 2, "wifi", "WiFi check");
+        run_wifi(NULL);
         run_fixture_recipe();
     }
 
@@ -1104,8 +1115,9 @@ static void selftest_task(void *pvarg)
         tc_mqtt_publish_selftest(mode, config, s_checks, s_ncheck);
     }
 
-    /* Clear test_in_progress so the UI knows selftest is done */
-    tc_mqtt_publish_test_progress(false, 0, 0, "complete", "complete");
+    /* Clear test_in_progress — suppress for quick mode (no progress was emitted) */
+    if (strcmp(mode, "quick") != 0)
+        tc_mqtt_publish_test_progress("selftest_progress", false, 0, 0, "complete", "complete");
 
     /* Notify state machine if this run was SM-owned.
      * tc_sm_selftest_done() may vTaskDelay internally before returning. */

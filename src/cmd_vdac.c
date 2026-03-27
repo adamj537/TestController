@@ -116,6 +116,11 @@ bool vdac_set_voltage(int ch_idx, int voltage_mv)
     return vdac_set_duty(ch_idx, duty);
 }
 
+bool vdac_is_enabled(int ch_idx)
+{
+    return (ch_idx == 0 || ch_idx == 1) && s_enabled[ch_idx];
+}
+
 bool vdac_disable(int ch_idx)
 {
     vdac_set_duty(ch_idx, 0);
@@ -271,19 +276,41 @@ static int do_vdac_duty(int argc, char **argv)
     int duty = atoi(argv[2]);
     if (duty < 0 || duty > 100) { printf("duty_pct must be 0-100\n"); return 1; }
 
+    /* DUT over-voltage protection.
+     * Slope is negative: higher duty → lower voltage.
+     * duty < 75% drives > ~5V which can damage a seated DUT (~4V rating). */
+    if (duty < 75 && dut_detect_present()) {
+        printf("ERR: duty %d%% rejected — DUT present. Minimum 75%% when DUT is seated (duty < 75%% drives > 5V).\n",
+               duty);
+        return 1;
+    }
+
     bool do1 = (strcmp(argv[1], "1")    == 0 || strcmp(argv[1], "both") == 0);
     bool do2 = (strcmp(argv[1], "2")    == 0 || strcmp(argv[1], "both") == 0);
     if (!do1 && !do2) { printf("channel must be 1, 2, or both\n"); return 1; }
 
     if (do1) {
-        vdac_set_enable(0, true);
-        vdac_set_duty(0, duty);
+        /* Configure LEDC on GPIO1 BEFORE enabling the converter.
+         * Enabling first causes gpio_reset_pin() inside vdac_set_duty() to
+         * briefly float the MP2315SGJ-Z feedback pin, tripping protection. */
+        if (!vdac_set_duty(0, duty)) {
+            printf("LEDC config failed for VDUT1\n"); return 1;
+        }
+        if (!s_enabled[0]) {
+            vdac_set_enable(0, true);
+            vTaskDelay(pdMS_TO_TICKS(VDAC_INIT_SETTLE_MS));
+        }
         printf("VDUT1: ENA=GPIO%d  PWM=GPIO%d  duty=%d%%\n",
                VDUT1_ENA_GPIO, VDUT1_PWM_GPIO, duty);
     }
     if (do2) {
-        vdac_set_enable(1, true);
-        vdac_set_duty(1, duty);
+        if (!vdac_set_duty(1, duty)) {
+            printf("LEDC config failed for VDUT2\n"); return 1;
+        }
+        if (!s_enabled[1]) {
+            vdac_set_enable(1, true);
+            vTaskDelay(pdMS_TO_TICKS(VDAC_INIT_SETTLE_MS));
+        }
         printf("VDUT2: ENA=GPIO%d  PWM=GPIO%d  duty=%d%%\n",
                VDUT2_ENA_GPIO, VDUT2_PWM_GPIO, duty);
     }
@@ -305,18 +332,25 @@ static int do_vdac_voltage(int argc, char **argv)
     if (!do1 && !do2) { printf("channel must be 1, 2, or both\n"); return 1; }
 
     if (do1) {
-        vdac_set_enable(0, true);
+        /* Same LEDC-before-enable ordering as do_vdac_duty. */
         if (!vdac_set_voltage(0, target_mv)) {
             printf("ERROR: VDUT calibration not set — run 'vdac char' first\n");
             return 1;
         }
+        if (!s_enabled[0]) {
+            vdac_set_enable(0, true);
+            vTaskDelay(pdMS_TO_TICKS(VDAC_INIT_SETTLE_MS));
+        }
         printf("VDUT1: %d mV\n", target_mv);
     }
     if (do2) {
-        vdac_set_enable(1, true);
         if (!vdac_set_voltage(1, target_mv)) {
             printf("ERROR: VDUT calibration not set — run 'vdac char' first\n");
             return 1;
+        }
+        if (!s_enabled[1]) {
+            vdac_set_enable(1, true);
+            vTaskDelay(pdMS_TO_TICKS(VDAC_INIT_SETTLE_MS));
         }
         printf("VDUT2: %d mV\n", target_mv);
     }

@@ -1,12 +1,22 @@
-/* storage_spiffs.c — SPIFFS-backed recipe storage.
+/* storage_spiffs.c — LittleFS-backed recipe and offline-buffer storage.
  *
- * Mounts the "recipes" partition (type=spiffs) at /recipes using ESP-IDF's
- * built-in SPIFFS VFS driver. No external dependencies required.
- * Implements the storage.h API for recipe read/write/list/delete.
+ * Mounts the "recipes" partition at /recipes using LittleFS (joltwallet/esp_littlefs).
+ * Subdirectories:
+ *   /recipes/      — named recipe JSON files ({key}.json)
+ *   /offline/      — queued result payloads for offline buffering
+ *
+ * OFFLINE_BUF_CAPACITY: compile-time limit on buffered offline results.
+ * The 384 KB "recipes" partition comfortably holds 80 compressed result payloads.
+ *
+ * Partition subtype in the CSV remains "spiffs" (0x82) — LittleFS uses the
+ * partition label, not the subtype, so no partition table change is needed.
+ * The filesystem is reformatted automatically on first boot (format_if_mount_failed).
+ * Re-push recipes after firmware update.
  */
+#define OFFLINE_BUF_CAPACITY  80
 
 #include "storage.h"
-#include "esp_spiffs.h"
+#include "esp_littlefs.h"
 #include "nvs.h"
 #include "esp_log.h"
 #include <stdio.h>
@@ -84,30 +94,34 @@ int Storage_Init(void)
 {
     if (s_mounted) return 0;
 
-    esp_vfs_spiffs_conf_t cfg = {
+    esp_vfs_littlefs_conf_t cfg = {
         .base_path = MOUNT_POINT,
         .partition_label = PARTITION,
-        .max_files = 10,
         .format_if_mount_failed = true,
+        .dont_mount = false,
     };
-    esp_err_t err = esp_vfs_spiffs_register(&cfg);
+    esp_err_t err = esp_vfs_littlefs_register(&cfg);
     if (err != ESP_OK) {
-        ESP_LOGE(TAG, "SPIFFS mount failed: %s", esp_err_to_name(err));
+        ESP_LOGE(TAG, "LittleFS mount failed: %s", esp_err_to_name(err));
         return -1;
     }
     s_mounted = true;
 
+    /* Create subdirectories on first mount (LittleFS requires explicit mkdir). */
+    mkdir(MOUNT_POINT "/offline", 0755);
+
     size_t total = 0, used = 0;
-    esp_spiffs_info(PARTITION, &total, &used);
-    ESP_LOGI(TAG, "SPIFFS mounted at %s  total=%uKB  used=%uKB",
-             MOUNT_POINT, (unsigned)(total / 1024), (unsigned)(used / 1024));
+    esp_littlefs_info(PARTITION, &total, &used);
+    ESP_LOGI(TAG, "LittleFS mounted at %s  total=%uKB  used=%uKB  offline_cap=%d",
+             MOUNT_POINT, (unsigned)(total / 1024), (unsigned)(used / 1024),
+             OFFLINE_BUF_CAPACITY);
     return 0;
 }
 
 int Storage_Deinit(void)
 {
     if (!s_mounted) return 0;
-    esp_vfs_spiffs_unregister(PARTITION);
+    esp_vfs_littlefs_unregister(PARTITION);
     s_mounted = false;
     return 0;
 }
@@ -118,7 +132,7 @@ int Storage_GetInfo(StorageType_t type, StorageInfo_t *info)
     if (!info || !s_mounted) return -1;
 
     size_t total = 0, used = 0;
-    esp_spiffs_info(PARTITION, &total, &used);
+    esp_littlefs_info(PARTITION, &total, &used);
     info->type = STORAGE_TYPE_NVS;
     info->available = true;
     info->total_bytes = (uint32_t)total;

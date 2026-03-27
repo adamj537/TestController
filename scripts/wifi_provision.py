@@ -7,7 +7,7 @@ is unavailable; WiFi must be provisioned via CDC serial (/dev/ttyACM0).
 
 Also use on any fresh flash when WiFi hasn't connected yet.
 
-Transport: USB CDC serial (/dev/ttyACM0)
+Transport: UART serial (/dev/ttyUSB0, preferred) or USB CDC (/dev/ttyACM0)
 
 Usage:
   python3 scripts/wifi_provision.py
@@ -17,9 +17,8 @@ import serial
 import sys
 import time
 
-SSID        = 'CatsAndDogs2'
-PASSWORD    = 'FADCADBAD1'
-PORT        = '/dev/ttyACM0'
+from tc_config import WIFI_SSID as SSID, WIFI_PASS as PASSWORD
+PORT        = '/dev/ttyUSB0'
 BAUD        = 115200
 BOOT_WAIT   = 12   # seconds to wait for boot + prompt
 
