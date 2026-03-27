@@ -13,6 +13,7 @@
 #include "recipe_engine.h"
 #include "recipe_primitives.h"
 #include "cmd_selftest.h"
+#include "meas_log.h"
 #include "tc_mqtt.h"
 #include "esp_log.h"
 #include "esp_timer.h"
@@ -90,6 +91,7 @@ int recipe_engine_run(const json_recipe_t *recipe, recipe_run_result_t *result)
     int64_t start_us = esp_timer_get_time();
 
     selftest_reset_checks();
+    meas_log_reset();
 
     int enabled_total = 0;
     for (int i = 0; i < recipe->step_count; i++)

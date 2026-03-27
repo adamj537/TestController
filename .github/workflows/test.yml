@@ -28,7 +28,7 @@ jobs:
     steps:
     - uses: actions/checkout@v4
       # No submodules: native tests include source files directly and
-      # do not depend on the common/ submodule (ESP32-specific, excluded from native build)
+      # do not depend on the common/ submodule (private repo, no CI credentials).
 
     - name: Set up Python
       uses: actions/setup-python@v5

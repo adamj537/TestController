@@ -98,6 +98,14 @@ void tc_cal_get_timestamp(char *buf, size_t len);
  * -2  = system clock not yet synchronised — cannot determine age (allow) */
 int  tc_cal_is_expired(int max_age_days);
 
+/* ── LittleFS fixture snapshot ───────────────────────────────────────────── */
+
+/* Write /recipes/config/cal-profile.json with the current calibration state.
+ * This file is read by tc_mqtt at publish time to populate fixture_snapshot.
+ * Called automatically by tc_cal_save(); also callable after tc_cal_reset().
+ * Silently no-ops if LittleFS is not mounted or write fails. */
+void tc_cal_write_profile_json(void);
+
 /* ── Console ─────────────────────────────────────────────────────────────── */
 
 void register_cal_commands(void);

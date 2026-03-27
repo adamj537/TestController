@@ -17,11 +17,17 @@
 #include "cJSON.h"
 #include "esp_log.h"
 #include "esp_console.h"
+#ifndef NATIVE_BUILD
+#include "version.h"
+#else
+#define FW_VERSION_STRING "unknown"
+#endif
 #include <string.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <errno.h>
 #include <time.h>
+#include <sys/stat.h>
 
 static const char *TAG = "tc_cal";
 static const char *KEY = "cal";
@@ -239,6 +245,7 @@ int tc_cal_load(void)
     s_loaded = true;
 
     ESP_LOGI(TAG, "Calibration loaded (%ld bytes)", (long)n);
+    tc_cal_write_profile_json();
     return 0;
 }
 
@@ -269,10 +276,12 @@ int tc_cal_save(void)
                            (const uint8_t *)json, strlen(json), false);
     free(json);
 
-    if (rc == 0)
+    if (rc == 0) {
         ESP_LOGI(TAG, "Calibration saved");
-    else
+        tc_cal_write_profile_json();
+    } else {
         ESP_LOGW(TAG, "Calibration save failed");
+    }
     return rc;
 }
 
@@ -407,6 +416,127 @@ int tc_cal_is_expired(int max_age_days)
 
     double age_days = difftime(now, cal_time) / 86400.0;
     return (age_days > (double)max_age_days) ? 1 : 0;
+}
+
+/* ── LittleFS fixture snapshot ───────────────────────────────────────────── */
+
+#define CAL_PROFILE_PATH  "/recipes/config/cal-profile.json"
+#define CAL_PROFILE_DIR   "/recipes/config"
+
+/* Six-month calibration interval per ISO 9001 §7.1.5. */
+#define CAL_EXPIRY_DAYS  180
+
+void tc_cal_write_profile_json(void)
+{
+    if (!s_loaded) return;
+
+    /* Ensure /recipes/config/ directory exists. */
+    mkdir(CAL_PROFILE_DIR, 0755);
+
+    cJSON *root = cJSON_CreateObject();
+    if (!root) {
+        ESP_LOGW(TAG, "cal_profile: OOM building JSON");
+        return;
+    }
+
+    cJSON_AddStringToObject(root, "fixture_type", "G3-MB-Single-Channel");
+    cJSON_AddStringToObject(root, "firmware_version", FW_VERSION_STRING);
+
+    /* calibration_date / calibration_expiry from stored timestamp. */
+    char cal_date[16] = "unknown";
+    char cal_expiry[16] = "unknown";
+    if (s_cal.cal_timestamp[0] != '\0') {
+        /* Extract YYYY-MM-DD from "YYYY-MM-DDTHH:MM:SSZ" */
+        snprintf(cal_date, sizeof(cal_date), "%.10s", s_cal.cal_timestamp);
+
+        /* Compute expiry = cal_date + CAL_EXPIRY_DAYS */
+        int y, mo, d, h, mi, s;
+        if (sscanf(s_cal.cal_timestamp, "%d-%d-%dT%d:%d:%dZ",
+                   &y, &mo, &d, &h, &mi, &s) == 6) {
+            struct tm tm_cal = {
+                .tm_year = y - 1900, .tm_mon = mo - 1, .tm_mday = d,
+                .tm_hour = 0, .tm_min = 0, .tm_sec = 0, .tm_isdst = 0,
+            };
+            time_t cal_t = mktime(&tm_cal);
+            if (cal_t >= 0) {
+                time_t exp_t = cal_t + (time_t)CAL_EXPIRY_DAYS * 86400;
+                struct tm tm_exp;
+                gmtime_r(&exp_t, &tm_exp);
+                strftime(cal_expiry, sizeof(cal_expiry), "%Y-%m-%d", &tm_exp);
+            }
+        }
+    }
+    cJSON_AddStringToObject(root, "calibration_date",   cal_date);
+    cJSON_AddStringToObject(root, "calibration_expiry", cal_expiry);
+
+    /* instruments[] — one entry per measurement instrument. */
+    cJSON *instruments = cJSON_AddArrayToObject(root, "instruments");
+
+    /* INA219 ch0 and ch1 */
+    for (int ch = 0; ch < TC_CAL_INA_NCH; ch++) {
+        cJSON *inst = cJSON_CreateObject();
+        char id[20];
+        snprintf(id, sizeof(id), "ina219_ch%d", ch);
+        cJSON_AddStringToObject(inst, "id", id);
+        cJSON_AddStringToObject(inst, "type", "INA219");
+        char role[48];
+        snprintf(role, sizeof(role), "DUT output current (VDUT%d)", ch + 1);
+        cJSON_AddStringToObject(inst, "role", role);
+        cJSON_AddNumberToObject(inst, "accuracy_pct", 0.5);
+        cJSON_AddStringToObject(inst, "accuracy_source", "datasheet");
+        /* INA219 calibration register — derived from current LSB (10µA → 0x2000) */
+        cJSON_AddStringToObject(inst, "cal_register", "0x2000");
+        cJSON_AddItemToArray(instruments, inst);
+    }
+
+    /* ADC128D818 */
+    {
+        cJSON *inst = cJSON_CreateObject();
+        cJSON_AddStringToObject(inst, "id", "adc128d818");
+        cJSON_AddStringToObject(inst, "type", "ADC128D818");
+        cJSON_AddStringToObject(inst, "role", "Rail voltages + continuity scan");
+        cJSON_AddNumberToObject(inst, "accuracy_pct", 0.45);
+        cJSON_AddStringToObject(inst, "accuracy_source", "datasheet");
+        cJSON_AddNumberToObject(inst, "vref_v", 3.3);
+        cJSON_AddItemToArray(instruments, inst);
+    }
+
+    /* PWM+RC DAC (VDUT) ch0 and ch1 */
+    for (int ch = 0; ch < TC_CAL_VDUT_NCH; ch++) {
+        cJSON *inst = cJSON_CreateObject();
+        char id[20];
+        snprintf(id, sizeof(id), "pwm_dac_ch%d", ch);
+        cJSON_AddStringToObject(inst, "id", id);
+        cJSON_AddStringToObject(inst, "type", "PWM+RC");
+        char role[48];
+        snprintf(role, sizeof(role), "VDUT%d adjustable voltage stimulus", ch + 1);
+        cJSON_AddStringToObject(inst, "role", role);
+        /* slope and intercept from calibration; 0 = uncalibrated */
+        cJSON_AddNumberToObject(inst, "slope",     (double)s_cal.vdut_slope_mv_per_pct[ch]);
+        cJSON_AddNumberToObject(inst, "intercept", (double)s_cal.vdut_intercept_mv[ch]);
+        cJSON_AddStringToObject(inst, "accuracy_source",
+            s_cal.vdut_slope_mv_per_pct[ch] != 0 ? "characterized_c5b" : "uncalibrated");
+        cJSON_AddItemToArray(instruments, inst);
+    }
+
+    char *json = cJSON_PrintUnformatted(root);
+    cJSON_Delete(root);
+    if (!json) {
+        ESP_LOGW(TAG, "cal_profile: cJSON print failed");
+        return;
+    }
+
+    FILE *f = fopen(CAL_PROFILE_PATH, "w");
+    if (!f) {
+        ESP_LOGW(TAG, "cal_profile: cannot open %s for write (errno=%d)", CAL_PROFILE_PATH, errno);
+        free(json);
+        return;
+    }
+    fputs(json, f);
+    fclose(f);
+    free(json);
+
+    ESP_LOGI(TAG, "cal_profile written: %s", CAL_PROFILE_PATH);
 }
 
 /* ── Console commands ────────────────────────────────────────────────────── */

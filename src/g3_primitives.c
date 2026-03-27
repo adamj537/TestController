@@ -21,6 +21,7 @@
 #include "tc_config.h"
 #include "tc_cal.h"
 #include "tc_mqtt.h"
+#include "meas_log.h"
 #include "cJSON.h"
 #include "esp_log.h"
 #include "freertos/FreeRTOS.h"
@@ -28,6 +29,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <math.h>
 
 static const char *TAG = "g3_prim";
 
@@ -169,6 +171,36 @@ void run_power_check(const cJSON *params)
 
     selftest_check_record_mv("power_v", v_ok, vbus_mv);
     selftest_check_record_mv("power_i", i_ok, current_ma);
+
+    /* Measurement log — branches[] for DDATA v2.15.0. */
+    meas_log_record(&(meas_entry_t){
+        .branch    = "System",
+        .connector = "",
+        .net_id    = "VDUT1_bus",
+        .name      = "Bus Voltage",
+        .scenario  = '\0',
+        .measured  = (float)vbus_mv,
+        .unit      = "mV",
+        .limit_min = (float)v_min_mv,
+        .limit_max = (float)v_max_mv,
+        .soft_limit_min = NAN,
+        .soft_limit_max = NAN,
+        .verdict   = v_ok,
+    });
+    meas_log_record(&(meas_entry_t){
+        .branch    = "System",
+        .connector = "",
+        .net_id    = "VDUT1_current",
+        .name      = "Quiescent Current",
+        .scenario  = '\0',
+        .measured  = (float)current_ma,
+        .unit      = "mA",
+        .limit_min = (float)i_min_ma,
+        .limit_max = (float)i_max_ma,
+        .soft_limit_min = NAN,
+        .soft_limit_max = NAN,
+        .verdict   = i_ok,
+    });
 }
 
 /* ── dut_program ─────────────────────────────────────────────────────────── *
@@ -465,6 +497,22 @@ void run_dut_uc_adc_read(const cJSON *params)
     printf("[%s] dut_uc_adc_read: %s  %d mV  (exp %d–%d mV)\n",
            in_range ? "PASS" : "FAIL", channel, mv, min_mv, max_mv);
     selftest_check_record_mv(check_id, in_range, mv);
+
+    /* Measurement log — branches[] for DDATA v2.15.0. */
+    {
+        meas_entry_t e = {0};
+        strlcpy(e.branch, "DUT_ADC", sizeof(e.branch));
+        snprintf(e.net_id, sizeof(e.net_id), "uc_%s", channel);
+        snprintf(e.name,   sizeof(e.name),   "UC ADC %s", channel);
+        e.measured  = (float)mv;
+        strlcpy(e.unit, "mV", sizeof(e.unit));
+        e.limit_min = (float)min_mv;
+        e.limit_max = (float)max_mv;
+        e.soft_limit_min = NAN;
+        e.soft_limit_max = NAN;
+        e.verdict   = in_range;
+        meas_log_record(&e);
+    }
 }
 
 /* ── dut_peripheral_adc_read ───────────────────────────────────────────────── *
