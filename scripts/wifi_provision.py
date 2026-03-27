@@ -17,8 +17,11 @@ import serial
 import sys
 import time
 
-SSID        = 'FixtureOpsGateway'
-PASSWORD    = 'gateway123'
+try:
+    from local_config import WIFI_SSID as SSID, WIFI_PASS as PASSWORD
+except ImportError:
+    SSID        = 'FixtureOpsGateway'
+    PASSWORD    = 'gateway123'
 PORT        = '/dev/ttyUSB0'
 BAUD        = 115200
 BOOT_WAIT   = 12   # seconds to wait for boot + prompt

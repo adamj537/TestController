@@ -1,0 +1,5 @@
+# local_config.py — machine-local overrides (not committed)
+# Copy this file to local_config.py and fill in your values.
+
+WIFI_SSID = "FixtureOpsGateway"
+WIFI_PASS = "gateway123"

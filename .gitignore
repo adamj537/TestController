@@ -31,6 +31,9 @@ managed_components/
 scripts/__pycache__/
 __pycache__/
 
+# Machine-local config (credentials, IPs) — copy from *.example
+scripts/local_config.py
+
 # Extra sdkconfig variants
 sdkconfig.esp32-Devkit-Debug
 sdkconfig.esp32-Devkit.broken
