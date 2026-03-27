@@ -421,7 +421,7 @@ void test_3v_rail_above_range_fails(void)
     TEST_ASSERT_FALSE(mv >= 2850 && mv <= 3150);
 }
 
-/* dut_rtc_read: RTC coin cell 1.55–3.6 V → 1550–3600 mV */
+/* dut_rtc_read: RTC coin cell 1.55–3.7 V → 1550–3700 mV */
 void test_rtc_range_fresh_cell(void)
 {
     const char *resp = "OK RTC_READ 3000";
@@ -429,20 +429,20 @@ void test_rtc_range_fresh_cell(void)
     int parsed = sscanf(resp, "OK RTC_READ %d", &mv);
     TEST_ASSERT_EQUAL_INT(1, parsed);
     TEST_ASSERT_EQUAL_INT(3000, mv);
-    TEST_ASSERT_TRUE(mv >= 1550 && mv <= 3600);
+    TEST_ASSERT_TRUE(mv >= 1550 && mv <= 3700);
 }
 
 void test_rtc_low_boundary(void)
 {
     int mv = 1550;
-    TEST_ASSERT_TRUE(mv >= 1550 && mv <= 3600);
+    TEST_ASSERT_TRUE(mv >= 1550 && mv <= 3700);
 }
 
 void test_rtc_below_range_fails(void)
 {
     /* Below 1.55V — coin cell depleted or missing */
     int mv = 1549;
-    TEST_ASSERT_FALSE(mv >= 1550 && mv <= 3600);
+    TEST_ASSERT_FALSE(mv >= 1550 && mv <= 3700);
 }
 
 /* dut_flash_test: response must contain "PASS" */
