@@ -36,6 +36,8 @@ extern "C" {
 #include "tc_cal.h"
 #include "conn_log.h"
 #include "../storage/storage.h"
+#include "crash_log.h"
+#include "cmd_flash.h"
 }
 
 static const char *TAG = "g3-tc";
@@ -185,6 +187,7 @@ extern "C" void app_main(void)
 
     initialize_nvs();
     conn_log_init();
+    crash_log_init();
     /* OTA rollback guard is deferred — see ota_health_check_task below */
     Storage_Init();   /* SPIFFS recipe partition — formats on first boot */
     tc_config_load(); /* Device config: operational params (limits, fixture ID) */
@@ -222,6 +225,8 @@ extern "C" void app_main(void)
     register_config_commands();
     register_cal_commands();
     register_conn_log_commands();
+    register_crash_log_commands();
+    register_flash_commands();
 
     /* WiFi init — sets up netif/event loop and auto-connects if NVS creds exist.
      * Must happen before net_console_start() which needs the TCP/IP stack. */
