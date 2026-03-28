@@ -8,6 +8,8 @@ Usage:
 """
 
 import argparse
+import json
+import re
 import socket
 import sys
 import time
@@ -107,6 +109,57 @@ class Results:
         return self.failed == 0
 
 
+def _parse_cal_json(resp: str) -> dict | None:
+    """Extract and parse the JSON block from a 'cal show' console response."""
+    start = resp.find('{')
+    end = resp.rfind('}')
+    if start < 0 or end <= start:
+        return None
+    try:
+        return json.loads(resp[start:end + 1])
+    except (json.JSONDecodeError, ValueError):
+        return None
+
+
+def _restore_cal(tc: TC, cal: dict) -> None:
+    """Restore all calibration values from a parsed cal show JSON dict.
+
+    Call after 'cal reset' — only restores values that differ from factory
+    defaults (VDUT slope/intercept=0, INA219/ADC128 gain=1.0 offset=0).
+    """
+    vdut = cal.get("vdut", {})
+    for ch in range(2):
+        chdata = vdut.get(f"ch{ch}", {})
+        slope = int(chdata.get("slope_mv_per_pct", 0))
+        intercept = int(chdata.get("intercept_mv", 0))
+        if slope != 0 or intercept != 0:
+            tc.reconnect()
+            tc.cmd(f"cal vdut {ch} {slope} {intercept}", wait=2)
+
+    ina = cal.get("ina219", {})
+    for ch in range(2):
+        chdata = ina.get(f"ch{ch}", {})
+        v_gain = float(chdata.get("v_gain", 1.0))
+        v_offset = int(chdata.get("v_offset_mv", 0))
+        i_gain = float(chdata.get("i_gain", 1.0))
+        i_offset = int(chdata.get("i_offset_ma", 0))
+        if v_gain != 1.0 or v_offset != 0:
+            tc.reconnect()
+            tc.cmd(f"cal ina {ch} v {v_gain} {v_offset}", wait=2)
+        if i_gain != 1.0 or i_offset != 0:
+            tc.reconnect()
+            tc.cmd(f"cal ina {ch} i {i_gain} {i_offset}", wait=2)
+
+    adc = cal.get("adc128", {})
+    for ch in range(8):
+        chdata = adc.get(f"ch{ch}", {})
+        gain = float(chdata.get("gain", 1.0))
+        offset = int(chdata.get("offset_mv", 0))
+        if gain != 1.0 or offset != 0:
+            tc.reconnect()
+            tc.cmd(f"cal adc {ch} {gain} {offset}", wait=2)
+
+
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", default=HOST)
@@ -198,11 +251,22 @@ def main():
     resp = tc.cmd("pwm stop 0")
     r.check("pwm stop", "PWM" in resp.upper() or "stop" in resp.lower() or ">" in resp)
 
+    # Detect DUT presence before vdac section — 50% duty is below the 75% minimum
+    # when a DUT is seated; re-checked in section [16] for selftest/sm decisions.
+    tc.reconnect()
+    _dut_resp = tc.cmd("dut status", wait=3)
+    dut_present = "present=true" in _dut_resp.lower() or (
+        "present" in _dut_resp.lower() and "false" not in _dut_resp.lower()
+    )
+
     # ── 11. vdac ─────────────────────────────────────────────────────────
     print("\n[11] vdac")
     tc.reconnect()
-    resp = tc.cmd("vdac set 0 50", wait=3)
-    r.check("vdac set 0 50", "VDUT" in resp.upper() or "duty" in resp.lower() or ">" in resp)
+    if dut_present:
+        r.skip("vdac set 0 50", "DUT present — 50% duty below 75% minimum; skip to avoid under-voltage")
+    else:
+        resp = tc.cmd("vdac set 0 50", wait=3)
+        r.check("vdac set 0 50", "VDUT" in resp.upper() or "duty" in resp.lower() or ">" in resp)
     resp = tc.cmd("vdac off", wait=2)
     r.check("vdac off", "off" in resp.lower() or "disable" in resp.lower() or ">" in resp)
 
@@ -333,45 +397,62 @@ def main():
     r.check("cal show: has ina219 block", "ina219" in resp)
     r.check("cal show: has adc128 block", "adc128" in resp)
 
-    tc.reconnect()
-    resp = tc.cmd("cal load", wait=3)
-    r.check("cal load: succeeds", "loaded" in resp.lower() or "default" in resp.lower())
+    # Capture FULL calibration state so we can restore it after the destructive
+    # test below.  Previous code only captured VDUT ch0 — INA219 and ADC128
+    # calibration was silently wiped to factory defaults by 'cal reset + cal save',
+    # causing pre_gate current=0 failures in subsequent recipe runs.
+    _orig_cal = _parse_cal_json(resp)
+    if not _orig_cal:
+        print("  [WARN] Could not parse cal JSON — skipping destructive cal tests")
+        r.skip("cal load", "cal JSON parse failed")
+        r.skip("cal vdut set", "cal JSON parse failed")
+        r.skip("cal vdut-duty", "cal JSON parse failed")
+        r.skip("cal ina ch0 v", "cal JSON parse failed")
+        r.skip("cal adc ch0", "cal JSON parse failed")
+        r.skip("cal save", "cal JSON parse failed")
+        r.skip("cal load roundtrip", "cal JSON parse failed")
+    else:
+        tc.reconnect()
+        resp = tc.cmd("cal load", wait=3)
+        r.check("cal load: succeeds", "loaded" in resp.lower() or "default" in resp.lower())
 
-    tc.reconnect()
-    resp = tc.cmd("cal vdut 0 -87 11200", wait=3)
-    r.check("cal vdut set: accepted", "slope" in resp.lower() or "vdut" in resp.lower())
+        tc.reconnect()
+        resp = tc.cmd("cal vdut 0 -87 11200", wait=3)
+        r.check("cal vdut set: accepted", "slope" in resp.lower() or "vdut" in resp.lower())
 
-    tc.reconnect()
-    resp = tc.cmd("cal vdut-duty 0 3300", wait=3)
-    r.check("cal vdut-duty: returns duty", "duty" in resp.lower() or "%" in resp)
+        tc.reconnect()
+        resp = tc.cmd("cal vdut-duty 0 3300", wait=3)
+        r.check("cal vdut-duty: returns duty", "duty" in resp.lower() or "%" in resp)
 
-    tc.reconnect()
-    resp = tc.cmd("cal ina 0 v 1.02 10", wait=3)
-    r.check("cal ina ch0 v: accepted", "gain" in resp.lower() or "ina219" in resp.lower())
+        tc.reconnect()
+        resp = tc.cmd("cal ina 0 v 1.02 10", wait=3)
+        r.check("cal ina ch0 v: accepted", "gain" in resp.lower() or "ina219" in resp.lower())
 
-    tc.reconnect()
-    resp = tc.cmd("cal adc 0 1.05 -5", wait=3)
-    r.check("cal adc ch0: accepted", "gain" in resp.lower() or "adc" in resp.lower())
+        tc.reconnect()
+        resp = tc.cmd("cal adc 0 1.05 -5", wait=3)
+        r.check("cal adc ch0: accepted", "gain" in resp.lower() or "adc" in resp.lower())
 
-    tc.reconnect()
-    resp = tc.cmd("cal save", wait=3)
-    r.check("cal save: succeeds", "saved" in resp.lower())
+        tc.reconnect()
+        resp = tc.cmd("cal save", wait=3)
+        r.check("cal save: succeeds", "saved" in resp.lower())
 
-    # Verify round-trip: reset to defaults, reload from NVS, confirm vdut is back
-    tc.reconnect()
-    tc.cmd("cal reset", wait=2)
-    tc.reconnect()
-    tc.cmd("cal load", wait=2)
-    tc.reconnect()
-    resp = tc.cmd("cal show", wait=3)
-    r.check("cal load roundtrip: vdut slope restored", '"slope_mv_per_pct": -87' in resp or
-            '"slope_mv_per_pct":\t-87' in resp)
+        # Verify round-trip: reset to defaults, reload from NVS, confirm vdut is back
+        tc.reconnect()
+        tc.cmd("cal reset", wait=2)
+        tc.reconnect()
+        tc.cmd("cal load", wait=2)
+        tc.reconnect()
+        resp = tc.cmd("cal show", wait=3)
+        r.check("cal load roundtrip: vdut slope restored",
+                '"slope_mv_per_pct": -87' in resp or '"slope_mv_per_pct":\t-87' in resp)
 
-    # Clean up: restore factory defaults and save
-    tc.reconnect()
-    tc.cmd("cal reset", wait=2)
-    tc.reconnect()
-    tc.cmd("cal save", wait=2)
+        # Clean up: restore FULL calibration state captured at start of section.
+        tc.reconnect()
+        tc.cmd("cal reset", wait=2)
+        _restore_cal(tc, _orig_cal)
+        tc.reconnect()
+        tc.cmd("cal save", wait=2)
+        print("  [cal] Full calibration restored and saved")
 
     # ── Pogo-blocked (skipped) ───────────────────────────────────────────
     print("\n[--] Pogo-blocked (skipped)")
