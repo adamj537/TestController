@@ -248,8 +248,12 @@ char *recipe_json_load_nvs(const char *recipe_id)
     if (sz <= 0) return NULL;
 
     /* Prefer PSRAM to avoid exhausting internal heap on large recipes */
+#ifdef ESP_PLATFORM
     char *buf = heap_caps_malloc((size_t)sz + 1, MALLOC_CAP_SPIRAM);
     if (!buf) buf = malloc((size_t)sz + 1);   /* internal fallback */
+#else
+    char *buf = malloc((size_t)sz + 1);
+#endif
     if (!buf) return NULL;
 
     int32_t n = Storage_Read(STORAGE_DOMAIN_RECIPES, recipe_id,
