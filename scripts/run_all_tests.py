@@ -132,28 +132,17 @@ def _detect_dut() -> bool:
 
 
 def _vdut_on() -> None:
-    """Apply VDUT1 at the calibrated 3300 mV duty and wait for the rail to settle.
+    """Apply VDUT1 at 3300 mV and wait for the rail to settle.
 
-    Uses 'cal vdut-duty 0 3300' to get the calibrated duty for VDUT1 (ch0).
-    Falls back to duty=87 if the TC is not reachable or not yet calibrated.
+    Uses 'vdac_voltage 1 3300' which handles calibration lookup, PWM config,
+    and enable internally (includes 2s VDAC_INIT_SETTLE_MS delay).
     Must be called before any PFW UART command (DUT needs power to respond).
     """
-    duty = 87  # ~3300 mV fallback for typical calibration (slope=-87, intercept~11200)
     try:
-        resp = _tc_cmd("cal vdut-duty 0 3300", wait=2.0)
-        m = re.search(r'duty\s+(\d+)%', resp)
-        if m:
-            d = int(m.group(1))
-            if 75 <= d <= 100:
-                duty = d
+        resp = _tc_cmd("vdac_voltage 1 3300", wait=4.0)
+        print(f"  VDUT1 on: {resp.strip().splitlines()[-1] if resp.strip() else 'sent'}")
     except OSError:
-        pass
-    try:
-        _tc_cmd(f"vdac set 0 {duty}", wait=1.0)
-        time.sleep(2.0)  # VDUT1 single-channel settle (VDAC_INIT_SETTLE_MS=2000)
-        print(f"  VDUT1 on: duty={duty}%")
-    except OSError:
-        pass
+        print("  VDUT1 on: TC not reachable")
 
 
 def _vdut_off() -> None:
