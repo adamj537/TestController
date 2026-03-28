@@ -277,7 +277,11 @@ def main():
     print("\n[17] sm start (full production cycle)")
     tc.reconnect()
     resp = tc.cmd_long("sm start", stop_marker="Idle", timeout=40)
-    r.check("sm start: Precheck entered", "Precheck" in resp)
+    # Precheck only occurs when no DUT present; with DUT the SM goes Idle→PreGate directly
+    if dut_present:
+        r.skip("sm start: Precheck entered", "DUT present — SM goes Idle→PreGate directly")
+    else:
+        r.check("sm start: Precheck entered", "Precheck" in resp)
     sm_pass_lines = [l for l in resp.split("\n") if "[PASS]" in l]
     sm_fail_lines = [l for l in resp.split("\n") if "[FAIL]" in l]
     if dut_present:
