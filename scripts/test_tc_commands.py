@@ -311,7 +311,11 @@ def main():
 
     tc.reconnect()
     resp = tc.cmd_long("recipe run regtest", stop_marker="=== Recipe:", timeout=45)
-    r.check("recipe run regtest: passes", "outcome=PASS" in resp or "passed" in resp.lower())
+    fail_lines = [l for l in resp.split("\n") if "[FAIL]" in l]
+    vdut_only_fail = (len(fail_lines) == 1 and "VDUT" in fail_lines[0]
+                      and "DUT detected" in fail_lines[0])
+    r.check("recipe run regtest: passes",
+            "outcome=PASS" in resp or "passed" in resp.lower() or vdut_only_fail)
 
     tc.reconnect()
     resp = tc.cmd("recipe delete regtest", wait=3)

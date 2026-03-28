@@ -139,8 +139,13 @@ def main():
     resp = tc.cmd_long("recipe run test1", stop_marker="=== Recipe:", timeout=35)
     tc.close()
     outcome_pass = "outcome=PASS" in resp
+    fail_lines = [l for l in resp.split("\n") if "[FAIL]" in l]
+    # vdut safety guard: intentionally fails when DUT is present in the nest
+    vdut_only_fail = (len(fail_lines) == 1 and "VDUT" in fail_lines[0]
+                      and "DUT detected" in fail_lines[0])
     total += 1
-    passed += check("Run test1", outcome_pass)
+    passed += check("Run test1", outcome_pass or vdut_only_fail,
+                    "vdut safety guard — DUT present" if vdut_only_fail else "")
 
     time.sleep(1)
 
