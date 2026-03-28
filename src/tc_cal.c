@@ -410,7 +410,7 @@ int tc_cal_is_expired(int max_age_days)
         .tm_sec  = s,
         .tm_isdst = 0,
     };
-    time_t cal_time = mktime(&tm_cal);
+    time_t cal_time = timegm(&tm_cal);
     if (cal_time < 0)
         return -1;
 
