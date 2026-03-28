@@ -8,7 +8,7 @@ then optionally verifies by re-flashing from the stored partition.
 Issue: S7 — 'swd flash --store' workflow for persisting PFW so that
 'swd flash local --target pfw' works without network access.
 
-Transport: TCP console 10.0.0.244:4242 + HTTP server
+Transport: TCP console (TC_IP from tc_config):4242 + HTTP server
 
 Usage:
   python3 scripts/swd_store_pfw.py [--fw path/to/firmware.bin] [--no-verify]
@@ -20,7 +20,10 @@ import subprocess
 import sys
 import time
 
-TCC_IP      = '10.0.0.244'
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(__file__))
+from tc_config import TC_IP as TCC_IP
+
 HTTP_PORT   = 8081          # use 8081 to avoid conflict with TCC OTA server
 DEFAULT_FW  = 'embedded/dut-firmware/.pio/build/g3-dut/firmware.bin'
 CMD_TIMEOUT = 60            # seconds per swd command
