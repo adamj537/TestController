@@ -9,7 +9,7 @@ Test order:
     4. test_recipe_storage.py — SPIFFS recipe lifecycle
     5. test_recipe_dcmd.py    — MQTT recipe management DCMDs
 
-  DUT detection (UART ENTER_TEST ping):
+  DUT detection (electrical — U8 ch3 ADC signal, no pogo/power required):
     → If no DUT: Phase 2 and recipe are skipped; suite exits 0.
 
   Phase 2 — PFW regressions (DUT required):
@@ -25,6 +25,7 @@ Usage:
 
 import json
 import os
+import re
 import socket
 import subprocess
 import sys
@@ -128,6 +129,29 @@ def _detect_dut() -> bool:
         return "PRESENT" in resp
     except OSError:
         return False
+
+
+def _vdut_on() -> None:
+    """Apply VDUT1 at 3300 mV and wait for the rail to settle.
+
+    Uses 'vdac_voltage 1 3300' which handles calibration lookup, PWM config,
+    and enable internally (includes 2s VDAC_INIT_SETTLE_MS delay).
+    Must be called before any PFW UART command (DUT needs power to respond).
+    """
+    try:
+        resp = _tc_cmd("vdac_voltage 1 3300", wait=4.0)
+        print(f"  VDUT1 on: {resp.strip().splitlines()[-1] if resp.strip() else 'sent'}")
+    except OSError:
+        print("  VDUT1 on: TC not reachable")
+
+
+def _vdut_off() -> None:
+    """Turn off VDUT after Phase 2 tests complete."""
+    try:
+        _tc_cmd("vdac off", wait=1.0)
+        print("  VDUT1 off")
+    except OSError:
+        pass
 
 
 # ── Recipe run ────────────────────────────────────────────────────────────────
@@ -234,6 +258,25 @@ def main() -> None:
         print(f"\n{RED}Phase 1 failed — skipping DUT tests and recipe.{RESET}")
         sys.exit(1)
 
+    # ── Cal integrity check ──────────────────────────────────────────────
+    _section("Cal Integrity Check")
+    print("  Verifying calibration not wiped by Phase 1 tests ...")
+    try:
+        cal_resp = _tc_cmd("cal show", wait=3.0)
+        m = re.search(r'"slope_mv_per_pct"\s*:\s*(-?\d+)', cal_resp)
+        if m:
+            slope = int(m.group(1))
+            if slope == 0:
+                print(f"  {RED}VDUT ch0 slope=0 (uncalibrated) — Phase 1 wiped calibration!{RESET}")
+                print(f"  Fix test_tc_commands.py section [19] cal cleanup.")
+                _print_summary(results, total_time, dut_detected=False, recipe_result=None)
+                sys.exit(1)
+            print(f"  VDUT ch0 slope={slope} — calibration intact")
+        else:
+            print(f"  {RED}Could not parse cal show output — proceeding with caution{RESET}")
+    except OSError:
+        print(f"  {RED}TC not reachable for cal verify — proceeding with caution{RESET}")
+
     # ── DUT detection ─────────────────────────────────────────────────────
     _section("DUT Detection")
     # Phase 1 scripts may have left the SM in a non-Idle state — reset first
@@ -250,6 +293,17 @@ def main() -> None:
 
     # ── Phase 2: PFW ──────────────────────────────────────────────────────
     _section("Phase 2 — PFW Regressions (DUT required)")
+    print("\n  Applying VDUT1 for DUT UART tests ...")
+    _vdut_on()
+    # Drain stale test-mode state: if Phase 1's sm start hit its timeout before
+    # EXIT_TEST ran, the DUT is still in test mode.  EXIT_TEST is safe to call
+    # regardless; it returns ERR NOT_IN_TEST if the DUT is already idle.
+    print("  Sending EXIT_TEST to reset DUT state ...")
+    try:
+        _tc_cmd("uart cmd EXIT_TEST", wait=1.5)
+        time.sleep(0.3)
+    except OSError:
+        pass
     phase2_ok = True
     for name, path in phase2_tests:
         print(f"\n▶ {name}  ({os.path.basename(path)})")
@@ -259,6 +313,7 @@ def main() -> None:
         if not ok:
             phase2_ok = False
         time.sleep(1)
+    _vdut_off()
 
     if not phase2_ok:
         _print_summary(results, total_time, dut_detected=True, recipe_result=None)

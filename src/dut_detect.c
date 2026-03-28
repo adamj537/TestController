@@ -54,14 +54,14 @@ static const int s_mux1_gpio[4] = {
 
 /* ── Module state ──────────────────────────────────────────────────────────── */
 
-static bool    s_running;
+static volatile bool s_running;             /* cross-task: set false by stop, read by task loop (F-08) */
 static bool    s_autostart_paused;
-static bool    s_dut_present;
+static volatile bool s_dut_present;         /* cross-task: written by detect, read by guards */
 static bool    s_first_report = true;
-static bool    s_boot_delay_done;       /* skip 5s init delay on re-starts */
-static int64_t s_selftest_cooldown_us;  /* suppress auto-start until this time */
+static bool    s_boot_delay_done;           /* skip 5s init delay on re-starts */
+static int64_t s_selftest_cooldown_us;      /* suppress auto-start until this time */
 static int     s_last_mv;
-static TaskHandle_t s_task_handle;
+static volatile TaskHandle_t s_task_handle; /* cross-task: NULL'd by task on exit, polled by wait_stopped (F-08) */
 
 /* ── ADC read helpers ──────────────────────────────────────────────────────── */
 
@@ -211,7 +211,9 @@ void dut_detect_start(void)
     /* s_first_report stays true from static init for the boot-time first sample.
      * SM-driven restarts (on_idle) leave it false so the DUT-present state
      * is carried over and doesn't re-trigger selftest-only. */
-    xTaskCreate(dut_detect_task, "dut_detect", 8192, NULL, 4, &s_task_handle);
+    TaskHandle_t handle = NULL;
+    xTaskCreate(dut_detect_task, "dut_detect", 8192, NULL, 4, &handle);
+    s_task_handle = handle;
 }
 
 void dut_detect_stop(void)

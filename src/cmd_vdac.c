@@ -24,7 +24,7 @@
 #define ADC128_REG_CONV_RATE 0x07   /* 0=low-power (~728ms/scan), 1=high-rate (~12ms/ch) */
 #define ADC128_REG_ADV_CFG   0x0B   /* bit0=ext-VREF-en, bits[2:1]=mode: 0x03=Mode1+ext-VREF */
 #define ADC128_REG_CH_BASE 0x20   /* CH0=0x20 … CH7=0x27, 2 bytes, left-justified 12-bit */
-#define ADC128_VREF_MV     2560
+#define ADC128_VREF_MV     3000    /* MAX6103 external reference (audit F-07: was 2560) */
 #define ADC128_FULL        4096
 
 /* CH6 = VDUT1Mon, CH7 = VDUT2Mon — voltage dividers not wired on TCC v1.1.
@@ -84,7 +84,14 @@ bool vdac_set_duty(int ch_idx, int duty_pct)
     if (!s_timer_ready && !vdac_ledc_init()) return false;
     ledc_channel_t ch = (ch_idx == 0) ? VDAC_CH1 : VDAC_CH2;
     int gpio          = (ch_idx == 0) ? VDUT1_PWM_GPIO : VDUT2_PWM_GPIO;
-    gpio_reset_pin((gpio_num_t)gpio);
+    if (!s_enabled[ch_idx]) {
+        /* First configuration only — clear ADC/analog pad claim (HW-014)
+         * so the LEDC driver can take ownership.  On subsequent duty updates
+         * the pad is already LEDC-owned; calling gpio_reset_pin() would float
+         * the MP2315SGJ-Z feedback pin for ~10-15 µs, causing a voltage spike
+         * (audit F-05). */
+        gpio_reset_pin((gpio_num_t)gpio);
+    }
     uint32_t duty     = (uint32_t)(duty_pct * 4095) / 100;
     ledc_channel_config_t ch_cfg = {
         .gpio_num   = gpio,

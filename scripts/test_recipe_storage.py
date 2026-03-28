@@ -88,6 +88,13 @@ def main():
     passed = 0
     total = 0
 
+    # Ensure a known recipe is loaded before storing test1,
+    # since prior test scripts may leave a different recipe in memory.
+    tc = TC(); tc.connect()
+    tc.cmd("recipe load default", wait=3)
+    tc.close()
+    time.sleep(0.5)
+
     # 1. Store test1
     print("[1] recipe store test1")
     tc = TC(); tc.connect()
