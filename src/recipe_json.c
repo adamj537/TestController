@@ -20,6 +20,14 @@
 
 static const char *TAG = "recipe";
 
+/* cJSON allocator backed by SPIRAM to avoid internal-heap OOM on large recipes.
+ * Falls back to internal heap if SPIRAM allocation fails. */
+static void *s_cjson_malloc(size_t sz)
+{
+    void *p = heap_caps_malloc(sz, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    return p ? p : malloc(sz);
+}
+
 /* ── Parse ───────────────────────────────────────────────────────────────── */
 
 int recipe_json_parse(const char *json_str, size_t len, json_recipe_t *out)
@@ -27,7 +35,14 @@ int recipe_json_parse(const char *json_str, size_t len, json_recipe_t *out)
     if (!json_str || !out) return -1;
     memset(out, 0, sizeof(*out));
 
+    /* Route cJSON through SPIRAM for large recipe parse trees */
+    cJSON_Hooks hooks = { s_cjson_malloc, free };
+    cJSON_InitHooks(&hooks);
+
     cJSON *root = cJSON_ParseWithLength(json_str, len);
+
+    cJSON_InitHooks(NULL);  /* restore default allocator */
+
     if (!root) {
         ESP_LOGW(TAG, "JSON parse failed near: %s", cJSON_GetErrorPtr());
         return -1;
