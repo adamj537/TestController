@@ -112,8 +112,7 @@ void selftest_check_record_mv(const char *id, bool pass, int mv) { st_record_mv(
 #define ADC128_CH5_NUM  8       /* numerator   of inverse divider (CH5 = /3V3_MON) */
 #define ADC128_CH5_DEN  5       /* denominator of inverse divider */
 
-#define ADC128_VREF_MV  3000    /* MAX6103 external reference */
-#define ADC128_FULL     4096
+/* ADC128_VREF_MV and ADC128_FULL defined in tie_pinmap.h (F-07) */
 
 /* Pass/fail window ±5 % on reconstructed rail voltage */
 #define ADC128_TOL_PCT  5

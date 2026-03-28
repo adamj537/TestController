@@ -9,6 +9,7 @@
 #include "cmd_vdac.h"
 #include "tc_cal.h"
 #include "dut_detect.h"
+#include "tie_pinmap.h"
 
 /* ── TCC carrier v1 pin assignments ──────────────────────────────────────── */
 
@@ -24,8 +25,7 @@
 #define ADC128_REG_CONV_RATE 0x07   /* 0=low-power (~728ms/scan), 1=high-rate (~12ms/ch) */
 #define ADC128_REG_ADV_CFG   0x0B   /* bit0=ext-VREF-en, bits[2:1]=mode: 0x03=Mode1+ext-VREF */
 #define ADC128_REG_CH_BASE 0x20   /* CH0=0x20 … CH7=0x27, 2 bytes, left-justified 12-bit */
-#define ADC128_VREF_MV     3000    /* MAX6103 external reference (audit F-07: was 2560) */
-#define ADC128_FULL        4096
+/* ADC128_VREF_MV and ADC128_FULL defined in tie_pinmap.h (F-07) */
 
 /* CH6 = VDUT1Mon, CH7 = VDUT2Mon — voltage dividers not wired on TCC v1.1.
  * INA219 Vbus is the primary voltage measurement path on this board spin. */

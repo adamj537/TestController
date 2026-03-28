@@ -43,8 +43,7 @@ static const char *TAG = "dut_det";
 #define ADC128_REG_CONV_RATE 0x07
 #define ADC128_REG_ADV_CFG 0x0B
 #define ADC128_REG_CH_BASE 0x20
-#define ADC128_VREF_MV     3000    /* MAX6103 external reference — must match ext-VREF-en in ADV_CFG */
-#define ADC128_FULL        4096
+/* ADC128_VREF_MV and ADC128_FULL defined in tie_pinmap.h (F-07) */
 
 /* TIE MUX1 (U11) address GPIOs */
 static const int s_mux1_gpio[4] = {

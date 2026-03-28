@@ -65,6 +65,12 @@ extern "C" {
 #define BSP_TIE_MUX3_A2     GPIO_NUM_41
 #define BSP_TIE_MUX3_A3     GPIO_NUM_42
 
+/* ── ADC128D818 — U6 MAX6103 precision voltage reference ────────────────────*
+ * ADV_CFG bit0 (ext-VREF-en) must be set to enable the external reference.  *
+ * Single definition here — do not redefine in individual source files (F-07).*/
+#define ADC128_VREF_MV   3000   /* MAX6103 3.000 V reference, VREF+ pin */
+#define ADC128_FULL      4096   /* 12-bit ADC full-scale count */
+
 #ifdef __cplusplus
 }
 #endif
