@@ -380,6 +380,25 @@ int tc_cal_apply_adc(int ch, int raw_mv)
 
 /* ── Timestamp & expiry ──────────────────────────────────────────────────── */
 
+/* timegm() is a GNU extension not declared in ESP-IDF newlib headers.
+ * Compute UTC epoch directly from broken-down time fields. */
+static time_t utc_epoch(int year, int mon, int mday, int hour, int min, int sec)
+{
+    /* Normalised Gregorian day count from 1970-01-01 */
+    static const int mdays[12] = {31,28,31,30,31,30,31,31,30,31,30,31};
+    long days = (year - 1970) * 365L;
+    /* Leap days 1970..(year-1) */
+    int y1 = year - 1;
+    days += (y1/4 - 1969/4) - (y1/100 - 1969/100) + (y1/400 - 1969/400);
+    for (int m = 0; m < mon; m++) {
+        days += mdays[m];
+        if (m == 1 && (year % 4 == 0) && (year % 100 != 0 || year % 400 == 0))
+            days++;
+    }
+    days += mday - 1;
+    return (time_t)(days * 86400L + hour * 3600L + min * 60L + sec);
+}
+
 void tc_cal_get_timestamp(char *buf, size_t len)
 {
     snprintf(buf, len, "%s", s_cal.cal_timestamp);
@@ -401,16 +420,7 @@ int tc_cal_is_expired(int max_age_days)
                &y, &mo, &d, &h, &mi, &s) != 6)
         return -1;   /* parse failed — treat as no timestamp */
 
-    struct tm tm_cal = {
-        .tm_year = y - 1900,
-        .tm_mon  = mo - 1,
-        .tm_mday = d,
-        .tm_hour = h,
-        .tm_min  = mi,
-        .tm_sec  = s,
-        .tm_isdst = 0,
-    };
-    time_t cal_time = mktime(&tm_cal);
+    time_t cal_time = utc_epoch(y, mo - 1, d, h, mi, s);
     if (cal_time < 0)
         return -1;
 
