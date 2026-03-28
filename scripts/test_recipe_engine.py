@@ -79,7 +79,14 @@ def main():
     failed = 0
 
     # Test 1: recipe run (hardcoded fallback)
-    print("[1] recipe run (hardcoded fallback)")
+    # Test 1: recipe run from NVS — load known-good 'default', run it
+    print("[1] recipe run default (NVS load + run)")
+    tc = TC()
+    tc.connect()
+    tc.cmd("recipe load default", wait=3)  # ensure known-good recipe is loaded
+    tc.close()
+    time.sleep(0.5)
+
     tc = TC()
     tc.connect()
     resp = tc.cmd_long("recipe run", stop_marker="=== Recipe:", timeout=35)
@@ -103,11 +110,11 @@ def main():
 
     time.sleep(2)
 
-    # Test 2: recipe store default + recipe run default (from NVS)
-    print("[2] recipe store default + recipe run default (NVS round-trip)")
+    # Test 2: store → run → delete (NVS round-trip with unique name to avoid clobbering 'default')
+    print("[2] recipe store/run/delete regtest-engine (NVS round-trip)")
     tc = TC()
     tc.connect()
-    store_resp = tc.cmd("recipe store default", wait=3)
+    store_resp = tc.cmd("recipe store regtest-engine", wait=3)
     stored = "stored" in store_resp.lower()
     tc.close()
 
@@ -118,8 +125,12 @@ def main():
         time.sleep(1)
         tc = TC()
         tc.connect()
-        resp = tc.cmd_long("recipe run default", stop_marker="=== Recipe:", timeout=35)
+        resp = tc.cmd_long("recipe run regtest-engine", stop_marker="=== Recipe:", timeout=35)
         tc.close()
+        # Clean up
+        tc2 = TC(); tc2.connect()
+        tc2.cmd("recipe delete regtest-engine", wait=3)
+        tc2.close()
 
         pass_lines = [l for l in resp.split("\n") if "[PASS]" in l]
         fail_lines = [l for l in resp.split("\n") if "[FAIL]" in l]
