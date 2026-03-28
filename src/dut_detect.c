@@ -93,11 +93,11 @@ bool dut_detect_sample(int *mv_out)
     if (!i2c_lock(500)) return false;
 
     /* 1. Inject signal: U8 ch3, SIG HIGH */
-    mux_select(DUT_DETECT_U8_CH, 1);
+    u8_mux_select(DUT_DETECT_U8_CH, 1);
 
     /* 2. Ensure ADC128 is running */
     if (!i2c_ensure_initialized()) {
-        mux_release();
+        u8_mux_release();
         i2c_unlock();
         return false;
     }
@@ -105,7 +105,7 @@ bool dut_detect_sample(int *mv_out)
               i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONV_RATE, 0x01) &&
               i2c_write_reg(ADDR_ADC128D818, ADC128_REG_CONFIG,    0x01);
     if (!ok) {
-        mux_release();
+        u8_mux_release();
         i2c_unlock();
         return false;
     }
@@ -118,7 +118,7 @@ bool dut_detect_sample(int *mv_out)
     ok = adc128_read_raw_mv(DUT_DETECT_ADC128_CH, mv_out);
 
     /* 5. Release U8 SIG */
-    mux_release();
+    u8_mux_release();
     i2c_unlock();
 
     return ok;
@@ -195,7 +195,7 @@ static void dut_detect_task(void *pvarg)
         vTaskDelay(pdMS_TO_TICKS(DUT_DETECT_INTERVAL_MS));
     }
 
-    mux_release();
+    u8_mux_release();
     ESP_LOGI(TAG, "DUT detect task stopped");
     s_task_handle = NULL;
     vTaskDelete(NULL);

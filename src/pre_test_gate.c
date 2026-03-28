@@ -45,7 +45,7 @@ static const char *TAG = "pre_gate";
 #define INA219_REG_CURRENT       0x04
 #define INA219_CURRENT_LSB_UA    10     /* µA per LSB (CAL=0xA000, PGA=/1) */
 
-/* PB-A: U8 mux ch0, SIG=0 (active low).  Asserted via mux_select(). */
+/* PB-A: U8 mux ch0, SIG=0 (active low).  Asserted via u8_mux_select(). */
 #define MUX_PBA_CH    0
 #define MUX_PBA_SIG   0   /* active low */
 
@@ -76,8 +76,8 @@ static void pre_gate_task(void *pvarg)
 
     /* ── Step 0: Wait for dut_detect to fully stop ───────────────────────── */
     /* dut_detect_stop() is called by SM on off_idle, but the task may still be
-     * mid-sample (mux_select + ADC128 read + mux_release).  If we assert PB-A
-     * before it finishes, dut_detect's mux_release() undoes our PB-A. */
+     * mid-sample (u8_mux_select + ADC128 read + u8_mux_release).  If we assert PB-A
+     * before it finishes, dut_detect's u8_mux_release() undoes our PB-A. */
     dut_detect_wait_stopped();
 
     /* ── Step 1: Enable VDUT (calibrated) + assert PB-A ─────────────────── */
@@ -93,7 +93,7 @@ static void pre_gate_task(void *pvarg)
         goto done;
     }
     vdac_set_enable(0, true);
-    mux_select(MUX_PBA_CH, MUX_PBA_SIG);   /* PB-A assert: ch0, SIG=0 */
+    u8_mux_select(MUX_PBA_CH, MUX_PBA_SIG);   /* PB-A assert: ch0, SIG=0 */
 
     /* Wait for DUT to power up and INA219 conversion to settle */
     vTaskDelay(pdMS_TO_TICKS(500));
@@ -148,7 +148,7 @@ static void pre_gate_task(void *pvarg)
 power_off:
     /* Gate failed — cut power */
     vdac_set_enable(0, false);
-    mux_release();
+    u8_mux_release();
 
 done:
     tc_sm_pre_gate_done(passed, uid_full[0] ? uid_full : NULL, pfw_loaded,

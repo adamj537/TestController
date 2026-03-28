@@ -87,7 +87,7 @@ bool g3_ina219_read_current_ma(int *ma_out)
  */
 void g3_critical_abort(void)
 {
-    mux_release();     /* Release PB-A (SIG=1) immediately */
+    u8_mux_release();     /* Release PB-A (SIG=1) immediately */
     vdac_disable(0);   /* VDUT1 off */
     vdac_disable(1);   /* VDUT2 off */
     printf("[ABORT] CRITICAL step failure — DUT power cut\n");
@@ -144,7 +144,7 @@ void run_power_check(const cJSON *params)
         }
         vdac_set_enable(0, true);
     }
-    mux_select(0, 0);            /* PB-A assert: ch0, SIG=0 */
+    u8_mux_select(0, 0);            /* PB-A assert: ch0, SIG=0 */
     vTaskDelay(pdMS_TO_TICKS(settle_ms));
 
     int vbus_mv = 0, current_ma = 0;
@@ -152,7 +152,7 @@ void run_power_check(const cJSON *params)
 
     /* Release PB-A — DUT KEEPALIVE must hold power.
      * VDUT stays on for subsequent steps (e.g. dut_heartbeat). */
-    mux_release();   /* SIG=1 — DUT KEEPALIVE must take over */
+    u8_mux_release();   /* SIG=1 — DUT KEEPALIVE must take over */
 
     if (!read_ok) {
         selftest_check_record("power_v", false);
@@ -838,9 +838,9 @@ void run_sig_inject(const cJSON *params)
     int level   = param_int(params, "level", 0);
     int hold_ms = param_int(params, "hold_ms", 50);
 
-    mux_select(u8_ch, level);
+    u8_mux_select(u8_ch, level);
     vTaskDelay(pdMS_TO_TICKS(hold_ms));
-    /* Caller is responsible for mux_release() via sig_release step */
+    /* Caller is responsible for u8_mux_release() via sig_release step */
 }
 
 /* ── sig_release ───────────────────────────────────────────────────────────── *
@@ -849,7 +849,7 @@ void run_sig_inject(const cJSON *params)
 void run_sig_release(const cJSON *params)
 {
     (void)params;
-    mux_release();
+    u8_mux_release();
 }
 
 /* ── button_test ───────────────────────────────────────────────────────────── *
@@ -897,7 +897,7 @@ void run_button_test(const cJSON *params)
     selftest_check_record(id_buf, rest_ok);
 
     /* Step 2: Drive LOW via U8 */
-    mux_select(u8_ch, 0);  /* active low */
+    u8_mux_select(u8_ch, 0);  /* active low */
     vTaskDelay(pdMS_TO_TICKS(hold_ms));
 
     /* Step 3: Read driven state — expect LOW */
@@ -909,7 +909,7 @@ void run_button_test(const cJSON *params)
     selftest_check_record(id_buf, drv_ok);
 
     /* Step 4: Release U8 */
-    mux_release();
+    u8_mux_release();
     vTaskDelay(pdMS_TO_TICKS(hold_ms));
 
     /* Step 5: Read restored state — expect HIGH */
