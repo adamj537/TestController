@@ -105,18 +105,14 @@ def _run_script(label: str, script_path: str, extra_args: list[str] | None = Non
 # ── DUT detection ─────────────────────────────────────────────────────────────
 
 def _detect_dut() -> bool:
-    """Return True if a DUT is present and responsive on the pogo pins.
+    """Return True if a DUT is electrically present in the pogo nest.
 
-    Sends ENTER_TEST via UART bridge and looks for TEST_MODE_ACTIVE.
-    Immediately sends EXIT_TEST on success.
+    Uses 'dut sample' which reads the U8 DUT-detect ADC signal.
+    Threshold: < 2000 mV = DUT present.
     """
     try:
-        _tc_cmd("mux release", wait=0.5)
-        resp = _tc_cmd("uart cmd ENTER_TEST", wait=2.0)
-        if "TEST_MODE_ACTIVE" in resp:
-            _tc_cmd("uart cmd EXIT_TEST", wait=1.0)
-            return True
-        return False
+        resp = _tc_cmd("dut sample", wait=1.5)
+        return "PRESENT" in resp
     except OSError:
         return False
 
