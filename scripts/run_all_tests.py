@@ -104,11 +104,24 @@ def _run_script(label: str, script_path: str, extra_args: list[str] | None = Non
 
 # ── DUT detection ─────────────────────────────────────────────────────────────
 
+def _reset_tc() -> None:
+    """Abort any running state machine and return TC to Idle.
+
+    Called before DUT detection and before the recipe run to ensure
+    a clean starting state regardless of what Phase 1 scripts left behind.
+    """
+    try:
+        _tc_cmd("sm abort", wait=1.0)
+        time.sleep(1.5)  # allow state machine to settle to Idle
+    except OSError:
+        pass
+
+
 def _detect_dut() -> bool:
     """Return True if a DUT is electrically present in the pogo nest.
 
-    Uses 'dut sample' which reads the U8 DUT-detect ADC signal.
-    Threshold: < 2000 mV = DUT present.
+    Uses 'dut sample' which reads the U8 DUT-detect ADC signal (no UART,
+    no power required). Threshold: < 2000 mV = DUT present.
     """
     try:
         resp = _tc_cmd("dut sample", wait=1.5)
@@ -197,6 +210,10 @@ def main() -> None:
     print(f"{BOLD}TC + PFW Full Regression Suite{RESET}")
     print("=" * 60)
 
+    # Abort any stale recipe/state machine from a previous run
+    print("\n  Resetting TC state machine ...")
+    _reset_tc()
+
     results: list[tuple[str, bool, float]] = []
     total_time = 0.0
 
@@ -219,7 +236,10 @@ def main() -> None:
 
     # ── DUT detection ─────────────────────────────────────────────────────
     _section("DUT Detection")
-    print("\n  Probing DUT via UART ENTER_TEST ...")
+    # Phase 1 scripts may have left the SM in a non-Idle state — reset first
+    print("\n  Resetting TC state machine ...")
+    _reset_tc()
+    print("  Probing DUT detect signal ...")
     dut_present = _detect_dut()
     if dut_present:
         print(f"  {GREEN}DUT detected{RESET} — PFW tests and recipe will run.")
@@ -247,6 +267,7 @@ def main() -> None:
 
     # ── Recipe run ────────────────────────────────────────────────────────
     _section("Recipe Run")
+    _reset_tc()
     recipe_ok, recipe_pass, recipe_total = _run_recipe(timeout=120)
     recipe_result = (recipe_ok, recipe_pass, recipe_total)
 
