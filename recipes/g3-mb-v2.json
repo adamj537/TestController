@@ -145,10 +145,10 @@
         "branch": 1,
         "v_channel": "VMON1",
         "i_channel": "CMON1",
-        "v_min_mv": 3000,
-        "v_max_mv": 3600,
-        "i_min_mv": 0,
-        "i_max_mv": 500,
+        "v_min_mv": 487,
+        "v_max_mv": 629,
+        "i_min_mv": 30,
+        "i_max_mv": 150,
         "settle_ms": 200,
         "check_id": "br1"
       }
@@ -240,10 +240,10 @@
         "branch": 2,
         "v_channel": "VMON2",
         "i_channel": "CMON2",
-        "v_min_mv": 3800,
-        "v_max_mv": 4400,
-        "i_min_mv": 0,
-        "i_max_mv": 500,
+        "v_min_mv": 388,
+        "v_max_mv": 530,
+        "i_min_mv": 315,
+        "i_max_mv": 347,
         "settle_ms": 200,
         "check_id": "br2"
       }
@@ -410,10 +410,10 @@
         "branch": 3,
         "v_channel": "VMON3",
         "i_channel": "CMON3",
-        "v_min_mv": 3000,
-        "v_max_mv": 3600,
-        "i_min_mv": 0,
-        "i_max_mv": 500,
+        "v_min_mv": 307,
+        "v_max_mv": 500,
+        "i_min_mv": 2,
+        "i_max_mv": 12,
         "settle_ms": 200,
         "check_id": "br3"
       }
@@ -427,8 +427,8 @@
       "enabled": true,
       "params": {
         "channel": "VCPMON",
-        "min_mv": 100,
-        "max_mv": 300,
+        "min_mv": 345,
+        "max_mv": 503,
         "check_id": "br3_cpvmon"
       }
     },
@@ -440,10 +440,10 @@
       "onError": "skip",
       "enabled": true,
       "params": {
-        "channel": "CMON3V",
-        "min_mv": 0,
-        "max_mv": 300,
-        "check_id": "br3_cmon3v"
+        "channel": "CMON3",
+        "min_mv": 2,
+        "max_mv": 12,
+        "check_id": "br3_cmon3"
       }
     },
     {
@@ -557,10 +557,10 @@
         "branch": 4,
         "v_channel": "VMON4",
         "i_channel": "CMON4",
-        "v_min_mv": 3000,
-        "v_max_mv": 5500,
-        "i_min_mv": 0,
-        "i_max_mv": 500,
+        "v_min_mv": 322,
+        "v_max_mv": 590,
+        "i_min_mv": 8,
+        "i_max_mv": 90,
         "settle_ms": 200,
         "check_id": "br4"
       }
@@ -885,12 +885,54 @@
       }
     },
     {
+      "id": "br5_3v_vmon",
+      "primitive": "dut_peripheral_adc_read",
+      "label": "Branch 5 3V Monitor (#5_3V_Volt_Mon)",
+      "criticality": "REQUIRED",
+      "onError": "skip",
+      "enabled": true,
+      "params": {
+        "channel": "VMON5_3V",
+        "min_mv": 270,
+        "max_mv": 600,
+        "check_id": "br5_3v_vmon"
+      }
+    },
+    {
+      "id": "br5_5v_vmon",
+      "primitive": "dut_peripheral_adc_read",
+      "label": "Branch 5 5V Monitor (#5_5V_Volt_Mon)",
+      "criticality": "REQUIRED",
+      "onError": "skip",
+      "enabled": true,
+      "params": {
+        "channel": "VMON5_5V",
+        "min_mv": 475,
+        "max_mv": 625,
+        "check_id": "br5_5v_vmon"
+      }
+    },
+    {
       "id": "dut_rtc_read",
       "primitive": "dut_rtc_read",
       "label": "RTC Battery (1550\u20133700 mV)",
       "criticality": "REQUIRED",
       "onError": "skip",
       "enabled": true
+    },
+    {
+      "id": "dut_vbatt",
+      "primitive": "dut_peripheral_adc_read",
+      "label": "Battery Voltage (LTC2498)",
+      "criticality": "REQUIRED",
+      "onError": "skip",
+      "enabled": true,
+      "params": {
+        "channel": "VBATT",
+        "min_mv": 340,
+        "max_mv": 620,
+        "check_id": "dut_vbatt"
+      }
     },
     {
       "id": "dut_flash_test",
@@ -938,6 +980,20 @@
       "params": {
         "branch": 6,
         "check_id": "br6_enable"
+      }
+    },
+    {
+      "id": "br6_vmon",
+      "primitive": "dut_peripheral_adc_read",
+      "label": "Branch 6 Voltage Monitor (#6_Volt_Mon)",
+      "criticality": "REQUIRED",
+      "onError": "skip",
+      "enabled": true,
+      "params": {
+        "channel": "VMON6",
+        "min_mv": 200,
+        "max_mv": 463,
+        "check_id": "br6_vmon"
       }
     },
     {
@@ -1043,6 +1099,19 @@
       "criticality": "OPTIONAL",
       "onError": "skip",
       "enabled": true
+    },
+    {
+      "id": "dut_program_product",
+      "primitive": "dut_program",
+      "label": "Program Product FW via SWD",
+      "criticality": "CRITICAL",
+      "onError": "abort",
+      "enabled": true,
+      "params": {
+        "target": "product",
+        "verify": true,
+        "timeout_s": 120
+      }
     }
   ]
 }
