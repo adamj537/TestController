@@ -69,11 +69,12 @@ static void recipe_run_task(void *pvarg)
             nvs_close(h);
         }
         if (!recipe_id[0]) {
-            strlcpy(recipe_id, "default", sizeof(recipe_id));
-            ESP_LOGW(TAG, "No active recipe in NVS — falling back to 'default'");
-        } else {
-            ESP_LOGI(TAG, "Active recipe from NVS: %s", recipe_id);
+            ESP_LOGE(TAG, "No active recipe configured — abort");
+            tc_sm_recipe_done(2 /* ABORT */, "recipe_not_configured", 0, 0, 0);
+            vTaskDelete(NULL);
+            return;   /* unreachable — keeps static analysers happy */
         }
+        ESP_LOGI(TAG, "Active recipe from NVS: %s", recipe_id);
     }
 
     /* Load recipe JSON from storage */
@@ -88,9 +89,10 @@ static void recipe_run_task(void *pvarg)
     }
 
     if (!parse_ok) {
-        /* Fall back to hardcoded recipe if stored recipe missing or corrupt */
-        ESP_LOGW(TAG, "Recipe '%s' not found or corrupt — using hardcoded", recipe_id);
-        recipe_json_from_hardcoded(recipe);
+        ESP_LOGE(TAG, "Recipe '%s' not found or corrupt — abort", recipe_id);
+        tc_sm_recipe_done(2 /* ABORT */, "recipe_not_found", 0, 0, 0);
+        vTaskDelete(NULL);
+        return;
     }
 
     ESP_LOGI(TAG, "Running recipe: %s v%s (%d steps)",

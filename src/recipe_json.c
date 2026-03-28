@@ -253,33 +253,37 @@ static int do_recipe(int argc, char **argv)
     if (argc < 2) goto usage;
 
     if (strcmp(argv[1], "show") == 0) {
-        json_recipe_t *recipe = malloc(sizeof(json_recipe_t));
-        if (!recipe) { printf("malloc failed\n"); return 1; }
-        recipe_json_from_hardcoded(recipe);
-        char *json = recipe_json_serialize(recipe);
-        free(recipe);
-        if (json) {
-            printf("%s\n", json);
-            free(json);
+        /* Show a specific recipe or the NVS active recipe */
+        char active_id[64] = {};
+        if (argc >= 3) {
+            strlcpy(active_id, argv[2], sizeof(active_id));
         } else {
-            printf("Serialize failed\n");
+#ifdef ESP_PLATFORM
+            nvs_handle_t h;
+            if (nvs_open("recipes", NVS_READONLY, &h) == ESP_OK) {
+                size_t len = sizeof(active_id);
+                nvs_get_str(h, "active", active_id, &len);
+                nvs_close(h);
+            }
+#endif
         }
+        if (!active_id[0]) {
+            printf("No active recipe configured (use: recipe select <id>)\n");
+            return 1;
+        }
+        char *json = recipe_json_load_nvs(active_id);
+        if (!json) {
+            printf("Recipe '%s' not found in NVS\n", active_id);
+            return 1;
+        }
+        printf("%s\n", json);
+        free(json);
         return 0;
     }
 
     if (strcmp(argv[1], "store") == 0) {
-        const char *id = (argc >= 3) ? argv[2] : "default";
-        json_recipe_t *recipe = malloc(sizeof(json_recipe_t));
-        if (!recipe) { printf("malloc failed\n"); return 1; }
-        recipe_json_from_hardcoded(recipe);
-        strlcpy(recipe->recipe_id, id, sizeof(recipe->recipe_id));
-        char *json = recipe_json_serialize(recipe);
-        free(recipe);
-        if (!json) { printf("Serialize failed\n"); return 1; }
-        int rc = recipe_json_store_nvs(id, json, strlen(json));
-        printf("%s: %s\n", id, rc == 0 ? "stored" : "FAILED");
-        free(json);
-        return rc;
+        printf("Use 'recipe set-b64 <id> <base64-json>' to upload recipes\n");
+        return 1;
     }
 
     if (strcmp(argv[1], "load") == 0) {
