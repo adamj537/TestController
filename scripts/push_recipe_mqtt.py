@@ -81,17 +81,20 @@ def main() -> int:
         except Exception:
             pass
 
+    # paho-mqtt 2.x: loop_start() must run before connect() so the event loop
+    # can process the CONNACK — connect() blocks until CONNACK is received.
     client = mqtt.Client()
     client.on_message = on_message
+    client.loop_start()
     print(f"\n[1] Connecting to {args.broker}:{args.port} ...")
     try:
-        client.connect(args.broker, args.port, 10)
+        client.connect(args.broker, args.port, 60)
     except Exception as e:
+        client.loop_stop()
         print(f"  FAIL: {e}")
         return 1
 
     client.subscribe(ddata_topic)
-    client.loop_start()
     time.sleep(1)
     print("  Connected")
 
