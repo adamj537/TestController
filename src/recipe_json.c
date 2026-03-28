@@ -12,7 +12,9 @@
 #include "nvs.h"
 #include "esp_log.h"
 #include "esp_console.h"
+#ifdef ESP_PLATFORM
 #include "esp_heap_caps.h"
+#endif
 #include "mbedtls/base64.h"
 #include <stdio.h>
 #include <string.h>
@@ -21,11 +23,16 @@
 static const char *TAG = "recipe";
 
 /* cJSON allocator backed by SPIRAM to avoid internal-heap OOM on large recipes.
- * Falls back to internal heap if SPIRAM allocation fails. */
+ * Falls back to internal heap if SPIRAM allocation fails.
+ * On native (test) builds, heap_caps_malloc is not available — use malloc(). */
 static void *s_cjson_malloc(size_t sz)
 {
+#ifdef ESP_PLATFORM
     void *p = heap_caps_malloc(sz, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     return p ? p : malloc(sz);
+#else
+    return malloc(sz);
+#endif
 }
 
 /* ── Parse ───────────────────────────────────────────────────────────────── */
