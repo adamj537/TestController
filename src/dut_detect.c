@@ -14,6 +14,7 @@
 #include "dut_detect.h"
 #include "cmd_swd.h"
 #include "cmd_i2c.h"
+#include "cmd_selftest.h"
 #include "tc_mqtt.h"
 #include "tc_statemachine.h"
 #include "tcc_pinmap.h"
@@ -45,12 +46,6 @@ static const char *TAG = "dut_det";
 #define ADC128_REG_CH_BASE 0x20
 /* ADC128_VREF_MV and ADC128_FULL defined in tie_pinmap.h (F-07) */
 
-/* TIE MUX1 (U11) address GPIOs */
-static const int s_mux1_gpio[4] = {
-    BSP_TIE_MUX1_A0, BSP_TIE_MUX1_A1,
-    BSP_TIE_MUX1_A2, BSP_TIE_MUX1_A3
-};
-
 /* ── Module state ──────────────────────────────────────────────────────────── */
 
 static volatile bool s_running;             /* cross-task: set false by stop, read by task loop (F-08) */
@@ -63,15 +58,8 @@ static int     s_last_mv;
 static volatile TaskHandle_t s_task_handle; /* cross-task: NULL'd by task on exit, polled by wait_stopped (F-08) */
 
 /* ── ADC read helpers ──────────────────────────────────────────────────────── */
-
-static void tie_mux1_select(int ch)
-{
-    for (int bit = 0; bit < 4; bit++) {
-        gpio_num_t pin = (gpio_num_t)s_mux1_gpio[bit];
-        gpio_set_direction(pin, GPIO_MODE_OUTPUT);
-        gpio_set_level(pin, (ch >> bit) & 1);
-    }
-}
+/* F-15: use canonical tie_mux_select() from cmd_selftest.h — avoids duplicate
+ * GPIO-driving logic that diverges from the shared implementation. */
 
 static bool adc128_read_raw_mv(uint8_t ch, int *mv_out)
 {
@@ -110,8 +98,8 @@ bool dut_detect_sample(int *mv_out)
         return false;
     }
 
-    /* 3. Select TIE MUX1 ch12 → ADC128 CH1 */
-    tie_mux1_select(DUT_DETECT_TIE_MUX_CH);
+    /* 3. Select TIE MUX1 ch12 → ADC128 CH1 (tie_mux_select only drives GPIOs, safe under i2c_lock) */
+    tie_mux_select(DUT_DETECT_TIE_MUX_IDX, DUT_DETECT_TIE_MUX_CH);
     vTaskDelay(pdMS_TO_TICKS(200));  /* ADC128 first conversion cycle */
 
     /* 4. Read ADC */
