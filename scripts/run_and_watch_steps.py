@@ -30,8 +30,8 @@ def on_connect(client: mqtt.Client, userdata, flags, rc) -> None:
 
 def on_message(client: mqtt.Client, userdata, msg: mqtt.MQTTMessage) -> None:
     try:
-        obj = json.loads(msg.payload.decode())
-    except json.JSONDecodeError:
+        obj = json.loads(msg.payload.decode("utf-8"))
+    except (json.JSONDecodeError, UnicodeDecodeError):
         return
     t = obj.get("type", "")
     if t == "step_result":
