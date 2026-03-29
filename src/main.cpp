@@ -185,6 +185,12 @@ extern "C" void app_main(void)
     fcntl(fileno(stdout), F_SETFL, fcntl(fileno(stdout), F_GETFL) | O_NONBLOCK);
 #endif
 
+    /* F-16: drive GPIO0 (U8 MUX SIG, strapping pin) OUTPUT+HIGH immediately.
+     * Must happen before any task creation — if GPIO0 floats during the strapping
+     * window after a hard reset, the external MUX SIG circuit can pull it LOW and
+     * boot the device into ROM download mode. */
+    u8_mux_gpio0_init_early();
+
     initialize_nvs();
     conn_log_init();
     crash_log_init();
