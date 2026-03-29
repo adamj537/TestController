@@ -383,7 +383,9 @@ static const char *param_str(const cJSON *params, const char *key, const char *d
  *   "ch"      : int  MUX channel (0–15)
  *   "min_mv"  : int  low threshold in mV (default 0)
  *   "max_mv"  : int  high threshold in mV (default 3300)
- *   "settle_ms": int settle time after mux select (default 20)
+ *   "settle_ms": int settle time after mux select (default 110)
+ *                ADC128 scan cycle = ~12ms/ch × 8ch = ~96ms.  Must wait at
+ *                least one full cycle after MUX change to read a fresh value.
  *   "check_id": string  check ID for result recording (default "mux_read")
  */
 void run_mux_read(const cJSON *params)
@@ -392,7 +394,7 @@ void run_mux_read(const cJSON *params)
     int ch        = param_int(params, "ch", 0);
     int min_mv    = param_int(params, "min_mv", 0);
     int max_mv    = param_int(params, "max_mv", 3300);
-    int settle_ms = param_int(params, "settle_ms", 20);
+    int settle_ms = param_int(params, "settle_ms", 110);
     const char *check_id = param_str(params, "check_id", "mux_read");
 
     if (mux_idx < 0 || mux_idx > 3 || ch < 0 || ch > 15) {
