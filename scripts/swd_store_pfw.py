@@ -37,7 +37,7 @@ def get_wsl_ip() -> str:
                 return ip
         return r.stdout.strip().split()[0]
     except Exception:
-        return '10.0.0.139'
+        return '192.168.50.19'
 
 
 def tc_cmd(cmd_str: str, timeout: float = CMD_TIMEOUT) -> str:

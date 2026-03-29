@@ -13,7 +13,7 @@ Transport: TCP console 10.0.0.244:4242
 Usage:
   python3 scripts/swd_probe_and_flash.py
   python3 scripts/swd_probe_and_flash.py --no-pba   # skip PB-A (DUT already latched)
-  python3 scripts/swd_probe_and_flash.py --url http://10.0.0.139:8081/firmware.bin
+  python3 scripts/swd_probe_and_flash.py --url http://192.168.50.19:8081/firmware.bin
 """
 import argparse
 import socket

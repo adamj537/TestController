@@ -2,9 +2,9 @@
 """Test fw_push DCMD — send firmware to TC, verify fw_push_status DDATA response.
 
 Usage:
-    python3 scripts/test_fw_push.py --fw-type dut_fw --url http://10.0.0.139:8080/pfw.bin --version 0.1.1
-    python3 scripts/test_fw_push.py --fw-type prod_fw --url http://10.0.0.139:8080/product.bin --version 1.0.46
-    python3 scripts/test_fw_push.py --fw-type dut_fw --url http://10.0.0.139:8080/pfw.bin --version 0.1.1 --sha256 abc123...
+    python3 scripts/test_fw_push.py --fw-type dut_fw --url http://192.168.50.19:8080/pfw.bin --version 0.1.1
+    python3 scripts/test_fw_push.py --fw-type prod_fw --url http://192.168.50.19:8080/product.bin --version 1.0.46
+    python3 scripts/test_fw_push.py --fw-type dut_fw --url http://192.168.50.19:8080/pfw.bin --version 0.1.1 --sha256 abc123...
 
 After fw_push completes, also sends versions_get to verify the stored version.
 """
