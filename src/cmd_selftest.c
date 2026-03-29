@@ -995,6 +995,15 @@ static int do_selftest(int argc, char **argv)
     return (s_pass == s_total) ? 0 : 1;
 }
 
+/* ── version command — firmware version string only ─────────────────────── */
+
+static int do_version(int argc, char **argv)
+{
+    (void)argc; (void)argv;
+    printf("%s\n", FW_VERSION_FULL);
+    return 0;
+}
+
 /* ── mac command — unique hardware identity ───────────────────────────────── */
 
 static int do_mac(int argc, char **argv)
@@ -1244,4 +1253,12 @@ void register_selftest_commands(void)
         .func    = &do_mac,
     };
     ESP_ERROR_CHECK(esp_console_cmd_register(&mac_cmd));
+
+    const esp_console_cmd_t version_cmd = {
+        .command = "version",
+        .help    = "Print firmware version string",
+        .hint    = NULL,
+        .func    = &do_version,
+    };
+    ESP_ERROR_CHECK(esp_console_cmd_register(&version_cmd));
 }

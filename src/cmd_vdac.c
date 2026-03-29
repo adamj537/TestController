@@ -383,6 +383,37 @@ static int do_vdac_off(int argc, char **argv)
     return 0;
 }
 
+/* ── vdac status ─────────────────────────────────────────────────────────── */
+
+static int do_vdac_status(int argc, char **argv)
+{
+    (void)argc; (void)argv;
+
+    static const struct { ledc_channel_t ch; uint8_t ina_addr; const char *name; } rails[2] = {
+        { VDAC_CH1, INA219_0_ADDR, "VDUT1" },
+        { VDAC_CH2, INA219_1_ADDR, "VDUT2" },
+    };
+
+    for (int i = 0; i < 2; i++) {
+        bool enabled = s_enabled[i];
+        uint32_t raw_duty = s_timer_ready
+            ? ledc_get_duty(VDAC_LEDC_MODE, rails[i].ch)
+            : 0;
+        int duty_pct = (int)(raw_duty * 100 / 4095);
+
+        int vbus_mv = -1;
+        bool vbus_ok = enabled && read_ina219_vbus(rails[i].ina_addr, &vbus_mv);
+
+        if (vbus_ok)
+            printf("%s: %s  duty=%d%%  vbus=%d mV\n",
+                   rails[i].name, "ON", duty_pct, vbus_mv);
+        else
+            printf("%s: %s  duty=%d%%\n",
+                   rails[i].name, enabled ? "ON (no vbus)" : "off", duty_pct);
+    }
+    return 0;
+}
+
 /* ── Command dispatcher ──────────────────────────────────────────────────── */
 
 static int do_vdac(int argc, char **argv)
@@ -391,14 +422,16 @@ static int do_vdac(int argc, char **argv)
         printf("VDUT regulator DAC control:\n");
         printf("  vdac char                    sweep 0-100%% and print voltage table\n");
         printf("  vdac off                     disable both channels\n");
+        printf("  vdac status                  show enabled state, duty, and live voltage\n");
 #ifdef CONFIG_TC_DIAG_CONSOLE
         printf("  vdac_duty <1|2|both> <pct>   enable and set duty cycle directly\n");
 #endif
         printf("  vdac_voltage <1|2|both> <mV> enable and set voltage (requires cal)\n");
         return 1;
     }
-    if (strcmp(argv[1], "char") == 0) return do_vdac_char(argc - 1, argv + 1);
-    if (strcmp(argv[1], "off")  == 0) return do_vdac_off(argc - 1, argv + 1);
+    if (strcmp(argv[1], "char")   == 0) return do_vdac_char(argc - 1, argv + 1);
+    if (strcmp(argv[1], "off")    == 0) return do_vdac_off(argc - 1, argv + 1);
+    if (strcmp(argv[1], "status") == 0) return do_vdac_status(argc - 1, argv + 1);
     printf("Unknown subcommand '%s'\n", argv[1]);
     return 1;
 }
