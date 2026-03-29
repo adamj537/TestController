@@ -194,7 +194,6 @@ void test_v2_no_recovery_branches(void)
  * ═══════════════════════════════════════════════════════════════════════════ */
 
 static const char *s_deferred_steps[] = {
-    "dut_read_id",          /* passive UART listener — redundant with cmd-based UART steps */
     "dut_uc_adc_vref",      /* ADC pin assignment unconfirmed */
     "dut_uc_adc_3v_rail",   /* ADC pin assignment unconfirmed */
     "dut_flash_test",       /* flash uses QUADSPI, not SPI1 */
@@ -611,6 +610,25 @@ void test_v2_peripheral_adc_read_params(void)
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
+ * Gap-1/Gap-2 — product FW gate + dut_read_id re-enabled
+ * ═══════════════════════════════════════════════════════════════════════════ */
+
+void test_v2_dut_program_product_requires_pass(void)
+{
+    const json_recipe_step_t *s = find_step("dut_program_product");
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_TRUE_MESSAGE(s->requires_pass,
+        "dut_program_product must have requiresPass:true — never flash failed boards");
+}
+
+void test_v2_dut_read_id_enabled(void)
+{
+    const json_recipe_step_t *s = find_step("dut_read_id");
+    TEST_ASSERT_NOT_NULL(s);
+    TEST_ASSERT_TRUE_MESSAGE(s->enabled, "dut_read_id must be enabled (Gap-2)");
+}
+
+/* ═══════════════════════════════════════════════════════════════════════════
  * Persistence round-trip
  * ═══════════════════════════════════════════════════════════════════════════ */
 
@@ -738,6 +756,10 @@ int main(void)
     RUN_TEST(test_v2_button_test_params);
     RUN_TEST(test_v2_i2c_scan_params);
     RUN_TEST(test_v2_peripheral_adc_read_params);
+
+    /* Gap-1/Gap-2 */
+    RUN_TEST(test_v2_dut_program_product_requires_pass);
+    RUN_TEST(test_v2_dut_read_id_enabled);
 
     /* Persistence */
     RUN_TEST(test_v2_store_and_load);

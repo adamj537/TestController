@@ -88,6 +88,8 @@ int recipe_json_parse(const char *json_str, size_t len, json_recipe_t *out)
                 strlcpy(s->on_error, item->valuestring ? item->valuestring : "", sizeof(s->on_error));
             if ((item = cJSON_GetObjectItem(step, "enabled")))
                 s->enabled = cJSON_IsTrue(item);
+            if ((item = cJSON_GetObjectItem(step, "requiresPass")))
+                s->requires_pass = cJSON_IsTrue(item);
 
             /* Default onError to "abort" if not specified */
             if (s->on_error[0] == '\0')

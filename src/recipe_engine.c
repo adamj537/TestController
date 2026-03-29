@@ -109,6 +109,14 @@ int recipe_engine_run(const json_recipe_t *recipe, recipe_run_result_t *result)
             continue;
         }
 
+        /* Gap-1 gate: skip product programming if any REQUIRED step already failed.
+         * Prevents flashing production FW onto a board that did not pass testing. */
+        if (step->requires_pass && any_required_fail) {
+            printf("[SKIP] %s (requires_pass: prior REQUIRED failure — board not production-ready)\n",
+                   step->id);
+            continue;
+        }
+
         primitive_fn_t fn = recipe_primitives_lookup(step->primitive);
         if (!fn) {
             printf("[SKIP] %s (primitive '%s' not found)\n", step->id, step->primitive);

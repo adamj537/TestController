@@ -53,6 +53,7 @@ typedef struct {
     char                on_error[JSON_STEP_ON_ERROR_MAX];   /* "abort" | "skip" | "recovery:<name>" */
     step_criticality_t  criticality;
     bool                enabled;
+    bool                requires_pass;  /* if true, step is skipped when any REQUIRED step has failed */
     cJSON              *params;   /* Non-owning pointer into recipe's _root cJSON tree. NULL = no params. */
 } json_recipe_step_t;
 

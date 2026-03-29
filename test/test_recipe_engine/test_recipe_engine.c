@@ -299,6 +299,79 @@ void test_multi_step_results_are_independent(void)
     TEST_ASSERT_EQUAL(RECIPE_RESULT_FAIL, result.outcome);
 }
 
+/* 7. requires_pass: step skipped when a prior REQUIRED step failed */
+void test_requires_pass_skips_on_prior_required_fail(void)
+{
+    json_recipe_t r;
+    memset(&r, 0, sizeof(r));
+    strlcpy(r.recipe_id, "rp_skip", sizeof(r.recipe_id));
+    r.timeout_ms = 10000;
+    r.step_count = 2;
+
+    /* Step 0: REQUIRED, will fail */
+    strlcpy(r.steps[0].id,        "s0_req",    sizeof(r.steps[0].id));
+    strlcpy(r.steps[0].primitive, "test_prim", sizeof(r.steps[0].primitive));
+    strlcpy(r.steps[0].on_error,  "skip",      sizeof(r.steps[0].on_error));
+    r.steps[0].criticality  = STEP_CRITICALITY_REQUIRED;
+    r.steps[0].enabled      = true;
+
+    /* Step 1: CRITICAL + requires_pass — must be skipped */
+    strlcpy(r.steps[1].id,        "s1_gated",  sizeof(r.steps[1].id));
+    strlcpy(r.steps[1].primitive, "test_prim", sizeof(r.steps[1].primitive));
+    strlcpy(r.steps[1].on_error,  "abort",     sizeof(r.steps[1].on_error));
+    r.steps[1].criticality  = STEP_CRITICALITY_CRITICAL;
+    r.steps[1].enabled      = true;
+    r.steps[1].requires_pass = true;
+
+    s_prim_check_enabled = true;
+    s_prim_check_value   = false;  /* step 0 fails */
+
+    recipe_run_result_t result;
+    recipe_engine_run(&r, &result);
+
+    /* Step 0 ran (and failed); step 1 was gated out — only 1 MQTT result publish */
+    TEST_ASSERT_EQUAL(1, s_step_result_count);
+    TEST_ASSERT_FALSE(result.step_results[0].passed);
+    /* Outcome is FAIL (required failure), not ABORT (gated step never ran) */
+    TEST_ASSERT_EQUAL(RECIPE_RESULT_FAIL, result.outcome);
+}
+
+/* 8. requires_pass: step runs when no prior required failures */
+void test_requires_pass_runs_on_clean_slate(void)
+{
+    json_recipe_t r;
+    memset(&r, 0, sizeof(r));
+    strlcpy(r.recipe_id, "rp_run", sizeof(r.recipe_id));
+    r.timeout_ms = 10000;
+    r.step_count = 2;
+
+    /* Step 0: REQUIRED, will pass */
+    strlcpy(r.steps[0].id,        "s0_pass",   sizeof(r.steps[0].id));
+    strlcpy(r.steps[0].primitive, "test_prim", sizeof(r.steps[0].primitive));
+    strlcpy(r.steps[0].on_error,  "skip",      sizeof(r.steps[0].on_error));
+    r.steps[0].criticality  = STEP_CRITICALITY_REQUIRED;
+    r.steps[0].enabled      = true;
+
+    /* Step 1: requires_pass=true — runs because step 0 passed */
+    strlcpy(r.steps[1].id,        "s1_gated",  sizeof(r.steps[1].id));
+    strlcpy(r.steps[1].primitive, "test_prim", sizeof(r.steps[1].primitive));
+    strlcpy(r.steps[1].on_error,  "abort",     sizeof(r.steps[1].on_error));
+    r.steps[1].criticality  = STEP_CRITICALITY_CRITICAL;
+    r.steps[1].enabled      = true;
+    r.steps[1].requires_pass = true;
+
+    s_prim_check_enabled = true;
+    s_prim_check_value   = true;  /* both pass */
+
+    recipe_run_result_t result;
+    recipe_engine_run(&r, &result);
+
+    TEST_ASSERT_EQUAL(2, s_step_result_count);
+    TEST_ASSERT_TRUE(result.step_results[0].passed);
+    TEST_ASSERT_TRUE(result.step_results[1].passed);
+    TEST_ASSERT_EQUAL(RECIPE_RESULT_PASS, result.outcome);
+}
+
 /* ── main ────────────────────────────────────────────────────────────────── */
 
 int main(void)
@@ -310,5 +383,7 @@ int main(void)
     RUN_TEST(test_mixed_checks_reports_fail);
     RUN_TEST(test_optional_fail_does_not_fail_recipe);
     RUN_TEST(test_multi_step_results_are_independent);
+    RUN_TEST(test_requires_pass_skips_on_prior_required_fail);
+    RUN_TEST(test_requires_pass_runs_on_clean_slate);
     return UNITY_END();
 }
