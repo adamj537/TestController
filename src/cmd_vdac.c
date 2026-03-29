@@ -391,7 +391,9 @@ static int do_vdac(int argc, char **argv)
         printf("VDUT regulator DAC control:\n");
         printf("  vdac char                    sweep 0-100%% and print voltage table\n");
         printf("  vdac off                     disable both channels\n");
+#ifdef CONFIG_TC_DIAG_CONSOLE
         printf("  vdac_duty <1|2|both> <pct>   enable and set duty cycle directly\n");
+#endif
         printf("  vdac_voltage <1|2|both> <mV> enable and set voltage (requires cal)\n");
         return 1;
     }
@@ -411,12 +413,6 @@ void register_vdac_commands(void)
             .func    = &do_vdac,
         },
         {
-            .command = "vdac_duty",
-            .help    = "Set VDUT duty cycle: vdac_duty <1|2|both> <duty_pct 0-100>",
-            .hint    = NULL,
-            .func    = &do_vdac_duty,
-        },
-        {
             .command = "vdac_voltage",
             .help    = "Set VDUT voltage: vdac_voltage <1|2|both> <voltage_mv>  (requires calibration)",
             .hint    = NULL,
@@ -425,4 +421,16 @@ void register_vdac_commands(void)
     };
     for (int i = 0; i < (int)(sizeof(cmds) / sizeof(cmds[0])); i++)
         ESP_ERROR_CHECK(esp_console_cmd_register(&cmds[i]));
+
+#ifdef CONFIG_TC_DIAG_CONSOLE
+    /* vdac_duty: raw duty-cycle control, bypasses calibration.
+     * Inverted law — duty 0% ≈ 10 V; use vdac_voltage for safe control. */
+    static const esp_console_cmd_t duty_cmd = {
+        .command = "vdac_duty",
+        .help    = "Set VDUT duty cycle: vdac_duty <1|2|both> <duty_pct 0-100>",
+        .hint    = NULL,
+        .func    = &do_vdac_duty,
+    };
+    ESP_ERROR_CHECK(esp_console_cmd_register(&duty_cmd));
+#endif /* CONFIG_TC_DIAG_CONSOLE */
 }

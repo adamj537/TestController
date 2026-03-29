@@ -1,0 +1,15 @@
+menu "TC Diagnostic Console"
+
+    config TC_DIAG_CONSOLE
+        bool "Enable diagnostic console commands"
+        default n
+        help
+            Expose low-level diagnostic commands on the TCP console.
+            These commands bypass calibration and safety guards and are
+            intended only for bringup/debug builds.
+
+            Examples gated by this option:
+              vdac_duty  — set VDUT PWM duty cycle directly (inverted law:
+                           0% duty ≈ 10V; use vdac_voltage for safe control)
+
+endmenu
