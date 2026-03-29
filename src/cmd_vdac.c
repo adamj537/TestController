@@ -178,8 +178,8 @@ static int do_vdac_char(int argc, char **argv)
         int mv = 0;
         bool sampled = dut_detect_sample(&mv);
         printf("DUT detect: %d mV (%s)\n", mv,
-               sampled ? (mv < 1500 ? "PRESENT" : "ABSENT") : "SAMPLE FAILED");
-        if (sampled && mv < 1500) {
+               sampled ? (mv < DUT_DETECT_THRESHOLD_MV ? "PRESENT" : "ABSENT") : "SAMPLE FAILED");
+        if (sampled && mv < DUT_DETECT_THRESHOLD_MV) {
             printf("ERROR: DUT detected (%d mV) — remove DUT before running vdac char\n", mv);
             return 1;
         }

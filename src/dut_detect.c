@@ -33,8 +33,7 @@ static const char *TAG = "dut_det";
 #define DUT_DETECT_TIE_MUX_IDX  1     /* MUX1 (U11) */
 #define DUT_DETECT_TIE_MUX_CH   12    /* MUX1 ch12 → #3_3V_Volt_Mon */
 #define DUT_DETECT_ADC128_CH     1     /* ADC128 CH1 = MUX1 output */
-#define DUT_DETECT_THRESHOLD_MV  2000  /* above = no DUT, below = DUT present
-                                        * G3 Rev1: no-DUT=2560 mV, DUT=~1666 mV */
+/* DUT_DETECT_THRESHOLD_MV defined in dut_detect.h (F-17) */
 #define DUT_DETECT_INTERVAL_MS   1000  /* poll interval when idle */
 #define DUT_DETECT_DEBOUNCE      3     /* consecutive readings to confirm change */
 
@@ -241,6 +240,13 @@ void tc_sm_dut_detect_off_idle(void) { dut_detect_stop(); }
 bool dut_detect_present(void)
 {
     return s_dut_present;
+}
+
+bool dut_detect_is_ready(void)
+{
+    /* s_first_report is true until the first sample completes.
+     * Guards must treat not-ready as PRESENT (fail-safe) per F-19. */
+    return !s_first_report;
 }
 
 int dut_detect_last_mv(void)

@@ -23,15 +23,24 @@ void dut_detect_wait_stopped(void);
 void dut_detect_pause(void);
 void dut_detect_resume(void);
 
+/* Threshold: ADC mV below which a DUT is considered present.
+ * G3 Rev1: no-DUT ≈ 2560 mV, DUT-seated ≈ 1666 mV — 2000 mV gives margin.
+ * Used by vdac guards and vdac char safety check (F-17). */
+#define DUT_DETECT_THRESHOLD_MV  2000
+
 /* Current DUT presence state (valid after first sample). */
 bool dut_detect_present(void);
+
+/* True once the first background sample has completed.
+ * Safety guards must treat not-ready as PRESENT (fail-safe) (F-19). */
+bool dut_detect_is_ready(void);
 
 /* Last raw ADC reading in mV (for diagnostics). */
 int dut_detect_last_mv(void);
 
 /* Take a single DUT presence measurement (blocking, ~200ms).
  * Returns true on successful ADC read; *mv_out receives raw mV.
- * Below 1500 mV = DUT present, above = absent. */
+ * Below DUT_DETECT_THRESHOLD_MV = DUT present, above = absent. */
 bool dut_detect_sample(int *mv_out);
 
 /* Register "dut" console command (dut detect start|stop|status|sample). */
