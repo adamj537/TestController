@@ -70,6 +70,12 @@ bool dut_uart_is_open(void);
  * with "OK".  buf receives the full response line (stripped of \r\n). */
 bool dut_cmd(const char *cmd, char *buf, size_t buf_len, int timeout_ms);
 
+/* Send "cmd\r\n", accumulate all response lines into buf until a line that
+ * starts with end_marker is received, or timeout expires.
+ * Returns true if end_marker was seen (command completed). */
+bool dut_cmd_multiline(const char *cmd, char *buf, size_t buf_len,
+                       int timeout_ms, const char *end_marker);
+
 /* ── TIE analog MUX + ADC128 read helpers (shared with g3_primitives.c) ── */
 
 /* Select 1-of-16 channel on TIE MUX mux_idx (0–3).

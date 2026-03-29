@@ -45,6 +45,11 @@ extern void run_short_detect(const cJSON *params);
 extern void run_sig_inject(const cJSON *params);
 extern void run_sig_release(const cJSON *params);
 extern void run_button_test(const cJSON *params);
+/* Phase 3: snapshot-based cross-contamination detection */
+extern void run_mux_snapshot(const cJSON *params);
+extern void run_mux_compare_snapshot(const cJSON *params);
+extern void run_ltc2498_snapshot(const cJSON *params);
+extern void run_ltc2498_compare_snapshot(const cJSON *params);
 
 static const primitive_entry_t s_primitives[] = {
     /* TCC/TIE carrier checks */
@@ -84,6 +89,11 @@ static const primitive_entry_t s_primitives[] = {
     { "sig_inject",          run_sig_inject },
     { "sig_release",         run_sig_release },
     { "button_test",         run_button_test },
+    /* Phase 3: snapshot-based cross-contamination detection */
+    { "mux_snapshot",            run_mux_snapshot },
+    { "mux_compare_snapshot",    run_mux_compare_snapshot },
+    { "ltc2498_snapshot",        run_ltc2498_snapshot },
+    { "ltc2498_compare_snapshot", run_ltc2498_compare_snapshot },
 };
 
 #define PRIMITIVE_COUNT  (sizeof(s_primitives) / sizeof(s_primitives[0]))

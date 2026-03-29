@@ -739,6 +739,45 @@ bool dut_cmd(const char *cmd, char *buf, size_t buf_len, int timeout_ms)
     return (strncmp(buf, "OK", 2) == 0);
 }
 
+bool dut_cmd_multiline(const char *cmd, char *buf, size_t buf_len,
+                       int timeout_ms, const char *end_marker)
+{
+    if (!s_uart_open || !buf || buf_len == 0) return false;
+    buf[0] = '\0';
+
+    uart_flush_input(DUT_UART_PORT);
+    uart_write_bytes(DUT_UART_PORT, cmd, strlen(cmd));
+    uart_write_bytes(DUT_UART_PORT, "\r\n", 2);
+    uart_wait_tx_done(DUT_UART_PORT, pdMS_TO_TICKS(200));
+
+    size_t  pos        = 0;
+    size_t  line_start = 0;
+    bool    found_end  = false;
+    size_t  end_len    = strlen(end_marker);
+    int64_t deadline   = esp_timer_get_time() + (int64_t)timeout_ms * 1000;
+
+    while (esp_timer_get_time() < deadline && pos < buf_len - 1) {
+        uint8_t ch = 0;
+        if (uart_read_bytes(DUT_UART_PORT, &ch, 1, pdMS_TO_TICKS(10)) != 1)
+            continue;
+        if (ch == '\r') continue;
+        if (ch == '\n') {
+            size_t line_len = pos - line_start;
+            if (line_len >= end_len &&
+                strncmp(buf + line_start, end_marker, end_len) == 0) {
+                found_end = true;
+                break;
+            }
+            buf[pos++] = '\n';
+            line_start = pos;
+        } else {
+            buf[pos++] = (char)ch;
+        }
+    }
+    buf[pos] = '\0';
+    return found_end;
+}
+
 /* ── DUT UART recipe steps ────────────────────────────────────────────────── */
 
 void run_dut_enter_test(const cJSON *params)

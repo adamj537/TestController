@@ -33,6 +33,74 @@
 
 static const char *TAG = "g3_prim";
 
+/* ── Snapshot storage ────────────────────────────────────────────────────── */
+
+#define SNAP_NAME_LEN  16
+#define MUX_SNAP_MAX    8
+#define LTC_SNAP_MAX    8
+#define LTC_CH_COUNT   16
+
+typedef struct {
+    char name[SNAP_NAME_LEN];
+    int  mv[4][16];   /* [mux_idx][channel] */
+    bool valid;
+} mux_snapshot_t;
+
+typedef struct {
+    char name[SNAP_NAME_LEN];
+    int  mv[LTC_CH_COUNT];  /* -1 = read error in baseline */
+    bool valid;
+} ltc_snapshot_t;
+
+static mux_snapshot_t s_mux_snaps[MUX_SNAP_MAX];
+static ltc_snapshot_t s_ltc_snaps[LTC_SNAP_MAX];
+
+/* Set true when PC5 (LTC2498 VREF_ENA) is driven HIGH via dut_gpio_set.
+ * Cleared on PC5 LOW.  dut_peripheral_adc_read auto-re-enables if false. */
+static bool s_ltc2498_enabled = false;
+
+static mux_snapshot_t *mux_snap_find_or_alloc(const char *name)
+{
+    for (int i = 0; i < MUX_SNAP_MAX; i++) {
+        if (!s_mux_snaps[i].valid || strcmp(s_mux_snaps[i].name, name) == 0) {
+            strlcpy(s_mux_snaps[i].name, name, SNAP_NAME_LEN);
+            s_mux_snaps[i].valid = true;
+            return &s_mux_snaps[i];
+        }
+    }
+    return NULL;
+}
+
+static const mux_snapshot_t *mux_snap_find(const char *name)
+{
+    for (int i = 0; i < MUX_SNAP_MAX; i++) {
+        if (s_mux_snaps[i].valid && strcmp(s_mux_snaps[i].name, name) == 0)
+            return &s_mux_snaps[i];
+    }
+    return NULL;
+}
+
+static ltc_snapshot_t *ltc_snap_find_or_alloc(const char *name)
+{
+    for (int i = 0; i < LTC_SNAP_MAX; i++) {
+        if (!s_ltc_snaps[i].valid || strcmp(s_ltc_snaps[i].name, name) == 0) {
+            strlcpy(s_ltc_snaps[i].name, name, SNAP_NAME_LEN);
+            s_ltc_snaps[i].valid = true;
+            return &s_ltc_snaps[i];
+        }
+    }
+    return NULL;
+}
+
+static const ltc_snapshot_t *ltc_snap_find(const char *name)
+{
+    for (int i = 0; i < LTC_SNAP_MAX; i++) {
+        if (s_ltc_snaps[i].valid && strcmp(s_ltc_snaps[i].name, name) == 0)
+            return &s_ltc_snaps[i];
+    }
+    return NULL;
+}
+
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
 /* Read an integer param with a fallback default. */
@@ -387,6 +455,10 @@ void run_dut_gpio_set(const cJSON *params)
     bool ok = dut_cmd(cmd, resp, sizeof(resp), 500);
     printf("[%s] dut_gpio_set: %s  %s\n", ok ? "PASS" : "FAIL", cmd, resp);
     selftest_check_record("dut_gpio_set", ok);
+
+    /* Track LTC2498 VREF enable state for auto-re-enable guard */
+    if (ok && strcmp(pin, "PC5") == 0)
+        s_ltc2498_enabled = (strcmp(level, "HIGH") == 0);
 }
 
 /* ── dut_gpio_clear ────────────────────────────────────────────────────────── *
@@ -536,6 +608,17 @@ void run_dut_peripheral_adc_read(const cJSON *params)
         printf("[FAIL] dut_peripheral_adc_read: UART not open\n");
         selftest_check_record(check_id, false);
         return;
+    }
+
+    /* Auto-re-enable LTC2498 VREF if it was cleared (e.g. power cycle) */
+    if (!s_ltc2498_enabled) {
+        char re_resp[64] = {0};
+        bool re_ok = dut_cmd("GPIO_SET PC5 HIGH", re_resp, sizeof(re_resp), 500);
+        if (re_ok) {
+            s_ltc2498_enabled = true;
+            vTaskDelay(pdMS_TO_TICKS(50));  /* brief settle */
+            ESP_LOGW(TAG, "dut_peripheral_adc_read: auto-re-enabled PC5 (VREF)");
+        }
     }
 
     char cmd[64];
@@ -820,6 +903,259 @@ void run_short_detect(const cJSON *params)
     bool pass = (short_count == 0);
     printf("[%s] short_detect: mux=%d  %d shorts detected\n",
            pass ? "PASS" : "FAIL", mux_idx, short_count);
+    selftest_check_record(check_id, pass);
+}
+
+/* ── mux_snapshot ──────────────────────────────────────────────────────────── *
+ * Read all 4 TIE MUXes × 16 channels and store as a named snapshot.
+ * Used as a baseline before enabling a load; pair with mux_compare_snapshot.
+ * No check recorded — this is a capture step.
+ *
+ * Params:
+ *   "name" : string  snapshot name (max 15 chars, e.g. "pre_vref")
+ */
+void run_mux_snapshot(const cJSON *params)
+{
+    const char *name = param_str(params, "name", "snap");
+
+    mux_snapshot_t *snap = mux_snap_find_or_alloc(name);
+    if (!snap) {
+        printf("[FAIL] mux_snapshot: snapshot table full\n");
+        return;
+    }
+    snap->valid = false;
+
+    if (!tie_adc128_init()) {
+        printf("[FAIL] mux_snapshot: ADC128 init failed\n");
+        return;
+    }
+    vTaskDelay(pdMS_TO_TICKS(150));
+
+    int fail_count = 0;
+    for (int mux_idx = 0; mux_idx < 4; mux_idx++) {
+        for (int ch = 0; ch < 16; ch++) {
+            tie_mux_select(mux_idx, ch);
+            vTaskDelay(pdMS_TO_TICKS(20));
+            int mv = 0;
+            if (!tie_adc128_read_raw_mv((uint8_t)mux_idx, &mv)) {
+                snap->mv[mux_idx][ch] = -1;
+                fail_count++;
+            } else {
+                snap->mv[mux_idx][ch] = mv;
+            }
+        }
+    }
+
+    snap->valid = true;
+    printf("[INFO] mux_snapshot: \"%s\" stored (%d read errors)\n", name, fail_count);
+}
+
+/* ── mux_compare_snapshot ──────────────────────────────────────────────────── *
+ * Re-scan all 4×16 TIE channels and compare against a stored mux_snapshot.
+ * Fails if any non-ignored channel delta exceeds noise_mv (absolute value).
+ * Channels whose baseline was -1 (read error) are always skipped.
+ *
+ * Params:
+ *   "name"     : string  snapshot to compare (default "snap")
+ *   "noise_mv" : int     max allowed delta in mV (default 100)
+ *   "check_id" : string  check ID (default "mux_xcheck")
+ *   "ignore"   : array   [{mux: int, ch: int}, ...] channels to skip
+ */
+void run_mux_compare_snapshot(const cJSON *params)
+{
+    const char *name     = param_str(params, "name", "snap");
+    int noise_mv         = param_int(params, "noise_mv", 100);
+    const char *check_id = param_str(params, "check_id", "mux_xcheck");
+
+    const mux_snapshot_t *baseline = mux_snap_find(name);
+    if (!baseline || !baseline->valid) {
+        printf("[FAIL] mux_compare_snapshot: snapshot \"%s\" not found\n", name);
+        selftest_check_record(check_id, false);
+        return;
+    }
+
+    const cJSON *ignore_arr = params ? cJSON_GetObjectItem(params, "ignore") : NULL;
+
+    if (!tie_adc128_init()) {
+        printf("[FAIL] mux_compare_snapshot: ADC128 init failed\n");
+        selftest_check_record(check_id, false);
+        return;
+    }
+    vTaskDelay(pdMS_TO_TICKS(150));
+
+    int delta_count = 0;
+    for (int mux_idx = 0; mux_idx < 4; mux_idx++) {
+        for (int ch = 0; ch < 16; ch++) {
+            int baseline_mv = baseline->mv[mux_idx][ch];
+            if (baseline_mv < 0) continue;  /* baseline read error — skip */
+
+            /* Check ignore list */
+            bool skip = false;
+            if (ignore_arr) {
+                int arr_sz = cJSON_GetArraySize(ignore_arr);
+                for (int k = 0; k < arr_sz && !skip; k++) {
+                    const cJSON *item = cJSON_GetArrayItem(ignore_arr, k);
+                    const cJSON *im = cJSON_GetObjectItem(item, "mux");
+                    const cJSON *ic = cJSON_GetObjectItem(item, "ch");
+                    if (im && cJSON_IsNumber(im) && ic && cJSON_IsNumber(ic) &&
+                        (int)im->valuedouble == mux_idx && (int)ic->valuedouble == ch)
+                        skip = true;
+                }
+            }
+            if (skip) continue;
+
+            tie_mux_select(mux_idx, ch);
+            vTaskDelay(pdMS_TO_TICKS(20));
+
+            int mv = 0;
+            if (!tie_adc128_read_raw_mv((uint8_t)mux_idx, &mv)) continue;
+
+            int delta = mv - baseline_mv;
+            if (delta < 0) delta = -delta;
+            if (delta > noise_mv) {
+                printf("[WARN] mux_compare_snapshot: mux=%d ch=%d  delta=%d mV"
+                       "  (was %d mV, now %d mV)\n",
+                       mux_idx, ch, delta, baseline_mv, mv);
+                delta_count++;
+            }
+        }
+    }
+
+    bool pass = (delta_count == 0);
+    printf("[%s] mux_compare_snapshot: \"%s\"  %d unexpected deltas  (noise_mv=%d)\n",
+           pass ? "PASS" : "FAIL", name, delta_count, noise_mv);
+    selftest_check_record(check_id, pass);
+}
+
+/* ── ltc2498_snapshot ──────────────────────────────────────────────────────── *
+ * Send PERIPHERAL_ADC_SCAN to DUT, parse all 16 LTC2498 channels, and store
+ * as a named snapshot.  Requires DUT UART open.  If a channel returns
+ * ADC_READ_ERROR it is stored as -1 and skipped in future comparisons.
+ * No check recorded — this is a capture step.
+ *
+ * Params:
+ *   "name" : string  snapshot name (default "ltc_snap")
+ */
+void run_ltc2498_snapshot(const cJSON *params)
+{
+    const char *name = param_str(params, "name", "ltc_snap");
+
+    if (!dut_uart_is_open()) {
+        printf("[FAIL] ltc2498_snapshot: UART not open\n");
+        return;
+    }
+
+    ltc_snapshot_t *snap = ltc_snap_find_or_alloc(name);
+    if (!snap) {
+        printf("[FAIL] ltc2498_snapshot: snapshot table full\n");
+        return;
+    }
+    snap->valid = false;
+
+    /* ~160ms × 16 channels ≈ 2.56s; use 3.5s timeout */
+    char buf[512] = {0};
+    bool ok = dut_cmd_multiline("PERIPHERAL_ADC_SCAN", buf, sizeof(buf), 3500, "END");
+    if (!ok) {
+        printf("[FAIL] ltc2498_snapshot: PERIPHERAL_ADC_SCAN timeout or error\n");
+        return;
+    }
+
+    /* Parse "  CH%02d  <value> mV"  or "  CH%02d  ADC_READ_ERROR" */
+    for (int i = 0; i < LTC_CH_COUNT; i++) {
+        char needle[6];
+        snprintf(needle, sizeof(needle), "CH%02d", i);
+        const char *p = strstr(buf, needle);
+        if (!p) { snap->mv[i] = -1; continue; }
+        p += 4;                      /* skip "CH%02d" */
+        while (*p == ' ') p++;
+        snap->mv[i] = ((*p >= '0' && *p <= '9') || *p == '-') ? (int)strtol(p, NULL, 10) : -1;
+    }
+
+    snap->valid = true;
+    printf("[INFO] ltc2498_snapshot: \"%s\" stored\n", name);
+}
+
+/* ── ltc2498_compare_snapshot ──────────────────────────────────────────────── *
+ * Re-scan all LTC2498 channels and compare against a stored ltc2498_snapshot.
+ * Fails if any non-ignored channel delta exceeds noise_mv.
+ * Channels with baseline == -1 or current == -1 (errors) are always skipped.
+ *
+ * Params:
+ *   "name"     : string  snapshot to compare (default "ltc_snap")
+ *   "noise_mv" : int     max allowed delta in mV (default 100)
+ *   "check_id" : string  check ID (default "ltc_xcheck")
+ *   "ignore"   : array   [int, ...] channel indices (0–15) to skip
+ */
+void run_ltc2498_compare_snapshot(const cJSON *params)
+{
+    const char *name     = param_str(params, "name", "ltc_snap");
+    int noise_mv         = param_int(params, "noise_mv", 100);
+    const char *check_id = param_str(params, "check_id", "ltc_xcheck");
+
+    if (!dut_uart_is_open()) {
+        printf("[FAIL] ltc2498_compare_snapshot: UART not open\n");
+        selftest_check_record(check_id, false);
+        return;
+    }
+
+    const ltc_snapshot_t *baseline = ltc_snap_find(name);
+    if (!baseline || !baseline->valid) {
+        printf("[FAIL] ltc2498_compare_snapshot: snapshot \"%s\" not found\n", name);
+        selftest_check_record(check_id, false);
+        return;
+    }
+
+    const cJSON *ignore_arr = params ? cJSON_GetObjectItem(params, "ignore") : NULL;
+
+    char buf[512] = {0};
+    bool ok = dut_cmd_multiline("PERIPHERAL_ADC_SCAN", buf, sizeof(buf), 3500, "END");
+    if (!ok) {
+        printf("[FAIL] ltc2498_compare_snapshot: PERIPHERAL_ADC_SCAN timeout\n");
+        selftest_check_record(check_id, false);
+        return;
+    }
+
+    /* Parse current scan */
+    int current[LTC_CH_COUNT];
+    for (int i = 0; i < LTC_CH_COUNT; i++) {
+        char needle[6];
+        snprintf(needle, sizeof(needle), "CH%02d", i);
+        const char *p = strstr(buf, needle);
+        if (!p) { current[i] = -1; continue; }
+        p += 4;
+        while (*p == ' ') p++;
+        current[i] = ((*p >= '0' && *p <= '9') || *p == '-') ? (int)strtol(p, NULL, 10) : -1;
+    }
+
+    int delta_count = 0;
+    for (int i = 0; i < LTC_CH_COUNT; i++) {
+        if (baseline->mv[i] < 0 || current[i] < 0) continue;  /* error in either scan */
+
+        /* Check ignore list */
+        bool skip = false;
+        if (ignore_arr) {
+            int arr_sz = cJSON_GetArraySize(ignore_arr);
+            for (int k = 0; k < arr_sz && !skip; k++) {
+                const cJSON *item = cJSON_GetArrayItem(ignore_arr, k);
+                if (item && cJSON_IsNumber(item) && (int)item->valuedouble == i)
+                    skip = true;
+            }
+        }
+        if (skip) continue;
+
+        int delta = current[i] - baseline->mv[i];
+        if (delta < 0) delta = -delta;
+        if (delta > noise_mv) {
+            printf("[WARN] ltc2498_compare_snapshot: CH%02d delta=%d mV"
+                   "  (was %d mV, now %d mV)\n",
+                   i, delta, baseline->mv[i], current[i]);
+            delta_count++;
+        }
+    }
+
+    bool pass = (delta_count == 0);
+    printf("[%s] ltc2498_compare_snapshot: \"%s\"  %d unexpected deltas  (noise_mv=%d)\n",
+           pass ? "PASS" : "FAIL", name, delta_count, noise_mv);
     selftest_check_record(check_id, pass);
 }
 
