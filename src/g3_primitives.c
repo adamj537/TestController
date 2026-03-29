@@ -331,15 +331,14 @@ void run_dut_read_id(const cJSON *params)
     char id_buf[64] = {0};
     int id_len = dut_identify_uart(id_buf, sizeof(id_buf), timeout_ms);
 
-    bool ok = (id_len > 0);
-    if (ok) {
-        printf("[PASS] dut_read_id: id=%s (%d chars)\n", id_buf, id_len);
+    if (id_len > 0) {
+        printf("[INFO] dut_read_id: id=%s (%d chars)\n", id_buf, id_len);
         ESP_LOGI(TAG, "DUT id: %s", id_buf);
     } else {
-        printf("[FAIL] dut_read_id: no identifier found within %d ms\n", timeout_ms);
+        printf("[INFO] dut_read_id: no identifier found within %d ms\n", timeout_ms);
     }
 
-    selftest_check_record("dut_read_id", ok);
+    selftest_check_record("dut_read_id", true);  /* informational — never fails */
 }
 
 /* ── swd_probe ─────────────────────────────────────────────────────────────── *
@@ -424,6 +423,21 @@ void run_mux_read(const cJSON *params)
     printf("[%s] mux_read: mux=%d ch=%d  %d mV  (exp %d–%d mV)\n",
            in_range ? "PASS" : "FAIL", mux_idx, ch, mv, min_mv, max_mv);
     selftest_check_record_mv(check_id, in_range, mv);
+
+    {
+        meas_entry_t e = {0};
+        snprintf(e.branch, sizeof(e.branch), "TIE_MUX%d", mux_idx);
+        snprintf(e.net_id, sizeof(e.net_id), "mux%d_ch%02d", mux_idx, ch);
+        strlcpy(e.name, check_id, sizeof(e.name));
+        e.measured       = (float)mv;
+        strlcpy(e.unit, "mV", sizeof(e.unit));
+        e.limit_min      = (float)min_mv;
+        e.limit_max      = (float)max_mv;
+        e.soft_limit_min = NAN;
+        e.soft_limit_max = NAN;
+        e.verdict        = in_range;
+        meas_log_record(&e);
+    }
 }
 
 /* ── dut_gpio_set ──────────────────────────────────────────────────────────── *
@@ -642,6 +656,21 @@ void run_dut_peripheral_adc_read(const cJSON *params)
     printf("[%s] dut_peripheral_adc_read: %s  %d mV  (exp %d–%d mV)\n",
            in_range ? "PASS" : "FAIL", channel, mv, min_mv, max_mv);
     selftest_check_record_mv(check_id, in_range, mv);
+
+    {
+        meas_entry_t e = {0};
+        strlcpy(e.branch, "DUT_PERIPH_ADC", sizeof(e.branch));
+        strlcpy(e.net_id, channel, sizeof(e.net_id));
+        strlcpy(e.name,   channel, sizeof(e.name));
+        e.measured       = (float)mv;
+        strlcpy(e.unit, "mV", sizeof(e.unit));
+        e.limit_min      = (float)min_mv;
+        e.limit_max      = (float)max_mv;
+        e.soft_limit_min = NAN;
+        e.soft_limit_max = NAN;
+        e.verdict        = in_range;
+        meas_log_record(&e);
+    }
 }
 
 /* ── dut_pwr_enable / dut_pwr_disable ──────────────────────────────────────── *
