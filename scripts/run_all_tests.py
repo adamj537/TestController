@@ -253,6 +253,12 @@ def main() -> None:
             phase1_ok = False
         time.sleep(1)
 
+    # ── Restore active recipe — Phase 1 tests change the NVS active pointer ──
+    try:
+        _tc_cmd("recipe load g3-mb-v2", wait=2.0)
+    except OSError:
+        pass  # non-fatal; recipe_run phase will fail if this matters
+
     if not phase1_ok:
         _print_summary(results, total_time, dut_detected=False, recipe_result=None)
         print(f"\n{RED}Phase 1 failed — skipping DUT tests and recipe.{RESET}")
