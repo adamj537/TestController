@@ -81,6 +81,13 @@ static bool vdac_ledc_init(void)
  * so the LEDC driver can take ownership without emitting a warning. */
 bool vdac_set_duty(int ch_idx, int duty_pct)
 {
+    /* F-18: DUT over-voltage interlock.
+     * duty < 75% → output > ~5V, which exceeds the 4V DUT rating.
+     * Guard applies when the DUT detect background task is ready (has sampled)
+     * OR when it has not yet sampled (treat not-ready as PRESENT, fail-safe per F-19). */
+    if (duty_pct < 75 && (!dut_detect_is_ready() || dut_detect_present())) {
+        return false;
+    }
     if (!s_timer_ready && !vdac_ledc_init()) return false;
     ledc_channel_t ch = (ch_idx == 0) ? VDAC_CH1 : VDAC_CH2;
     int gpio          = (ch_idx == 0) ? VDUT1_PWM_GPIO : VDUT2_PWM_GPIO;
@@ -283,11 +290,10 @@ static int do_vdac_duty(int argc, char **argv)
     int duty = atoi(argv[2]);
     if (duty < 0 || duty > 100) { printf("duty_pct must be 0-100\n"); return 1; }
 
-    /* DUT over-voltage protection.
-     * Slope is negative: higher duty → lower voltage.
-     * duty < 75% drives > ~5V which can damage a seated DUT (~4V rating). */
-    if (duty < 75 && dut_detect_present()) {
-        printf("ERR: duty %d%% rejected — DUT present. Minimum 75%% when DUT is seated (duty < 75%% drives > 5V).\n",
+    /* DUT over-voltage protection (see vdac_set_duty for the core interlock).
+     * Mirrors the guard for a user-readable error message. */
+    if (duty < 75 && (!dut_detect_is_ready() || dut_detect_present())) {
+        printf("ERR: duty %d%% rejected — DUT present (or not yet sampled). Minimum 75%% when DUT is seated (duty < 75%% drives > 5V).\n",
                duty);
         return 1;
     }
