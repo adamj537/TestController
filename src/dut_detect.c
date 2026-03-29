@@ -117,12 +117,12 @@ static void publish_dut_presence(bool present, int mv)
 {
     printf("DUT detect: %s  (%d mV)\n", present ? "PRESENT" : "ABSENT", mv);
     tc_mqtt_publish_dut_presence(present, mv);
-    /* Auto-start: trigger selftest-only cycle on DUT insert (if SM is idle).
+    /* Auto-start: trigger full recipe on DUT insert (if SM is idle).
      * Config key autostart/enabled (default 1) can disable this per-fixture.
-     * Cooldown prevents re-triggering immediately after a selftest-only cycle. */
+     * Cooldown prevents re-triggering immediately after a cycle. */
     if (present && !s_autostart_paused && tc_sm_state() == TC_SM_IDLE
         && esp_timer_get_time() >= s_selftest_cooldown_us) {
-        tc_sm_cmd_start_selftest_only();
+        tc_sm_cmd_start();
     }
 }
 
