@@ -7,7 +7,7 @@ Usage:
 Defaults:
     topic_filter = spBv1.0/SensitMfg/DDATA/#
     timeout = 10
-    broker_ip = 10.0.0.59
+    broker_ip = 192.168.50.45
 """
 import json
 import sys
@@ -15,7 +15,7 @@ import time
 
 import paho.mqtt.client as mqtt
 
-DEFAULT_BROKER = "10.0.0.59"
+DEFAULT_BROKER = "192.168.50.45"
 PORT = 1883
 
 

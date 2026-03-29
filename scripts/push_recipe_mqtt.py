@@ -5,7 +5,7 @@ Bypasses the TCP console 4KB line-length limit by using the MQTT DCMD path
 which has a 16KB buffer.
 
 Usage:
-    python3 scripts/push_recipe_mqtt.py recipes/g3-mb-v2.json [--broker 10.0.0.59]
+    python3 scripts/push_recipe_mqtt.py recipes/g3-mb-v2.json [--broker 192.168.50.45]
     python3 scripts/push_recipe_mqtt.py recipes/g3-mb-v2.json --set-active
 """
 
