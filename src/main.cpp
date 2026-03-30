@@ -189,7 +189,8 @@ extern "C" void app_main(void)
      * Must happen before any task creation — if GPIO0 floats during the strapping
      * window after a hard reset, the external MUX SIG circuit can pull it LOW and
      * boot the device into ROM download mode. */
-    u8_mux_gpio0_init_early();
+    u8_mux_gpio0_init_early();  /* DAC MUX: SIG + address pins */
+    tie_mux_gpio_init();        /* TIE MUX: all 16 address pins (incl. JTAG GPIO39-42) */
 
     initialize_nvs();
     conn_log_init();

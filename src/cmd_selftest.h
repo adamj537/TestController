@@ -78,6 +78,11 @@ bool dut_cmd_multiline(const char *cmd, char *buf, size_t buf_len,
 
 /* ── TIE analog MUX + ADC128 read helpers (shared with g3_primitives.c) ── */
 
+/* Configure all 16 TIE MUX address GPIOs as outputs once at startup.
+ * Must be called before tie_mux_select().  Handles gpio_reset_pin() for
+ * GPIO39-42 (JTAG pads on MUX3). */
+void tie_mux_gpio_init(void);
+
 /* Select 1-of-16 channel on TIE MUX mux_idx (0–3).
  * MUX0→ADC128 CH0, MUX1→CH1, MUX2→CH2, MUX3→CH3. */
 void tie_mux_select(int mux_idx, int ch);

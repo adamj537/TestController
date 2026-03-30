@@ -558,13 +558,41 @@ static const int s_mux_gpio[TIE_MUX_COUNT][4] = {
 
 static const uint8_t s_mux_adc128_ch[TIE_MUX_COUNT] = { 0, 1, 2, 3 };
 
+/* Configure all 16 TIE MUX address GPIOs as outputs once at startup.
+ * GPIO39-42 (MUX3) are JTAG pads — gpio_reset_pin() detaches them from the
+ * JTAG mux before configuring as GPIO.  After this call, tie_mux_select()
+ * only needs to set levels — no per-call direction reconfiguration. */
+void tie_mux_gpio_init(void)
+{
+    /* GPIO39-42 are JTAG pads; detach from JTAG peripheral mux first */
+    for (int bit = 0; bit < 4; bit++)
+        gpio_reset_pin((gpio_num_t)s_mux_gpio[3][bit]);
+
+    /* Bulk-configure all 16 address pins as push-pull outputs */
+    uint64_t pin_mask = 0;
+    for (int m = 0; m < TIE_MUX_COUNT; m++)
+        for (int bit = 0; bit < 4; bit++)
+            pin_mask |= (1ULL << s_mux_gpio[m][bit]);
+
+    gpio_config_t cfg = {
+        .pin_bit_mask = pin_mask,
+        .mode         = GPIO_MODE_OUTPUT,
+        .pull_up_en   = GPIO_PULLUP_DISABLE,
+        .pull_down_en = GPIO_PULLDOWN_DISABLE,
+        .intr_type    = GPIO_INTR_DISABLE,
+    };
+    ESP_ERROR_CHECK(gpio_config(&cfg));
+
+    /* Drive all address lines LOW (select channel 0 on every MUX) */
+    for (int m = 0; m < TIE_MUX_COUNT; m++)
+        for (int bit = 0; bit < 4; bit++)
+            gpio_set_level((gpio_num_t)s_mux_gpio[m][bit], 0);
+}
+
 void tie_mux_select(int mux_idx, int ch)
 {
-    for (int bit = 0; bit < 4; bit++) {
-        gpio_num_t pin = (gpio_num_t)s_mux_gpio[mux_idx][bit];
-        gpio_set_direction(pin, GPIO_MODE_OUTPUT);
-        gpio_set_level(pin, (ch >> bit) & 1);
-    }
+    for (int bit = 0; bit < 4; bit++)
+        gpio_set_level((gpio_num_t)s_mux_gpio[mux_idx][bit], (ch >> bit) & 1);
 }
 
 bool tie_adc128_read_raw_mv(uint8_t ch, int *mv_out)
@@ -612,11 +640,6 @@ void run_mux_scan(const cJSON *params)
         }
     }
 
-    /* Release all address GPIOs */
-    for (int m = 0; m < TIE_MUX_COUNT; m++)
-        for (int bit = 0; bit < 4; bit++)
-            gpio_set_direction((gpio_num_t)s_mux_gpio[m][bit], GPIO_MODE_INPUT);
-
     report(err_count == 0, "MUX: scan complete  %d read errors", err_count);
     st_record("mux_scan", err_count == 0);
 }
@@ -656,10 +679,6 @@ void run_dut_heartbeat(const cJSON *params)
         }
         vTaskDelay(pdMS_TO_TICKS(100));
     }
-
-    /* Release address GPIOs */
-    for (int bit = 0; bit < 4; bit++)
-        gpio_set_direction((gpio_num_t)s_mux_gpio[HEARTBEAT_MUX_IDX][bit], GPIO_MODE_INPUT);
 
     bool saw_low  = min_mv < HEARTBEAT_THRESH_MV;
     bool saw_high = max_mv > HEARTBEAT_THRESH_MV;
