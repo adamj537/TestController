@@ -593,6 +593,12 @@ CONFIG_PARTITION_TABLE_MD5=y
 # end of Partition Table
 
 #
+# TC Diagnostic Console
+#
+CONFIG_TC_DIAG_CONSOLE=y
+# end of TC Diagnostic Console
+
+#
 # Compiler options
 #
 CONFIG_COMPILER_OPTIMIZATION_DEBUG=y
@@ -2527,9 +2533,3 @@ CONFIG_SUPPRESS_SELECT_DEBUG_OUTPUT=y
 CONFIG_SUPPORT_TERMIOS=y
 CONFIG_SEMIHOSTFS_MAX_MOUNT_POINTS=1
 # End of deprecated options
-
-#
-# TC Diagnostic Console
-#
-CONFIG_TC_DIAG_CONSOLE=y
-# end of TC Diagnostic Console

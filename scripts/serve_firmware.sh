@@ -28,8 +28,19 @@ fi
 fuser -k 8080/tcp 2>/dev/null || true
 sleep 0.3
 
+# Pick the IP that routes to the TC subnet (handles multi-interface WSL setups)
+TC_IP=$(python3 -c "
+try:
+    from local_config import TC_IP
+    print(TC_IP)
+except Exception:
+    print('192.168.50.30')
+" 2>/dev/null || echo "192.168.50.30")
+WSL_IP=$(ip route get "${TC_IP}" 2>/dev/null | awk 'NR==1 {for(i=1;i<=NF;i++) if($i=="src") {print $(i+1); exit}}')
+WSL_IP="${WSL_IP:-$(hostname -I | awk '{print $1}')}"
+
 echo "Serving ${BUILD_DIR}/ on port 8080 ..."
-echo "OTA command: ota update http://$(hostname -I | awk '{print $1}'):8080/firmware.bin"
+echo "OTA command: ota update http://${WSL_IP}:8080/firmware.bin"
 echo "Press Ctrl-C to stop."
 echo ""
 python3 -m http.server 8080 --directory "${BUILD_DIR}"

@@ -581,7 +581,11 @@ void tie_mux_gpio_init(void)
         .pull_down_en = GPIO_PULLDOWN_DISABLE,
         .intr_type    = GPIO_INTR_DISABLE,
     };
-    ESP_ERROR_CHECK(gpio_config(&cfg));
+    esp_err_t gpio_err = gpio_config(&cfg);
+    if (gpio_err != ESP_OK) {
+        printf("[WARN] tie_mux_gpio_init: gpio_config failed (%d) — MUX may not work; continuing boot\n",
+               gpio_err);
+    }
 
     /* Drive all address lines LOW (select channel 0 on every MUX) */
     for (int m = 0; m < TIE_MUX_COUNT; m++)

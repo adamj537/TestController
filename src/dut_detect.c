@@ -24,6 +24,7 @@
 #include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "nvs.h"
 
 static const char *TAG = "dut_det";
 
@@ -188,12 +189,33 @@ static void dut_detect_task(void *pvarg)
     vTaskDelete(NULL);
 }
 
+/* ── NVS autostart config ──────────────────────────────────────────────────── */
+
+/* Read autostart/enabled (u8) from NVS once at first boot.
+ * If the key is present and value == 0, suppress auto-start.
+ * Default (key absent) leaves s_autostart_paused unchanged (enabled). */
+static void autostart_load_nvs(void)
+{
+    nvs_handle_t h;
+    if (nvs_open("autostart", NVS_READONLY, &h) != ESP_OK) return;
+    uint8_t val = 1;
+    nvs_get_u8(h, "enabled", &val);
+    nvs_close(h);
+    if (val == 0) {
+        s_autostart_paused = true;
+        ESP_LOGI(TAG, "auto-start disabled by NVS (autostart/enabled=0)");
+    }
+}
+
 /* ── Public API ────────────────────────────────────────────────────────────── */
 
 void dut_detect_start(void)
 {
     if (s_running) return;
     s_running = true;
+    if (!s_boot_delay_done) {
+        autostart_load_nvs();  /* read NVS once at boot — before first task cycle */
+    }
     /* s_first_report stays true from static init for the boot-time first sample.
      * SM-driven restarts (on_idle) leave it false so the DUT-present state
      * is carried over and doesn't re-trigger selftest-only. */
@@ -290,6 +312,25 @@ static int do_dut(int argc, char **argv)
         printf("DUT detect: auto-start resumed\n");
         return 0;
     }
+    /* dut autostart <on|off>  — persist auto-start enable/disable in NVS */
+    if (strcmp(argv[1], "autostart") == 0) {
+        if (argc < 3 || (strcmp(argv[2], "on") != 0 && strcmp(argv[2], "off") != 0)) {
+            printf("Usage: dut autostart <on|off>\n");
+            return 1;
+        }
+        bool enable = (strcmp(argv[2], "on") == 0);
+        nvs_handle_t h;
+        if (nvs_open("autostart", NVS_READWRITE, &h) != ESP_OK) {
+            printf("NVS error\n");
+            return 1;
+        }
+        nvs_set_u8(h, "enabled", enable ? 1 : 0);
+        nvs_commit(h);
+        nvs_close(h);
+        s_autostart_paused = !enable;
+        printf("DUT auto-start %s (persisted to NVS)\n", enable ? "enabled" : "disabled");
+        return 0;
+    }
     if (strcmp(argv[1], "sample") == 0) {
         int mv = 0;
         bool ok = dut_detect_sample(&mv);
@@ -346,14 +387,15 @@ static int do_dut(int argc, char **argv)
 
 usage:
     printf("Usage:\n"
-           "  dut start    start background detection task\n"
-           "  dut stop     stop detection task\n"
-           "  dut pause    suppress auto-start (keep detection running)\n"
-           "  dut resume   re-enable auto-start\n"
-           "  dut status   show current state\n"
-           "  dut sample   take one reading now\n"
-           "  dut raw <cmd> forward command to DUT via open UART (no driver install)\n"
-           "  dut scan     send PERIPHERAL_ADC_SCAN and print all channels\n");
+           "  dut start              start background detection task\n"
+           "  dut stop               stop detection task\n"
+           "  dut pause              suppress auto-start (this boot only)\n"
+           "  dut resume             re-enable auto-start (this boot only)\n"
+           "  dut autostart <on|off> enable/disable auto-start persistently (NVS)\n"
+           "  dut status             show current state\n"
+           "  dut sample             take one reading now\n"
+           "  dut raw <cmd>          forward command to DUT via open UART\n"
+           "  dut scan               send PERIPHERAL_ADC_SCAN and print all channels\n");
     return 1;
 }
 
