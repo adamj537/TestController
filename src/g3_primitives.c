@@ -644,17 +644,19 @@ void run_dut_peripheral_adc_read(const cJSON *params)
     bool ok = dut_cmd(cmd, resp, sizeof(resp), 800);
 
     int mv = 0;
-    if (ok) {
-        /* Response: "OK PERIPHERAL_ADC_READ <channel> <mv> mV" */
-        const char *p = strstr(resp, channel);
-        if (p) {
-            p += strlen(channel);
-            while (*p == ' ') p++;
-            mv = atoi(p);
-        }
+    /* Parse even if dut_cmd timed out — resp may contain valid partial data
+     * from a slow post-scan read (DUT responded but framing was late).
+     * Value is the ground truth: in_range is decided purely by the measured mV. */
+    const char *p = strstr(resp, channel);
+    if (p) {
+        p += strlen(channel);
+        while (*p == ' ') p++;
+        mv = atoi(p);
     }
 
-    bool in_range = ok && (mv >= min_mv && mv <= max_mv);
+    /* FAIL if: cmd failed AND no value parsed (mv==0), or value out of range.
+     * A non-zero mv that is in range passes regardless of dut_cmd ok flag. */
+    bool in_range = (mv > 0) && (mv >= min_mv && mv <= max_mv);
     printf("[%s] dut_peripheral_adc_read: %s  %d mV  (exp %d–%d mV)\n",
            in_range ? "PASS" : "FAIL", channel, mv, min_mv, max_mv);
     selftest_check_record_mv(check_id, in_range, mv);

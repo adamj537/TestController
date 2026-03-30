@@ -1,6 +1,6 @@
 {
   "recipeId": "g3-mb-v2",
-  "recipeVersion": "2.2.6",
+  "recipeVersion": "2.2.7",
   "schemaVersion": 1,
   "name": "G3 Main Board \u2014 Full Production Test",
   "timeoutMs": 300000,
@@ -415,7 +415,7 @@
         "channel": "VMON1",
         "check_id": "br1_vmon1_fl"
       },
-      "enabled": false,
+      "enabled": true,
       "onError": "skip",
       "primitive": "dut_peripheral_adc_read",
       "criticality": "REQUIRED"
@@ -552,7 +552,7 @@
         "channel": "VMON1",
         "check_id": "br1_vmon1_s2"
       },
-      "enabled": false,
+      "enabled": true,
       "onError": "skip",
       "primitive": "dut_peripheral_adc_read",
       "criticality": "REQUIRED"
@@ -696,7 +696,7 @@
         "channel": "VMON1",
         "check_id": "br1_vmon1_both"
       },
-      "enabled": false,
+      "enabled": true,
       "onError": "skip",
       "primitive": "dut_peripheral_adc_read",
       "criticality": "REQUIRED"
