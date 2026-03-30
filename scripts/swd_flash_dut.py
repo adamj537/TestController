@@ -18,7 +18,10 @@ import subprocess
 import sys
 import time
 
-TCC_IP       = '192.168.50.30'
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.dirname(__file__))
+from tc_config import TC_IP as TCC_IP
+
 HTTP_PORT    = 8080
 DEFAULT_FW   = 'embedded/dut-firmware/.pio/build/g3-dut/firmware.bin'
 FLASH_TIMEOUT = 120  # seconds
