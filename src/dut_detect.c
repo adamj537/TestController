@@ -303,6 +303,47 @@ static int do_dut(int argc, char **argv)
         return 0;
     }
 
+    /* dut raw <cmd [args...]>
+     * Forward a single-line command to the DUT via the already-open UART
+     * (opened by run_dut_enter_test).  Does NOT install/delete the UART driver.
+     * Use when the recipe engine owns the UART and uart cmd would fail. */
+    if (strcmp(argv[1], "raw") == 0) {
+        if (argc < 3) { printf("Usage: dut raw <command [args...]>\n"); return 1; }
+        if (!dut_uart_is_open()) {
+            printf("DUT UART not open (run dut_enter_test first)\n");
+            return 1;
+        }
+        /* Reassemble arguments into a single command string */
+        char cmd_buf[128] = {0};
+        size_t pos = 0;
+        for (int i = 2; i < argc && pos < sizeof(cmd_buf) - 2; i++) {
+            if (i > 2) cmd_buf[pos++] = ' ';
+            size_t n = strlen(argv[i]);
+            if (pos + n >= sizeof(cmd_buf) - 1) n = sizeof(cmd_buf) - 1 - pos;
+            memcpy(cmd_buf + pos, argv[i], n);
+            pos += n;
+        }
+        cmd_buf[pos] = '\0';
+        char resp[256] = {0};
+        bool ok = dut_cmd(cmd_buf, resp, sizeof(resp), 2000);
+        printf("%s\n", resp);
+        return ok ? 0 : 1;
+    }
+
+    /* dut scan
+     * Send PERIPHERAL_ADC_SCAN to the DUT and print the multi-line response.
+     * Requires the UART to be open (recipe engine must be in test mode). */
+    if (strcmp(argv[1], "scan") == 0) {
+        if (!dut_uart_is_open()) {
+            printf("DUT UART not open (run dut_enter_test first)\n");
+            return 1;
+        }
+        char buf[1024] = {0};
+        bool ok = dut_cmd_multiline("PERIPHERAL_ADC_SCAN", buf, sizeof(buf), 4000, "END");
+        printf("%s\n", buf);
+        return ok ? 0 : 1;
+    }
+
 usage:
     printf("Usage:\n"
            "  dut start    start background detection task\n"
@@ -310,7 +351,9 @@ usage:
            "  dut pause    suppress auto-start (keep detection running)\n"
            "  dut resume   re-enable auto-start\n"
            "  dut status   show current state\n"
-           "  dut sample   take one reading now\n");
+           "  dut sample   take one reading now\n"
+           "  dut raw <cmd> forward command to DUT via open UART (no driver install)\n"
+           "  dut scan     send PERIPHERAL_ADC_SCAN and print all channels\n");
     return 1;
 }
 
