@@ -1,6 +1,6 @@
 {
   "recipeId": "g3-mb-v2",
-  "recipeVersion": "2.2.3",
+  "recipeVersion": "2.2.4",
   "schemaVersion": 1,
   "name": "G3 Main Board — Full Production Test",
   "timeoutMs": 300000,
@@ -275,8 +275,8 @@
       "id": "br1_vmon1_q",
       "label": "Branch 1 — VMON1 Quiescent (5.05V rail alive)",
       "params": {
-        "max_mv": 3600,
-        "min_mv": 3000,
+        "max_mv": 629,
+        "min_mv": 487,
         "channel": "VMON1",
         "check_id": "br1_vmon1_q"
       },
@@ -287,10 +287,10 @@
     },
     {
       "id": "br1_cmon1_q",
-      "label": "Branch 1 — CMON1 Quiescent (low current, TBD limits)",
+      "label": "Branch 1 — CMON1 Quiescent",
       "params": {
-        "max_mv": 500,
-        "min_mv": 0,
+        "max_mv": 150,
+        "min_mv": 30,
         "channel": "CMON1",
         "check_id": "br1_cmon1_q"
       },
@@ -365,8 +365,8 @@
       "id": "br1_vmon1_fl",
       "label": "Branch 1 — VMON1 Under Flashlight Load (voltage stable)",
       "params": {
-        "max_mv": 3600,
-        "min_mv": 3000,
+        "max_mv": 629,
+        "min_mv": 487,
         "channel": "VMON1",
         "check_id": "br1_vmon1_fl"
       },
@@ -377,10 +377,10 @@
     },
     {
       "id": "br1_cmon1_fl",
-      "label": "Branch 1 — CMON1 Flashlight Load (TBD limits)",
+      "label": "Branch 1 — CMON1 Flashlight Load",
       "params": {
         "max_mv": 9999,
-        "min_mv": 0,
+        "min_mv": 30,
         "channel": "CMON1",
         "check_id": "br1_cmon1_fl"
       },
@@ -502,8 +502,8 @@
       "id": "br1_vmon1_s2",
       "label": "Branch 1 — VMON1 Under 2611 Load (voltage stable)",
       "params": {
-        "max_mv": 3600,
-        "min_mv": 3000,
+        "max_mv": 629,
+        "min_mv": 487,
         "channel": "VMON1",
         "check_id": "br1_vmon1_s2"
       },
@@ -514,10 +514,10 @@
     },
     {
       "id": "br1_cmon1_s2",
-      "label": "Branch 1 — CMON1 2611 Sensor Load (TBD limits)",
+      "label": "Branch 1 — CMON1 2611 Sensor Load",
       "params": {
         "max_mv": 9999,
-        "min_mv": 0,
+        "min_mv": 30,
         "channel": "CMON1",
         "check_id": "br1_cmon1_s2"
       },
@@ -646,8 +646,8 @@
       "id": "br1_vmon1_both",
       "label": "Branch 1 — VMON1 Under Dual Load (voltage stable)",
       "params": {
-        "max_mv": 3600,
-        "min_mv": 3000,
+        "max_mv": 629,
+        "min_mv": 487,
         "channel": "VMON1",
         "check_id": "br1_vmon1_both"
       },
@@ -658,10 +658,10 @@
     },
     {
       "id": "br1_cmon1_both",
-      "label": "Branch 1 — CMON1 Dual Load (~double, TBD limits)",
+      "label": "Branch 1 — CMON1 Dual Load",
       "params": {
         "max_mv": 9999,
-        "min_mv": 0,
+        "min_mv": 30,
         "channel": "CMON1",
         "check_id": "br1_cmon1_both"
       },
