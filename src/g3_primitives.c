@@ -288,7 +288,9 @@ void run_dut_program(const cJSON *params)
     swd_fw_target_t target = SWD_FW_TARGET_PFW;
     if (params) {
         const cJSON *t = cJSON_GetObjectItem(params, "target");
-        if (t && cJSON_IsString(t) && strcmp(t->valuestring, "prod") == 0)
+        if (t && cJSON_IsString(t) &&
+            (strcmp(t->valuestring, "prod") == 0 ||
+             strcmp(t->valuestring, "product") == 0))
             target = SWD_FW_TARGET_PROD;
     }
 
