@@ -1,0 +1,23 @@
+# Partition table for G3 TC — 32 MB flash (ESP32-S3-WROOM-2 N32R16V)
+# Board: Freenove ESP32-S3 WROOM-2 (32 MB flash, 16 MB OPI PSRAM)
+#
+# Identical app slot sizing as 8 MB layout (2 MB each, ~1.7x current firmware).
+# Expansion focused on data storage per user request:
+#   recipes:  384 KB → 2 MB  (5x — ~500 recipes @ 4 KB avg)
+#   results:  NEW 8 MB       (dedicated local result archive, LittleFS)
+#   dut_fw:   640 KB → 1 MB  (headroom for larger DUT images)
+#   prod_fw:  896 KB → 2 MB  (headroom for full Sensit product image growth)
+#
+# Free space: ~13 MB (0x1320000–0x2000000) reserved for future use.
+#
+# Name,   Type, SubType,  Offset,     Size,     Flags
+nvs,      data, nvs,      0x9000,     0x6000,
+otadata,  data, ota,      0xf000,     0x2000,
+phy_init, data, phy,      0x11000,    0x1000,
+factory,  app,  factory,  0x20000,    2M,
+ota_0,    app,  ota_0,    0x220000,   2M,
+ota_1,    app,  ota_1,    0x420000,   2M,
+dut_fw,   data, 0xff,     0x620000,   0x100000,
+prod_fw,  data, 0xff,     0x720000,   0x200000,
+recipes,  data, spiffs,   0x920000,   0x200000,
+results,  data, spiffs,   0xB20000,   0x800000,
