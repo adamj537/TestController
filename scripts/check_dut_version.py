@@ -21,6 +21,7 @@ Exit codes:
 
 import argparse
 import json
+import os
 import re
 import socket
 import sys
@@ -29,12 +30,12 @@ import threading
 
 import paho.mqtt.client as mqtt
 
-HOST     = "10.0.0.244"
-PORT     = 4242
-BROKER   = "10.0.0.178"
+sys.path.insert(0, os.path.dirname(__file__))
+from tc_config import HOST, PORT, TC_SERIAL, BROKER
+
 MQTT_PORT = 1883
 GROUP    = "SensitMfg"
-NODE     = "G3-MB-Tester-000"
+NODE     = TC_SERIAL
 CHANNEL  = 0
 BOOT_WAIT = 2.5  # seconds for DUT firmware to boot and be ready for UART
 
@@ -42,14 +43,15 @@ BOOT_WAIT = 2.5  # seconds for DUT firmware to boot and be ready for UART
 # ── TC class (shared with other test scripts) ────────────────────────────────
 
 class TC:
-    def __init__(self, host: str = HOST):
+    def __init__(self, host: str = HOST, port: int = PORT):
         self.host = host
+        self.port = port
         self.sock: socket.socket | None = None
 
     def connect(self) -> None:
         self.sock = socket.socket()
         self.sock.settimeout(10)
-        self.sock.connect((self.host, PORT))
+        self.sock.connect((self.host, self.port))
         time.sleep(0.3)
         self._drain()
 
