@@ -11,9 +11,10 @@ Usage:
 import socket
 import sys
 import time
+import os
 
-HOST = "192.168.50.30"
-PORT = 4242
+sys.path.insert(0, os.path.dirname(__file__))
+from tc_config import HOST, PORT
 
 def main():
     if len(sys.argv) < 2:

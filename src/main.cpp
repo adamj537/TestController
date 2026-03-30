@@ -10,6 +10,7 @@
 #ifdef CONFIG_SPIRAM
 #include "esp_psram.h"
 #include "esp_private/esp_psram_extram.h"
+#include "esp_heap_caps.h"
 #endif
 #include "version.h"
 
@@ -171,6 +172,12 @@ extern "C" void app_main(void)
                 ESP_LOGI(TAG, "PSRAM heap OK, total=%uKB free_spiram=%uKB",
                          (unsigned)(esp_psram_get_size() / 1024),
                          (unsigned)(heap_caps_get_free_size(MALLOC_CAP_SPIRAM) / 1024));
+#if CONFIG_SPIRAM_USE_MALLOC
+                /* CONFIG_SPIRAM_BOOT_INIT is not set (causes WDT on this HW), so the
+                 * system init function that normally enables extmem malloc routing
+                 * never runs.  Do it here so malloc(>=4096) tries PSRAM first. */
+                heap_caps_malloc_extmem_enable(CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL);
+#endif
             }
         }
     }

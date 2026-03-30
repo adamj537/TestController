@@ -52,6 +52,12 @@ typedef struct {
 static json_recipe_t      s_recipe;
 static recipe_run_result_t s_result;
 
+/* Shared 16 KB worker stack — defined in tc_statemachine.c, shared with
+ * flash_dut_task.  State machine guarantees mutual exclusion. */
+#define RECIPE_STACK_WORDS  (16384 / sizeof(StackType_t))
+extern StackType_t tc_sm_worker_stack[];
+static StaticTask_t  s_recipe_tcb;
+
 /* ── Task ─────────────────────────────────────────────────────────────────── */
 
 static void recipe_run_task(void *pvarg)
@@ -181,12 +187,12 @@ bool tc_sm_spawn_recipe_task(const char *recipe_id)
     } else {
         arg->recipe_id[0] = '\0';
     }
-    /* 16 KB stack: recipe primitives (SWD, I2C, UART) have deep call chains */
-    BaseType_t rc = xTaskCreate(recipe_run_task, "recipe_run", 16384, arg, 4, NULL);
-    if (rc != pdPASS) {
-        ESP_LOGE(TAG, "spawn_recipe_task: xTaskCreate failed (rc=%d, free heap=%lu, internal=%lu)",
-                 (int)rc, (unsigned long)esp_get_free_heap_size(),
-                 (unsigned long)heap_caps_get_free_size(MALLOC_CAP_INTERNAL));
+    /* Shared 16 KB static worker stack — see tc_sm_worker_stack in tc_statemachine.c. */
+    TaskHandle_t h = xTaskCreateStatic(recipe_run_task, "recipe_run",
+                                       RECIPE_STACK_WORDS, arg, 4,
+                                       tc_sm_worker_stack, &s_recipe_tcb);
+    if (!h) {
+        ESP_LOGE(TAG, "spawn_recipe_task: xTaskCreateStatic failed");
         free(arg);
         return false;
     }

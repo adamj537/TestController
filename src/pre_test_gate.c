@@ -158,8 +158,25 @@ done:
 
 /* ── Public API (extern bridge from tc_statemachine.c) ───────────────────── */
 
-void tc_sm_spawn_pre_gate_task(void)
+/* Dedicated 8 KB static stack for pre_gate — CANNOT share with recipe/flash
+ * because pre_gate_task calls tc_sm_pre_gate_done() which spawns the next
+ * task (recipe or flash) while pre_gate_task is still on the stack. */
+static StaticTask_t s_pre_gate_tcb;
+static StackType_t  s_pre_gate_stack[8192 / sizeof(StackType_t)];
+#define PRE_GATE_STACK_WORDS  (8192 / sizeof(StackType_t))
+
+bool tc_sm_spawn_pre_gate_task(void)
 {
-    /* 8 KB stack: SWD bit-bang + HTTP-free; tc_config adds small JSON overhead */
-    xTaskCreate(pre_gate_task, "pre_gate", 8192, NULL, 5, NULL);
+    /* Uses the shared worker stack (16 KB available, only 8 KB used here).
+     * xTaskCreate fails on the N32R16V: internal heap too fragmented.
+     * Returns false on failure — caller (holding SM_LOCK) must handle
+     * the SM transition directly to avoid deadlock. */
+    TaskHandle_t h = xTaskCreateStatic(pre_gate_task, "pre_gate",
+                                       PRE_GATE_STACK_WORDS, NULL, 5,
+                                       s_pre_gate_stack, &s_pre_gate_tcb);
+    if (!h) {
+        ESP_LOGE(TAG, "spawn_pre_gate_task: xTaskCreateStatic failed");
+        return false;
+    }
+    return true;
 }

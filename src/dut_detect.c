@@ -119,7 +119,7 @@ static void publish_dut_presence(bool present, int mv)
     printf("DUT detect: %s  (%d mV)\n", present ? "PRESENT" : "ABSENT", mv);
     tc_mqtt_publish_dut_presence(present, mv);
     /* Auto-start: trigger full recipe on DUT insert (if SM is idle).
-     * Config key autostart/enabled (default 1) can disable this per-fixture.
+     * Disabled by default — enabled via UI or `dut autostart on`.
      * Cooldown prevents re-triggering immediately after a cycle. */
     if (present && !s_autostart_paused && tc_sm_state() == TC_SM_IDLE
         && esp_timer_get_time() >= s_selftest_cooldown_us) {
@@ -192,18 +192,24 @@ static void dut_detect_task(void *pvarg)
 /* ── NVS autostart config ──────────────────────────────────────────────────── */
 
 /* Read autostart/enabled (u8) from NVS once at first boot.
- * If the key is present and value == 0, suppress auto-start.
- * Default (key absent) leaves s_autostart_paused unchanged (enabled). */
+ * Default (key absent) = disabled — autostart is opt-in via UI/DCMD.
+ * Only enabled when NVS key is explicitly set to 1. */
 static void autostart_load_nvs(void)
 {
     nvs_handle_t h;
-    if (nvs_open("autostart", NVS_READONLY, &h) != ESP_OK) return;
-    uint8_t val = 1;
+    if (nvs_open("autostart", NVS_READONLY, &h) != ESP_OK) {
+        s_autostart_paused = true;   /* no NVS key → disabled by default */
+        ESP_LOGI(TAG, "auto-start disabled (no NVS key — enable via UI)");
+        return;
+    }
+    uint8_t val = 0;   /* default disabled */
     nvs_get_u8(h, "enabled", &val);
     nvs_close(h);
     if (val == 0) {
         s_autostart_paused = true;
         ESP_LOGI(TAG, "auto-start disabled by NVS (autostart/enabled=0)");
+    } else {
+        ESP_LOGI(TAG, "auto-start enabled by NVS (autostart/enabled=1)");
     }
 }
 
