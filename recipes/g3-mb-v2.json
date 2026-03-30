@@ -1,8 +1,8 @@
 {
   "recipeId": "g3-mb-v2",
-  "recipeVersion": "2.2.4",
+  "recipeVersion": "2.2.5",
   "schemaVersion": 1,
-  "name": "G3 Main Board — Full Production Test",
+  "name": "G3 Main Board \u2014 Full Production Test",
   "timeoutMs": 300000,
   "steps": [
     {
@@ -109,7 +109,7 @@
     },
     {
       "id": "dut_uc_adc_vref",
-      "label": "UC ADC Vref (2400–2600 mV)",
+      "label": "UC ADC Vref (2400\u20132600 mV)",
       "enabled": false,
       "onError": "skip",
       "primitive": "dut_uc_adc_vref",
@@ -117,7 +117,7 @@
     },
     {
       "id": "dut_uc_adc_3v_rail",
-      "label": "UC ADC 3V Rail (2850–3150 mV)",
+      "label": "UC ADC 3V Rail (2850\u20133150 mV)",
       "enabled": false,
       "onError": "skip",
       "primitive": "dut_uc_adc_3v_rail",
@@ -150,8 +150,8 @@
       "id": "ltc_vout_2611",
       "label": "LTC2498 VOUT_2611 (VREF divider, ~596 mV nominal)",
       "params": {
-        "max_mv": 720,
-        "min_mv": 480,
+        "max_mv": 7200,
+        "min_mv": 4800,
         "channel": "VOUT_2611",
         "check_id": "ltc_vout_2611"
       },
@@ -162,7 +162,7 @@
     },
     {
       "id": "ltc_vref_div",
-      "label": "TIE VREF_DIV (MUX3 ch08, CN2 pin 2) — VREF×21.8K/24.01K",
+      "label": "TIE VREF_DIV (MUX3 ch08, CN2 pin 2) \u2014 VREF\u00d721.8K/24.01K",
       "params": {
         "ch": 8,
         "mux": 3,
@@ -207,7 +207,7 @@
     },
     {
       "id": "br1_pre_mux_snap",
-      "label": "Branch 1 — TIE Snapshot (pre-enable baseline)",
+      "label": "Branch 1 \u2014 TIE Snapshot (pre-enable baseline)",
       "params": {
         "name": "br1_pre"
       },
@@ -218,7 +218,7 @@
     },
     {
       "id": "br1_pre_ltc_snap",
-      "label": "Branch 1 — LTC2498 Snapshot (pre-enable baseline)",
+      "label": "Branch 1 \u2014 LTC2498 Snapshot (pre-enable baseline)",
       "params": {
         "name": "br1_pre"
       },
@@ -241,7 +241,7 @@
     },
     {
       "id": "br1_post_mux_cmp",
-      "label": "Branch 1 — TIE Xcheck (post-VIN#1, ignore TBD)",
+      "label": "Branch 1 \u2014 TIE Xcheck (post-VIN#1, ignore TBD)",
       "params": {
         "name": "br1_pre",
         "ignore": [],
@@ -255,7 +255,7 @@
     },
     {
       "id": "br1_post_ltc_cmp",
-      "label": "Branch 1 — LTC2498 Xcheck (post-VIN#1, ignore VMON1+CMON1)",
+      "label": "Branch 1 \u2014 LTC2498 Xcheck (post-VIN#1, ignore VMON1+CMON1)",
       "params": {
         "name": "br1_pre",
         "ignore": [
@@ -264,7 +264,7 @@
           2
         ],
         "check_id": "br1_post_ltc_cmp",
-        "noise_mv": 100
+        "noise_mv": 1000
       },
       "enabled": true,
       "onError": "skip",
@@ -273,10 +273,10 @@
     },
     {
       "id": "br1_vmon1_q",
-      "label": "Branch 1 — VMON1 Quiescent (5.05V rail alive)",
+      "label": "Branch 1 \u2014 VMON1 Quiescent (5.05V rail alive)",
       "params": {
-        "max_mv": 629,
-        "min_mv": 487,
+        "max_mv": 6290,
+        "min_mv": 4870,
         "channel": "VMON1",
         "check_id": "br1_vmon1_q"
       },
@@ -287,10 +287,10 @@
     },
     {
       "id": "br1_cmon1_q",
-      "label": "Branch 1 — CMON1 Quiescent",
+      "label": "Branch 1 \u2014 CMON1 Quiescent",
       "params": {
-        "max_mv": 150,
-        "min_mv": 30,
+        "max_mv": 1500,
+        "min_mv": 300,
         "channel": "CMON1",
         "check_id": "br1_cmon1_q"
       },
@@ -301,7 +301,7 @@
     },
     {
       "id": "br1_pwr_q",
-      "label": "Branch 1 — INA219 Quiescent (2–50 mA)",
+      "label": "Branch 1 \u2014 INA219 Quiescent (2\u201350 mA)",
       "params": {
         "i_max_ma": 50,
         "i_min_ma": 2,
@@ -315,7 +315,7 @@
     },
     {
       "id": "br1_fl_mux_snap",
-      "label": "Branch 1 — TIE Snapshot (pre-flashlight baseline)",
+      "label": "Branch 1 \u2014 TIE Snapshot (pre-flashlight baseline)",
       "params": {
         "name": "br1_fl"
       },
@@ -326,7 +326,7 @@
     },
     {
       "id": "br1_fl_ltc_snap",
-      "label": "Branch 1 — LTC2498 Snapshot (pre-flashlight baseline)",
+      "label": "Branch 1 \u2014 LTC2498 Snapshot (pre-flashlight baseline)",
       "params": {
         "name": "br1_fl"
       },
@@ -349,7 +349,7 @@
     },
     {
       "id": "br1_pwr_fl",
-      "label": "Branch 1 — INA219 Flashlight Load (~229 mA)",
+      "label": "Branch 1 \u2014 INA219 Flashlight Load (~229 mA)",
       "params": {
         "i_max_ma": 270,
         "i_min_ma": 190,
@@ -363,10 +363,10 @@
     },
     {
       "id": "br1_vmon1_fl",
-      "label": "Branch 1 — VMON1 Under Flashlight Load (voltage stable)",
+      "label": "Branch 1 \u2014 VMON1 Under Flashlight Load (voltage stable)",
       "params": {
-        "max_mv": 629,
-        "min_mv": 487,
+        "max_mv": 6290,
+        "min_mv": 4870,
         "channel": "VMON1",
         "check_id": "br1_vmon1_fl"
       },
@@ -377,10 +377,10 @@
     },
     {
       "id": "br1_cmon1_fl",
-      "label": "Branch 1 — CMON1 Flashlight Load",
+      "label": "Branch 1 \u2014 CMON1 Flashlight Load",
       "params": {
-        "max_mv": 9999,
-        "min_mv": 30,
+        "max_mv": 99990,
+        "min_mv": 300,
         "channel": "CMON1",
         "check_id": "br1_cmon1_fl"
       },
@@ -406,7 +406,7 @@
     },
     {
       "id": "br1_fl_mux_cmp",
-      "label": "Branch 1 — TIE Xcheck (post-flashlight, ignore ch10)",
+      "label": "Branch 1 \u2014 TIE Xcheck (post-flashlight, ignore ch10)",
       "params": {
         "name": "br1_fl",
         "ignore": [
@@ -425,14 +425,14 @@
     },
     {
       "id": "br1_fl_ltc_cmp",
-      "label": "Branch 1 — LTC2498 Xcheck (post-flashlight, ignore CMON1)",
+      "label": "Branch 1 \u2014 LTC2498 Xcheck (post-flashlight, ignore CMON1)",
       "params": {
         "name": "br1_fl",
         "ignore": [
           2
         ],
         "check_id": "br1_fl_ltc_cmp",
-        "noise_mv": 100
+        "noise_mv": 1000
       },
       "enabled": true,
       "onError": "skip",
@@ -452,7 +452,7 @@
     },
     {
       "id": "br1_s2_mux_snap",
-      "label": "Branch 1 — TIE Snapshot (pre-2611 sensor baseline)",
+      "label": "Branch 1 \u2014 TIE Snapshot (pre-2611 sensor baseline)",
       "params": {
         "name": "br1_s2"
       },
@@ -463,7 +463,7 @@
     },
     {
       "id": "br1_s2_ltc_snap",
-      "label": "Branch 1 — LTC2498 Snapshot (pre-2611 sensor baseline)",
+      "label": "Branch 1 \u2014 LTC2498 Snapshot (pre-2611 sensor baseline)",
       "params": {
         "name": "br1_s2"
       },
@@ -486,7 +486,7 @@
     },
     {
       "id": "br1_pwr_s2",
-      "label": "Branch 1 — INA219 2611 Sensor Load (~229 mA)",
+      "label": "Branch 1 \u2014 INA219 2611 Sensor Load (~229 mA)",
       "params": {
         "i_max_ma": 270,
         "i_min_ma": 190,
@@ -500,10 +500,10 @@
     },
     {
       "id": "br1_vmon1_s2",
-      "label": "Branch 1 — VMON1 Under 2611 Load (voltage stable)",
+      "label": "Branch 1 \u2014 VMON1 Under 2611 Load (voltage stable)",
       "params": {
-        "max_mv": 629,
-        "min_mv": 487,
+        "max_mv": 6290,
+        "min_mv": 4870,
         "channel": "VMON1",
         "check_id": "br1_vmon1_s2"
       },
@@ -514,10 +514,10 @@
     },
     {
       "id": "br1_cmon1_s2",
-      "label": "Branch 1 — CMON1 2611 Sensor Load",
+      "label": "Branch 1 \u2014 CMON1 2611 Sensor Load",
       "params": {
-        "max_mv": 9999,
-        "min_mv": 30,
+        "max_mv": 99990,
+        "min_mv": 300,
         "channel": "CMON1",
         "check_id": "br1_cmon1_s2"
       },
@@ -530,7 +530,7 @@
       "id": "br1_2611_vout",
       "label": "LEL Sensor 2611 Vout (under load)",
       "params": {
-        "max_mv": 500,
+        "max_mv": 5000,
         "min_mv": 0,
         "channel": "VOUT_2611",
         "check_id": "br1_2611_vout"
@@ -542,7 +542,7 @@
     },
     {
       "id": "br1_s2_mux_cmp",
-      "label": "Branch 1 — TIE Xcheck (post-2611, no expected TIE changes)",
+      "label": "Branch 1 \u2014 TIE Xcheck (post-2611, no expected TIE changes)",
       "params": {
         "name": "br1_s2",
         "ignore": [],
@@ -556,7 +556,7 @@
     },
     {
       "id": "br1_s2_ltc_cmp",
-      "label": "Branch 1 — LTC2498 Xcheck (post-2611, ignore CMON1+VOUT_2611)",
+      "label": "Branch 1 \u2014 LTC2498 Xcheck (post-2611, ignore CMON1+VOUT_2611)",
       "params": {
         "name": "br1_s2",
         "ignore": [
@@ -564,7 +564,7 @@
           2
         ],
         "check_id": "br1_s2_ltc_cmp",
-        "noise_mv": 100
+        "noise_mv": 1000
       },
       "enabled": true,
       "onError": "skip",
@@ -584,7 +584,7 @@
     },
     {
       "id": "br1_both_mux_snap",
-      "label": "Branch 1 — TIE Snapshot (pre-dual-load baseline)",
+      "label": "Branch 1 \u2014 TIE Snapshot (pre-dual-load baseline)",
       "params": {
         "name": "br1_both"
       },
@@ -595,7 +595,7 @@
     },
     {
       "id": "br1_both_ltc_snap",
-      "label": "Branch 1 — LTC2498 Snapshot (pre-dual-load baseline)",
+      "label": "Branch 1 \u2014 LTC2498 Snapshot (pre-dual-load baseline)",
       "params": {
         "name": "br1_both"
       },
@@ -606,7 +606,7 @@
     },
     {
       "id": "br1_both_fl_ena",
-      "label": "Dual Load — Flashlight Enable (PA15 HIGH)",
+      "label": "Dual Load \u2014 Flashlight Enable (PA15 HIGH)",
       "params": {
         "pin": "PA15",
         "level": "HIGH"
@@ -618,7 +618,7 @@
     },
     {
       "id": "br1_both_s2_ena",
-      "label": "Dual Load — 2611 Sensor Enable (PC8 HIGH)",
+      "label": "Dual Load \u2014 2611 Sensor Enable (PC8 HIGH)",
       "params": {
         "pin": "PC8",
         "level": "HIGH"
@@ -630,7 +630,7 @@
     },
     {
       "id": "br1_pwr_both",
-      "label": "Branch 1 — INA219 Dual Load (~458 mA)",
+      "label": "Branch 1 \u2014 INA219 Dual Load (~458 mA)",
       "params": {
         "i_max_ma": 520,
         "i_min_ma": 400,
@@ -644,10 +644,10 @@
     },
     {
       "id": "br1_vmon1_both",
-      "label": "Branch 1 — VMON1 Under Dual Load (voltage stable)",
+      "label": "Branch 1 \u2014 VMON1 Under Dual Load (voltage stable)",
       "params": {
-        "max_mv": 629,
-        "min_mv": 487,
+        "max_mv": 6290,
+        "min_mv": 4870,
         "channel": "VMON1",
         "check_id": "br1_vmon1_both"
       },
@@ -658,10 +658,10 @@
     },
     {
       "id": "br1_cmon1_both",
-      "label": "Branch 1 — CMON1 Dual Load",
+      "label": "Branch 1 \u2014 CMON1 Dual Load",
       "params": {
-        "max_mv": 9999,
-        "min_mv": 30,
+        "max_mv": 99990,
+        "min_mv": 300,
         "channel": "CMON1",
         "check_id": "br1_cmon1_both"
       },
@@ -672,7 +672,7 @@
     },
     {
       "id": "br1_both_mux_cmp",
-      "label": "Branch 1 — TIE Xcheck (post-dual-load, ignore fl ch10)",
+      "label": "Branch 1 \u2014 TIE Xcheck (post-dual-load, ignore fl ch10)",
       "params": {
         "name": "br1_both",
         "ignore": [
@@ -691,7 +691,7 @@
     },
     {
       "id": "br1_both_ltc_cmp",
-      "label": "Branch 1 — LTC2498 Xcheck (post-dual-load, ignore CMON1+VOUT_2611)",
+      "label": "Branch 1 \u2014 LTC2498 Xcheck (post-dual-load, ignore CMON1+VOUT_2611)",
       "params": {
         "name": "br1_both",
         "ignore": [
@@ -699,7 +699,7 @@
           2
         ],
         "check_id": "br1_both_ltc_cmp",
-        "noise_mv": 100
+        "noise_mv": 1000
       },
       "enabled": true,
       "onError": "skip",
@@ -708,7 +708,7 @@
     },
     {
       "id": "br1_both_fl_clear",
-      "label": "Dual Load Cleanup — Flashlight Clear (PA15)",
+      "label": "Dual Load Cleanup \u2014 Flashlight Clear (PA15)",
       "params": {
         "pin": "PA15"
       },
@@ -719,7 +719,7 @@
     },
     {
       "id": "br1_both_s2_clear",
-      "label": "Dual Load Cleanup — 2611 Clear (PC8)",
+      "label": "Dual Load Cleanup \u2014 2611 Clear (PC8)",
       "params": {
         "pin": "PC8"
       },
@@ -945,8 +945,8 @@
       "id": "br3_cp_vmon",
       "label": "Charge Pump Voltage",
       "params": {
-        "max_mv": 503,
-        "min_mv": 345,
+        "max_mv": 5030,
+        "min_mv": 3450,
         "channel": "VCPMON",
         "check_id": "br3_cpvmon"
       },
@@ -959,8 +959,8 @@
       "id": "br3_3v_cmon",
       "label": "Branch 3 Current Monitor",
       "params": {
-        "max_mv": 12,
-        "min_mv": 2,
+        "max_mv": 120,
+        "min_mv": 20,
         "channel": "CMON3",
         "check_id": "br3_cmon3"
       },
@@ -1411,8 +1411,8 @@
       "id": "br5_3v_vmon",
       "label": "Branch 5 3V Monitor (#5_3V_Volt_Mon)",
       "params": {
-        "max_mv": 600,
-        "min_mv": 270,
+        "max_mv": 6000,
+        "min_mv": 2700,
         "channel": "VMON5_3V",
         "check_id": "br5_3v_vmon"
       },
@@ -1425,8 +1425,8 @@
       "id": "br5_5v_vmon",
       "label": "Branch 5 5V Monitor (#5_5V_Volt_Mon)",
       "params": {
-        "max_mv": 625,
-        "min_mv": 475,
+        "max_mv": 6250,
+        "min_mv": 4750,
         "channel": "VMON5_5V",
         "check_id": "br5_5v_vmon"
       },
@@ -1437,7 +1437,7 @@
     },
     {
       "id": "dut_rtc_read",
-      "label": "RTC Battery (1550–3700 mV)",
+      "label": "RTC Battery (1550\u20133700 mV)",
       "enabled": true,
       "onError": "skip",
       "primitive": "dut_rtc_read",
@@ -1447,8 +1447,8 @@
       "id": "dut_vbatt",
       "label": "Battery Voltage (LTC2498)",
       "params": {
-        "max_mv": 620,
-        "min_mv": 340,
+        "max_mv": 6200,
+        "min_mv": 3400,
         "channel": "VBATT",
         "check_id": "dut_vbatt"
       },
@@ -1469,8 +1469,8 @@
       "id": "br5_pressure_pos",
       "label": "Pressure Pos ADC",
       "params": {
-        "max_mv": 4500,
-        "min_mv": 50,
+        "max_mv": 45000,
+        "min_mv": 500,
         "channel": "PRESSURE_POS",
         "check_id": "br5_pres_pos"
       },
@@ -1483,8 +1483,8 @@
       "id": "br5_pressure_neg",
       "label": "Pressure Neg ADC",
       "params": {
-        "max_mv": 4500,
-        "min_mv": 50,
+        "max_mv": 45000,
+        "min_mv": 500,
         "channel": "PRESSURE_NEG",
         "check_id": "br5_pres_neg"
       },
@@ -1509,8 +1509,8 @@
       "id": "br6_vmon",
       "label": "Branch 6 Voltage Monitor (#6_Volt_Mon)",
       "params": {
-        "max_mv": 463,
-        "min_mv": 200,
+        "max_mv": 4630,
+        "min_mv": 2000,
         "channel": "VMON6",
         "check_id": "br6_vmon"
       },
