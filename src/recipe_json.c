@@ -319,7 +319,12 @@ static int do_recipe(int argc, char **argv)
         char *json = recipe_json_load_nvs(id);
         if (!json) { printf("Recipe '%s' not found\n", id); return 1; }
 
+#ifdef ESP_PLATFORM
+        json_recipe_t *recipe = heap_caps_malloc(sizeof(json_recipe_t),
+                                                  MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+#else
         json_recipe_t *recipe = malloc(sizeof(json_recipe_t));
+#endif
         if (!recipe) { free(json); printf("malloc failed\n"); return 1; }
         int rc = recipe_json_parse(json, strlen(json), recipe);
         if (rc == 0) {

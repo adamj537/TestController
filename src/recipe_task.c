@@ -177,7 +177,14 @@ void tc_sm_spawn_recipe_task(const char *recipe_id)
         arg->recipe_id[0] = '\0';
     }
     /* 16 KB stack: recipe primitives (SWD, I2C, UART) have deep call chains */
-    xTaskCreate(recipe_run_task, "recipe_run", 16384, arg, 4, NULL);
+    BaseType_t rc = xTaskCreate(recipe_run_task, "recipe_run", 16384, arg, 4, NULL);
+    if (rc != pdPASS) {
+        ESP_LOGE(TAG, "spawn_recipe_task: xTaskCreate failed (rc=%d, free heap=%lu)",
+                 (int)rc, (unsigned long)esp_get_free_heap_size());
+        free(arg);
+        tc_sm_recipe_done(2 /* ABORT */, "task_create_failed", 0, 0, 0);
+        return;
+    }
     /* 2 KB stack: watchdog only reads INA219 + checks DUT detect cached state */
     xTaskCreate(dut_watchdog_task, "dut_wdog", 2048, NULL, 4, NULL);
 }

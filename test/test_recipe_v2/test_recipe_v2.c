@@ -178,8 +178,8 @@ void test_v2_timeout_300s(void)
 
 void test_v2_step_count(void)
 {
-    /* 73 steps as of v2.0.0 — must fit in JSON_RECIPE_STEPS_MAX (96) */
-    TEST_ASSERT_GREATER_OR_EQUAL(60, s_recipe.step_count);
+    /* 136 steps as of v2.2.8 — must fit in JSON_RECIPE_STEPS_MAX (160) */
+    TEST_ASSERT_GREATER_OR_EQUAL(100, s_recipe.step_count);
     TEST_ASSERT_LESS_OR_EQUAL(JSON_RECIPE_STEPS_MAX, s_recipe.step_count);
 }
 
