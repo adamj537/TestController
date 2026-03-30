@@ -12,9 +12,18 @@ typedef struct {
     int         value;
 } tc_mqtt_check_t;
 
+typedef struct {
+    bool  has_value;
+    float measured;
+    char  unit[8];
+    float limit_min;
+    float limit_max;
+} step_meas_t;
+
 void tc_mqtt_publish_step_result(int step_index, const char *step_id,
                                   const char *step_status, bool passed,
-                                  uint32_t duration_ms);
+                                  uint32_t duration_ms,
+                                  const step_meas_t *meas);
 
 void tc_mqtt_publish_test_progress(const char *event_type, bool in_progress,
                                     int step_index, int step_total,

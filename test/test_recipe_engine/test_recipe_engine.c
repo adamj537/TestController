@@ -47,9 +47,10 @@ static int  s_step_result_count = 0;
 
 void tc_mqtt_publish_step_result(int step_index, const char *step_id,
                                   const char *step_status, bool passed,
-                                  uint32_t duration_ms)
+                                  uint32_t duration_ms,
+                                  const step_meas_t *meas)
 {
-    (void)step_index; (void)step_id; (void)step_status; (void)duration_ms;
+    (void)step_index; (void)step_id; (void)step_status; (void)duration_ms; (void)meas;
     s_last_step_passed = passed;
     s_step_result_count++;
 }

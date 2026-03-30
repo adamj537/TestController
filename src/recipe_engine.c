@@ -18,6 +18,7 @@
 #include "esp_log.h"
 #include "esp_timer.h"
 #include <string.h>
+#include <math.h>
 #include <stdio.h>
 
 static const char *TAG = "recipe_eng";
@@ -147,11 +148,14 @@ int recipe_engine_run(const json_recipe_t *recipe, recipe_run_result_t *result)
         bool step_ok = false;
         int  measured_value = 0;
         bool has_value      = false;
+        step_meas_t step_meas = { .has_value = false, .measured = NAN,
+                                  .unit = "", .limit_min = NAN, .limit_max = NAN };
 
         for (attempts = 0; attempts < max_retries; attempts++) {
             int ncheck_before = selftest_get_ncheck();
             int pass_before   = selftest_get_pass();
             int total_before  = selftest_get_total();
+            int mlog_before   = meas_log_count();
             int64_t step_start = esp_timer_get_time();
 
             fn(step->params);
@@ -183,6 +187,19 @@ int recipe_engine_run(const json_recipe_t *recipe, recipe_run_result_t *result)
                 const tc_mqtt_check_t *last   = &checks[ncheck_after - 1];
                 has_value      = last->has_value;
                 measured_value = last->value;
+            }
+
+            /* Capture measurement data from meas_log (float values with limits) */
+            int mlog_after = meas_log_count();
+            if (mlog_after > mlog_before) {
+                const meas_entry_t *me = meas_log_get_entry(mlog_after - 1);
+                if (me) {
+                    step_meas.has_value = true;
+                    step_meas.measured  = me->measured;
+                    step_meas.limit_min = me->limit_min;
+                    step_meas.limit_max = me->limit_max;
+                    strlcpy(step_meas.unit, me->unit, sizeof(step_meas.unit));
+                }
             }
 
             /* Record this attempt's duration on first pass-through */
@@ -221,7 +238,8 @@ int recipe_engine_run(const json_recipe_t *recipe, recipe_run_result_t *result)
             uint32_t dur_ms = (result->step_result_count > 0)
                 ? result->step_results[result->step_result_count - 1].duration_ms
                 : 0;
-            tc_mqtt_publish_step_result(step_num, step->id, step_status, step_ok, dur_ms);
+            tc_mqtt_publish_step_result(step_num, step->id, step_status, step_ok, dur_ms,
+                                       step_meas.has_value ? &step_meas : NULL);
         }
 
         result->total_count++;
