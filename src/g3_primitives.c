@@ -1316,6 +1316,50 @@ void run_button_test(const cJSON *params)
     selftest_check_record(id_buf, rel_ok);
 }
 
+/* ── ina_read ──────────────────────────────────────────────────────────────── *
+ * Read INA219 #0 (VDUT1 bus) and check current against min/max limits.
+ * Used as a sanity-check after branch enables to confirm expected current draw.
+ *
+ * Params:
+ *   "i_min_ma"  : int     minimum expected current in mA (default 0)
+ *   "i_max_ma"  : int     maximum expected current in mA (default 2000)
+ *   "check_id"  : string  label for meas_log and selftest_check_record
+ */
+void run_ina_read(const cJSON *params)
+{
+    int i_min_ma         = param_int(params, "i_min_ma",  0);
+    int i_max_ma         = param_int(params, "i_max_ma",  2000);
+    const char *check_id = param_str(params, "check_id", "ina_read");
+
+    int vbus_mv = 0, current_ma = 0;
+    bool read_ok = ina219_read(ADDR_INA219_0, &vbus_mv, &current_ma);
+    if (!read_ok) {
+        printf("[FAIL] ina_read: INA219 read error\n");
+        selftest_check_record(check_id, false);
+        return;
+    }
+
+    bool in_range = (current_ma >= i_min_ma && current_ma <= i_max_ma);
+    printf("[%s] ina_read: %s  vbus=%d mV  current=%d mA  range[%d–%d]\n",
+           in_range ? "PASS" : "FAIL", check_id,
+           vbus_mv, current_ma, i_min_ma, i_max_ma);
+
+    meas_entry_t e = {0};
+    strlcpy(e.branch,   check_id,   sizeof(e.branch));
+    strlcpy(e.net_id,   "INA219_I", sizeof(e.net_id));
+    strlcpy(e.name,     check_id,   sizeof(e.name));
+    e.measured       = (float)current_ma;
+    strlcpy(e.unit,     "mA",       sizeof(e.unit));
+    e.limit_min      = (float)i_min_ma;
+    e.limit_max      = (float)i_max_ma;
+    e.soft_limit_min = NAN;
+    e.soft_limit_max = NAN;
+    e.verdict        = in_range;
+    meas_log_record(&e);
+
+    selftest_check_record(check_id, in_range);
+}
+
 /* ── delay_ms ──────────────────────────────────────────────────────────────── *
  * Recipe-level blocking delay primitive.
  *

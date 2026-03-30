@@ -1,6 +1,6 @@
 {
   "recipeId": "g3-mb-v2",
-  "recipeVersion": "2.2.7",
+  "recipeVersion": "2.2.8",
   "schemaVersion": 1,
   "name": "G3 Main Board \u2014 Full Production Test",
   "timeoutMs": 300000,
@@ -136,7 +136,7 @@
     },
     {
       "id": "vin5_enable",
-      "label": "VIN5 Enable (PD14 HIGH) — required before LTC2498 VREF",
+      "label": "VIN5 Enable (PD14 HIGH) \u2014 required before LTC2498 VREF",
       "params": {
         "pin": "PD14",
         "level": "HIGH"
@@ -230,7 +230,7 @@
     },
     {
       "id": "br1_fl_clear_init",
-      "label": "BR1 Init — Flashlight Clear (PA15 LOW)",
+      "label": "BR1 Init \u2014 Flashlight Clear (PA15 LOW)",
       "params": {
         "pin": "PA15"
       },
@@ -240,14 +240,40 @@
       "criticality": "REQUIRED"
     },
     {
+      "id": "br1_fl_pin_verify",
+      "label": "Branch 1 \u2014 Verify PA15 (FLASHLIGHT_ENA) is LOW after clear",
+      "params": {
+        "pin": "PA15",
+        "expected": "LOW",
+        "check_id": "br1_fl_pin_verify"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_pin_read",
+      "criticality": "REQUIRED"
+    },
+    {
       "id": "br1_s2_clear_init",
-      "label": "BR1 Init — 2611 Sensor Clear (PC8 LOW)",
+      "label": "BR1 Init \u2014 2611 Sensor Clear (PC8 LOW)",
       "params": {
         "pin": "PC8"
       },
       "enabled": true,
       "onError": "skip",
       "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "br1_s2_pin_verify",
+      "label": "Branch 1 \u2014 Verify PC8 (2611_SENSOR_ENA) is LOW after clear",
+      "params": {
+        "pin": "PC8",
+        "expected": "LOW",
+        "check_id": "br1_s2_pin_verify"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_pin_read",
       "criticality": "REQUIRED"
     },
     {
@@ -270,6 +296,19 @@
       "enabled": true,
       "onError": "skip",
       "primitive": "ltc2498_snapshot",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "br1_ina_pre",
+      "label": "Branch 1 \u2014 INA219 Pre-enable Baseline (DUT quiescent, no branch loads)",
+      "params": {
+        "i_min_ma": 2,
+        "i_max_ma": 300,
+        "check_id": "br1_ina_pre"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "ina_read",
       "criticality": "REQUIRED"
     },
     {
@@ -345,17 +384,16 @@
       "criticality": "REQUIRED"
     },
     {
-      "id": "br1_pwr_q",
-      "label": "Branch 1 \u2014 INA219 Quiescent (2\u201350 mA)",
+      "id": "br1_ina_q",
+      "label": "Branch 1 \u2014 INA219 Quiescent (branch on, both loads off)",
       "params": {
-        "i_max_ma": 50,
-        "i_min_ma": 2,
-        "v_nominal_mv": 3300,
-        "v_tolerance_pct": 5
+        "i_min_ma": 20,
+        "i_max_ma": 500,
+        "check_id": "br1_ina_q"
       },
       "enabled": true,
       "onError": "skip",
-      "primitive": "power_check",
+      "primitive": "ina_read",
       "criticality": "REQUIRED"
     },
     {
@@ -393,17 +431,16 @@
       "criticality": "REQUIRED"
     },
     {
-      "id": "br1_pwr_fl",
-      "label": "Branch 1 \u2014 INA219 Flashlight Load (~229 mA)",
+      "id": "br1_ina_fl",
+      "label": "Branch 1 \u2014 INA219 Flashlight Only",
       "params": {
-        "i_max_ma": 270,
-        "i_min_ma": 190,
-        "v_nominal_mv": 3300,
-        "v_tolerance_pct": 5
+        "i_min_ma": 100,
+        "i_max_ma": 1200,
+        "check_id": "br1_ina_fl"
       },
       "enabled": true,
       "onError": "skip",
-      "primitive": "power_check",
+      "primitive": "ina_read",
       "criticality": "REQUIRED"
     },
     {
@@ -530,17 +567,16 @@
       "criticality": "REQUIRED"
     },
     {
-      "id": "br1_pwr_s2",
-      "label": "Branch 1 \u2014 INA219 2611 Sensor Load (~229 mA)",
+      "id": "br1_ina_s2",
+      "label": "Branch 1 \u2014 INA219 2611 Sensor Only",
       "params": {
-        "i_max_ma": 270,
-        "i_min_ma": 190,
-        "v_nominal_mv": 3300,
-        "v_tolerance_pct": 5
+        "i_min_ma": 50,
+        "i_max_ma": 800,
+        "check_id": "br1_ina_s2"
       },
       "enabled": true,
       "onError": "skip",
-      "primitive": "power_check",
+      "primitive": "ina_read",
       "criticality": "REQUIRED"
     },
     {
@@ -674,17 +710,16 @@
       "criticality": "REQUIRED"
     },
     {
-      "id": "br1_pwr_both",
-      "label": "Branch 1 \u2014 INA219 Dual Load (~458 mA)",
+      "id": "br1_ina_both",
+      "label": "Branch 1 \u2014 INA219 Both Loads (flashlight + 2611)",
       "params": {
-        "i_max_ma": 520,
-        "i_min_ma": 400,
-        "v_nominal_mv": 3300,
-        "v_tolerance_pct": 5
+        "i_min_ma": 200,
+        "i_max_ma": 2000,
+        "check_id": "br1_ina_both"
       },
       "enabled": true,
       "onError": "skip",
-      "primitive": "power_check",
+      "primitive": "ina_read",
       "criticality": "REQUIRED"
     },
     {

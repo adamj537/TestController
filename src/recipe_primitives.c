@@ -50,6 +50,7 @@ extern void run_mux_snapshot(const cJSON *params);
 extern void run_mux_compare_snapshot(const cJSON *params);
 extern void run_ltc2498_snapshot(const cJSON *params);
 extern void run_ltc2498_compare_snapshot(const cJSON *params);
+extern void run_ina_read(const cJSON *params);
 extern void run_delay_ms(const cJSON *params);
 
 static const primitive_entry_t s_primitives[] = {
@@ -96,6 +97,7 @@ static const primitive_entry_t s_primitives[] = {
     { "ltc2498_snapshot",        run_ltc2498_snapshot },
     { "ltc2498_compare_snapshot", run_ltc2498_compare_snapshot },
     /* Utility */
+    { "ina_read",                run_ina_read },
     { "delay_ms",                run_delay_ms },
 };
 
