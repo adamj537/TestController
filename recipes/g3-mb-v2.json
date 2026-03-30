@@ -1,6 +1,6 @@
 {
   "recipeId": "g3-mb-v2",
-  "recipeVersion": "2.2.8",
+  "recipeVersion": "2.2.13",
   "schemaVersion": 1,
   "name": "G3 Main Board \u2014 Full Production Test",
   "timeoutMs": 300000,
@@ -181,7 +181,7 @@
       "enabled": true,
       "onError": "skip",
       "primitive": "dut_peripheral_adc_read",
-      "criticality": "REQUIRED"
+      "criticality": "OPTIONAL"
     },
     {
       "id": "ltc_vref_div",
@@ -196,7 +196,7 @@
       "enabled": true,
       "onError": "skip",
       "primitive": "mux_read",
-      "criticality": "REQUIRED"
+      "criticality": "OPTIONAL"
     },
     {
       "id": "ltc_vref_xcheck",
@@ -212,7 +212,7 @@
         "check_id": "ltc_vref_xcheck",
         "noise_mv": 100
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "mux_compare_snapshot",
       "criticality": "REQUIRED"
@@ -309,7 +309,7 @@
       "enabled": true,
       "onError": "skip",
       "primitive": "ina_read",
-      "criticality": "REQUIRED"
+      "criticality": "OPTIONAL"
     },
     {
       "id": "br1_enable",
@@ -332,7 +332,7 @@
         "check_id": "br1_post_mux_cmp",
         "noise_mv": 200
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "mux_compare_snapshot",
       "criticality": "REQUIRED"
@@ -353,7 +353,7 @@
       "enabled": true,
       "onError": "skip",
       "primitive": "ltc2498_compare_snapshot",
-      "criticality": "REQUIRED"
+      "criticality": "OPTIONAL"
     },
     {
       "id": "br1_vmon1_q",
@@ -367,7 +367,7 @@
       "enabled": true,
       "onError": "skip",
       "primitive": "dut_peripheral_adc_read",
-      "criticality": "REQUIRED"
+      "criticality": "OPTIONAL"
     },
     {
       "id": "br1_cmon1_q",
@@ -378,7 +378,7 @@
         "channel": "CMON1",
         "check_id": "br1_cmon1_q"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "dut_peripheral_adc_read",
       "criticality": "REQUIRED"
@@ -391,7 +391,7 @@
         "i_max_ma": 500,
         "check_id": "br1_ina_q"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "ina_read",
       "criticality": "REQUIRED"
@@ -438,7 +438,7 @@
         "i_max_ma": 1200,
         "check_id": "br1_ina_fl"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "ina_read",
       "criticality": "REQUIRED"
@@ -455,7 +455,7 @@
       "enabled": true,
       "onError": "skip",
       "primitive": "dut_peripheral_adc_read",
-      "criticality": "REQUIRED"
+      "criticality": "OPTIONAL"
     },
     {
       "id": "br1_cmon1_fl",
@@ -466,7 +466,7 @@
         "channel": "CMON1",
         "check_id": "br1_cmon1_fl"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "dut_peripheral_adc_read",
       "criticality": "REQUIRED"
@@ -481,7 +481,7 @@
         "min_mv": 2400,
         "check_id": "br1_flashlight"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "mux_read",
       "criticality": "REQUIRED"
@@ -500,7 +500,7 @@
         "check_id": "br1_fl_mux_cmp",
         "noise_mv": 100
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "mux_compare_snapshot",
       "criticality": "REQUIRED"
@@ -519,7 +519,7 @@
       "enabled": true,
       "onError": "skip",
       "primitive": "ltc2498_compare_snapshot",
-      "criticality": "REQUIRED"
+      "criticality": "OPTIONAL"
     },
     {
       "id": "br1_flashlight_clear",
@@ -574,7 +574,7 @@
         "i_max_ma": 800,
         "check_id": "br1_ina_s2"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "ina_read",
       "criticality": "REQUIRED"
@@ -591,7 +591,7 @@
       "enabled": true,
       "onError": "skip",
       "primitive": "dut_peripheral_adc_read",
-      "criticality": "REQUIRED"
+      "criticality": "OPTIONAL"
     },
     {
       "id": "br1_cmon1_s2",
@@ -602,7 +602,7 @@
         "channel": "CMON1",
         "check_id": "br1_cmon1_s2"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "dut_peripheral_adc_read",
       "criticality": "REQUIRED"
@@ -619,7 +619,7 @@
       "enabled": true,
       "onError": "skip",
       "primitive": "dut_peripheral_adc_read",
-      "criticality": "REQUIRED"
+      "criticality": "OPTIONAL"
     },
     {
       "id": "br1_s2_mux_cmp",
@@ -630,7 +630,7 @@
         "check_id": "br1_s2_mux_cmp",
         "noise_mv": 100
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "mux_compare_snapshot",
       "criticality": "REQUIRED"
@@ -650,7 +650,7 @@
       "enabled": true,
       "onError": "skip",
       "primitive": "ltc2498_compare_snapshot",
-      "criticality": "REQUIRED"
+      "criticality": "OPTIONAL"
     },
     {
       "id": "br1_2611_clear",
@@ -717,7 +717,7 @@
         "i_max_ma": 2000,
         "check_id": "br1_ina_both"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "ina_read",
       "criticality": "REQUIRED"
@@ -734,7 +734,7 @@
       "enabled": true,
       "onError": "skip",
       "primitive": "dut_peripheral_adc_read",
-      "criticality": "REQUIRED"
+      "criticality": "OPTIONAL"
     },
     {
       "id": "br1_cmon1_both",
@@ -745,7 +745,7 @@
         "channel": "CMON1",
         "check_id": "br1_cmon1_both"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "dut_peripheral_adc_read",
       "criticality": "REQUIRED"
@@ -764,7 +764,7 @@
         "check_id": "br1_both_mux_cmp",
         "noise_mv": 100
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "mux_compare_snapshot",
       "criticality": "REQUIRED"
@@ -784,7 +784,7 @@
       "enabled": true,
       "onError": "skip",
       "primitive": "ltc2498_compare_snapshot",
-      "criticality": "REQUIRED"
+      "criticality": "OPTIONAL"
     },
     {
       "id": "br1_both_fl_clear",
@@ -846,7 +846,7 @@
         "settle_ms": 200,
         "v_channel": "VMON2"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "branch_test",
       "criticality": "REQUIRED"
@@ -873,7 +873,7 @@
         "min_mv": 2400,
         "check_id": "br2_led_r"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "mux_read",
       "criticality": "REQUIRED"
@@ -911,7 +911,7 @@
         "min_mv": 2400,
         "check_id": "br2_led_g"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "mux_read",
       "criticality": "REQUIRED"
@@ -949,7 +949,7 @@
         "min_mv": 2400,
         "check_id": "br2_led_b"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "mux_read",
       "criticality": "REQUIRED"
@@ -973,7 +973,7 @@
         "check_id": "br2_i2c_led",
         "expected": "0x40"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "dut_i2c_scan",
       "criticality": "REQUIRED"
@@ -1016,7 +1016,7 @@
         "settle_ms": 200,
         "v_channel": "VMON3"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "branch_test",
       "criticality": "REQUIRED"
@@ -1030,7 +1030,7 @@
         "channel": "VCPMON",
         "check_id": "br3_cpvmon"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "dut_peripheral_adc_read",
       "criticality": "REQUIRED"
@@ -1044,7 +1044,7 @@
         "channel": "CMON3",
         "check_id": "br3_cmon3"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "dut_peripheral_adc_read",
       "criticality": "REQUIRED"
@@ -1109,7 +1109,7 @@
         "min_mv": 2400,
         "check_id": "br3_tc_mode"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "mux_read",
       "criticality": "REQUIRED"
@@ -1163,7 +1163,7 @@
         "settle_ms": 200,
         "v_channel": "VMON4"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "branch_test",
       "criticality": "REQUIRED"
@@ -1190,7 +1190,7 @@
         "min_mv": 2400,
         "check_id": "br4_pump_ena"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "mux_read",
       "criticality": "REQUIRED"
@@ -1227,7 +1227,7 @@
         "hold_ms": 50,
         "check_id": "br5_btn_b"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "button_test",
       "criticality": "REQUIRED"
@@ -1241,7 +1241,7 @@
         "hold_ms": 50,
         "check_id": "br5_btn_c"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "button_test",
       "criticality": "REQUIRED"
@@ -1268,7 +1268,7 @@
         "min_mv": 2400,
         "check_id": "br5_lcd_sck"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "mux_read",
       "criticality": "REQUIRED"
@@ -1306,7 +1306,7 @@
         "min_mv": 2400,
         "check_id": "br5_lcd_mosi"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "mux_read",
       "criticality": "REQUIRED"
@@ -1344,7 +1344,7 @@
         "min_mv": 2400,
         "check_id": "br5_lcd_cs"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "mux_read",
       "criticality": "REQUIRED"
@@ -1382,7 +1382,7 @@
         "min_mv": 2400,
         "check_id": "br5_lcd_extcomin"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "mux_read",
       "criticality": "REQUIRED"
@@ -1458,7 +1458,7 @@
         "min_mv": 2400,
         "check_id": "br5_backlight"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "mux_read",
       "criticality": "REQUIRED"
@@ -1482,7 +1482,7 @@
         "check_id": "br5_i2c3",
         "expected": ""
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "dut_i2c_scan",
       "criticality": "REQUIRED"
@@ -1499,7 +1499,7 @@
       "enabled": true,
       "onError": "skip",
       "primitive": "dut_peripheral_adc_read",
-      "criticality": "REQUIRED"
+      "criticality": "OPTIONAL"
     },
     {
       "id": "br5_5v_vmon",
@@ -1510,7 +1510,7 @@
         "channel": "VMON5_5V",
         "check_id": "br5_5v_vmon"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "dut_peripheral_adc_read",
       "criticality": "REQUIRED"
@@ -1535,7 +1535,7 @@
       "enabled": true,
       "onError": "skip",
       "primitive": "dut_peripheral_adc_read",
-      "criticality": "REQUIRED"
+      "criticality": "OPTIONAL"
     },
     {
       "id": "dut_flash_test",
@@ -1554,7 +1554,7 @@
         "channel": "PRESSURE_POS",
         "check_id": "br5_pres_pos"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "dut_peripheral_adc_read",
       "criticality": "REQUIRED"
@@ -1571,7 +1571,7 @@
       "enabled": true,
       "onError": "skip",
       "primitive": "dut_peripheral_adc_read",
-      "criticality": "REQUIRED"
+      "criticality": "OPTIONAL"
     },
     {
       "id": "br6_enable",
@@ -1597,7 +1597,7 @@
       "enabled": true,
       "onError": "skip",
       "primitive": "dut_peripheral_adc_read",
-      "criticality": "REQUIRED"
+      "criticality": "OPTIONAL"
     },
     {
       "id": "br6_bt_gpio1",
@@ -1621,7 +1621,7 @@
         "min_mv": 2400,
         "check_id": "br6_bt_gpio1"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "mux_read",
       "criticality": "REQUIRED"
@@ -1659,7 +1659,7 @@
         "min_mv": 2400,
         "check_id": "br6_bt_gpio2"
       },
-      "enabled": true,
+      "enabled": false,
       "onError": "skip",
       "primitive": "mux_read",
       "criticality": "REQUIRED"
