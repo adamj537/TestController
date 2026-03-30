@@ -1050,6 +1050,19 @@ void run_mux_compare_snapshot(const cJSON *params)
                        "  (was %d mV, now %d mV)\n",
                        mux_idx, ch, delta, baseline_mv, mv);
                 delta_count++;
+                /* Record per-channel delta so it appears in the result payload */
+                meas_entry_t e = {0};
+                snprintf(e.branch, sizeof(e.branch), "TIE_XCHECK_%s", name);
+                snprintf(e.net_id, sizeof(e.net_id), "MUX%d_CH%02d", mux_idx, ch);
+                snprintf(e.name,   sizeof(e.name),   "MUX%d_CH%02d_delta", mux_idx, ch);
+                e.measured       = (float)delta;
+                strlcpy(e.unit,  "mV", sizeof(e.unit));
+                e.limit_min      = NAN;
+                e.limit_max      = (float)noise_mv;
+                e.soft_limit_min = NAN;
+                e.soft_limit_max = NAN;
+                e.verdict        = false;
+                meas_log_record(&e);
             }
         }
     }
@@ -1183,6 +1196,19 @@ void run_ltc2498_compare_snapshot(const cJSON *params)
                    "  (was %d mV, now %d mV)\n",
                    i, delta, baseline->mv[i], current[i]);
             delta_count++;
+            /* Record per-channel delta so it appears in the result payload */
+            meas_entry_t e = {0};
+            snprintf(e.branch, sizeof(e.branch), "LTC_XCHECK_%s", name);
+            snprintf(e.net_id, sizeof(e.net_id), "LTC_CH%02d", i);
+            snprintf(e.name,   sizeof(e.name),   "LTC_CH%02d_delta", i);
+            e.measured       = (float)delta;
+            strlcpy(e.unit,  "mV", sizeof(e.unit));
+            e.limit_min      = NAN;
+            e.limit_max      = (float)noise_mv;
+            e.soft_limit_min = NAN;
+            e.soft_limit_max = NAN;
+            e.verdict        = false;
+            meas_log_record(&e);
         }
     }
 
