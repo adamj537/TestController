@@ -640,8 +640,8 @@ void run_dut_peripheral_adc_read(const cJSON *params)
     char cmd[64];
     snprintf(cmd, sizeof(cmd), "PERIPHERAL_ADC_READ %s", channel);
     char resp[128] = {0};
-    /* 500ms timeout: 160ms conversion + margin */
-    bool ok = dut_cmd(cmd, resp, sizeof(resp), 500);
+    /* 800ms timeout: 160ms conversion + generous margin for post-scan reads */
+    bool ok = dut_cmd(cmd, resp, sizeof(resp), 800);
 
     int mv = 0;
     if (ok) {
@@ -1286,4 +1286,23 @@ void run_button_test(const cJSON *params)
     printf("[%s] button_test: %s released %s  (exp HIGH)\n",
            rel_ok ? "PASS" : "FAIL", pin, resp);
     selftest_check_record(id_buf, rel_ok);
+}
+
+/* ── delay_ms ──────────────────────────────────────────────────────────────── *
+ * Recipe-level blocking delay primitive.
+ *
+ * Params:
+ *   "ms" : int  milliseconds to wait (required)
+ */
+void run_delay_ms(const cJSON *params)
+{
+    int ms = param_int(params, "ms", 0);
+    if (ms <= 0) {
+        printf("[FAIL] delay_ms: missing or zero 'ms' param\n");
+        selftest_check_record("delay_ms", false);
+        return;
+    }
+    printf("[INFO] delay_ms: waiting %d ms\n", ms);
+    vTaskDelay(pdMS_TO_TICKS(ms));
+    selftest_check_record("delay_ms", true);
 }
