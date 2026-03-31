@@ -52,8 +52,6 @@ extern void run_ltc2498_snapshot(const cJSON *params);
 extern void run_ltc2498_compare_snapshot(const cJSON *params);
 extern void run_ina_read(const cJSON *params);
 extern void run_delay_ms(const cJSON *params);
-extern void run_dut_read_product_ver(const cJSON *params);
-extern void run_vdut_off(const cJSON *params);
 
 static const primitive_entry_t s_primitives[] = {
     /* TCC/TIE carrier checks */
@@ -101,9 +99,6 @@ static const primitive_entry_t s_primitives[] = {
     /* Utility */
     { "ina_read",                run_ina_read },
     { "delay_ms",                run_delay_ms },
-    /* Post-program verification */
-    { "dut_read_product_ver",    run_dut_read_product_ver },
-    { "vdut_off",                run_vdut_off },
 };
 
 #define PRIMITIVE_COUNT  (sizeof(s_primitives) / sizeof(s_primitives[0]))
