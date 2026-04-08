@@ -1,7 +1,7 @@
 /* dut_detect.c — DUT presence detection via U8 DAC MUX signal injection
  *
  * Drives GPIO0 (SIG) HIGH through U8 ch3 into the #3_3V_Volt_Mon pogo net.
- * Without a DUT the signal is unloaded (~2560 mV, ADC Vref saturated).  With
+ * Without a DUT the signal is unloaded (~3000 mV, ADC Vref saturated).  With
  * a DUT, the board's internal impedance pulls it down (~1666 mV measured on
  * G3 Rev1 hardware).  Threshold at 2000 mV gives margin on both sides.
  *

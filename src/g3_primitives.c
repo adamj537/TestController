@@ -643,7 +643,7 @@ void run_dut_peripheral_adc_read(const cJSON *params)
     snprintf(cmd, sizeof(cmd), "PERIPHERAL_ADC_READ %s", channel);
     char resp[128] = {0};
     /* 800ms timeout: 160ms conversion + generous margin for post-scan reads */
-    bool ok = dut_cmd(cmd, resp, sizeof(resp), 800);
+    dut_cmd(cmd, resp, sizeof(resp), 800);
 
     int mv = 0;
     /* Parse even if dut_cmd timed out — resp may contain valid partial data
