@@ -137,8 +137,11 @@ primitive_fn_t recipe_primitives_lookup(const char *id)
 /* ── Other stubs required by recipe_engine.c ─────────────────────────────── */
 void g3_critical_abort(void) {}
 
-/* meas_log stub — recipe_engine.c only calls meas_log_reset(); no submodule path needed. */
+/* meas_log stubs — meas_log.h defines meas_entry_t; include it first. */
+#include "meas_log.h"
 void meas_log_reset(void) {}
+int  meas_log_count(void) { return 0; }
+const meas_entry_t *meas_log_get_entry(int index) { (void)index; return NULL; }
 
 /* ── Unit under test ─────────────────────────────────────────────────────── */
 #include "../../src/recipe_engine.h"
