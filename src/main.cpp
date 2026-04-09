@@ -1,7 +1,5 @@
 #include <stdio.h>
 #include <fcntl.h>
-#include "freertos/FreeRTOS.h"
-#include "freertos/task.h"
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "esp_console.h"
@@ -259,31 +257,11 @@ extern "C" void app_main(void)
      * without requiring a selftest run first. */
     selftest_ina219_init();
 
-    /* OTA health check — runs in background, validates I2C + WiFi + MQTT.
-     * If all pass within 30s, marks partition valid.
-     * If timeout, rolls back to previous partition automatically. */
-    /* Allocate the health check task stack from PSRAM to keep DRAM free for
-     * the MQTT client internal task (~8 KB contiguous DRAM required).
-     * CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY=y permits this.
-     * The stack is intentionally not freed — PSRAM leak is negligible
-     * (3 KB, once per OTA boot) and simplifies ownership. */
-    static StaticTask_t s_ota_health_tcb;   /* TCB stays in DRAM BSS (~220 bytes) */
-#ifdef CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY
-    /* portBYTE_ALIGNMENT is 16 on Xtensa; heap_caps_malloc only guarantees 8.
-     * Use aligned_alloc to satisfy the FreeRTOS stack-alignment assertion. */
-    StackType_t *health_stack = static_cast<StackType_t *>(
-        heap_caps_aligned_alloc(portBYTE_ALIGNMENT, 3072,
-                                MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
-    if (health_stack) {
-        xTaskCreateStaticPinnedToCore(ota_health_check_task, "ota_health",
-                                      3072, nullptr, 3,
-                                      health_stack, &s_ota_health_tcb, tskNO_AFFINITY);
-    } else {
-#endif
-        xTaskCreate(ota_health_check_task, "ota_health", 3072, NULL, 3, NULL);
-#ifdef CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY
-    }
-#endif
+    /* OTA health check — runs in background; polls WiFi + MQTT for up to 90s.
+     * If both connect in time, marks partition valid (cancels rollback).
+     * Stack kept at 3072: 3 KB DRAM is safe — MQTT internal task needs 7424
+     * contiguous DRAM and is the binding constraint on free DRAM. */
+    xTaskCreate(ota_health_check_task, "ota_health", 3072, NULL, 3, NULL);
 
     /* DUT presence detection — auto-starts on boot.
      * dut_detect_sample() acquires i2c_lock() to avoid bus contention. */
