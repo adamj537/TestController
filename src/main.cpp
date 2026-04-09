@@ -260,7 +260,7 @@ extern "C" void app_main(void)
     /* OTA health check — runs in background, validates I2C + WiFi + MQTT.
      * If all pass within 30s, marks partition valid.
      * If timeout, rolls back to previous partition automatically. */
-    xTaskCreate(ota_health_check_task, "ota_health", 2048, NULL, 3, NULL);
+    xTaskCreate(ota_health_check_task, "ota_health", 3072, NULL, 3, NULL);
 
     /* DUT presence detection — auto-starts on boot.
      * dut_detect_sample() acquires i2c_lock() to avoid bus contention. */
