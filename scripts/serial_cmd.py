@@ -20,19 +20,19 @@ import time
 def reboot(port: str, watch: int) -> int:
     """Reset ESP32-S3 via USB-Serial-JTAG DTR/RTS toggle."""
     try:
-        s = serial.Serial(port, 115200, timeout=1)
+        s = serial.Serial(port, 115200, timeout=1, dsrdtr=False, rtscts=False)
     except serial.SerialException as e:
         print(f"Cannot open {port}: {e}", file=sys.stderr)
         return 1
 
     print(f"Resetting via {port} ...")
-    s.dtr = False
-    s.rts = True
+    # Reset without entering download mode:
+    # RTS controls EN (reset), DTR controls GPIO0 (boot mode).
+    # Keep DTR=False (GPIO0 high = normal boot) throughout.
+    s.dtr = False  # GPIO0 high = normal boot
+    s.rts = True   # EN low = hold in reset
     time.sleep(0.1)
-    s.dtr = True
-    s.rts = False
-    time.sleep(0.1)
-    s.dtr = False
+    s.rts = False  # EN high = release reset, boots normally
     print("Reset pulse sent.")
 
     if watch > 0:
@@ -51,7 +51,7 @@ def reboot(port: str, watch: int) -> int:
 def send_cmd(cmd: str, port: str, timeout: float) -> int:
     """Send a command and print the response."""
     try:
-        s = serial.Serial(port, 115200, timeout=timeout)
+        s = serial.Serial(port, 115200, timeout=timeout, dsrdtr=False, rtscts=False)
     except serial.SerialException as e:
         print(f"Cannot open {port}: {e}", file=sys.stderr)
         return 1
