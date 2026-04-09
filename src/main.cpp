@@ -1,5 +1,7 @@
 #include <stdio.h>
 #include <fcntl.h>
+#include "freertos/FreeRTOS.h"
+#include "freertos/task.h"
 #include "nvs_flash.h"
 #include "nvs.h"
 #include "esp_console.h"
@@ -260,7 +262,25 @@ extern "C" void app_main(void)
     /* OTA health check — runs in background, validates I2C + WiFi + MQTT.
      * If all pass within 30s, marks partition valid.
      * If timeout, rolls back to previous partition automatically. */
-    xTaskCreate(ota_health_check_task, "ota_health", 3072, NULL, 3, NULL);
+    /* Allocate the health check task stack from PSRAM to keep DRAM free for
+     * the MQTT client internal task (~8 KB contiguous DRAM required).
+     * CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY=y permits this.
+     * The stack is intentionally not freed — PSRAM leak is negligible
+     * (3 KB, once per OTA boot) and simplifies ownership. */
+    static StaticTask_t s_ota_health_tcb;   /* TCB stays in DRAM BSS (~220 bytes) */
+#ifdef CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY
+    StackType_t *health_stack = static_cast<StackType_t *>(
+        heap_caps_malloc(3072, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+    if (health_stack) {
+        xTaskCreateStaticPinnedToCore(ota_health_check_task, "ota_health",
+                                      3072, nullptr, 3,
+                                      health_stack, &s_ota_health_tcb, tskNO_AFFINITY);
+    } else {
+#endif
+        xTaskCreate(ota_health_check_task, "ota_health", 3072, NULL, 3, NULL);
+#ifdef CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY
+    }
+#endif
 
     /* DUT presence detection — auto-starts on boot.
      * dut_detect_sample() acquires i2c_lock() to avoid bus contention. */
