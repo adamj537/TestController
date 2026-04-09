@@ -269,8 +269,11 @@ extern "C" void app_main(void)
      * (3 KB, once per OTA boot) and simplifies ownership. */
     static StaticTask_t s_ota_health_tcb;   /* TCB stays in DRAM BSS (~220 bytes) */
 #ifdef CONFIG_SPIRAM_ALLOW_STACK_EXTERNAL_MEMORY
+    /* portBYTE_ALIGNMENT is 16 on Xtensa; heap_caps_malloc only guarantees 8.
+     * Use aligned_alloc to satisfy the FreeRTOS stack-alignment assertion. */
     StackType_t *health_stack = static_cast<StackType_t *>(
-        heap_caps_malloc(3072, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
+        heap_caps_aligned_alloc(portBYTE_ALIGNMENT, 3072,
+                                MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT));
     if (health_stack) {
         xTaskCreateStaticPinnedToCore(ota_health_check_task, "ota_health",
                                       3072, nullptr, 3,
