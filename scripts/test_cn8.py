@@ -134,8 +134,13 @@ def tc_cmd_long(tc: TcConsole, cmd: str, stop: str, timeout: float) -> str:
 
 
 def dut_cmd(tc: TcConsole, cmd: str, wait: float = 0.8) -> str:
-    """Send a command to the DUT via uart passthrough; return DUT response lines."""
-    raw = tc_cmd(tc, f"uart cmd {cmd}", wait=wait)
+    """Send a command to the DUT via uart passthrough; return DUT response lines.
+
+    Uses TcConsole.cmd() which sleeps `wait` seconds before draining — this
+    guarantees the DUT has had time to process the command and respond before
+    we return, eliminating the one-command response shift from tc_cmd().
+    """
+    raw = tc.cmd(f"uart cmd {cmd}", wait=wait)
     lines: list[str] = []
     for line in raw.splitlines():
         s = line.strip()
@@ -436,6 +441,10 @@ def _sw_drive_and_check(
         print(f"\n  Driving {state_label} → {level} ...")
         for _, role, signal, conn in _SW_CHANNELS:
             pin = pin_map[role]
+            if level == "HIGH" and pin in _SW_SKIP_HIGH:
+                # Do NOT drive HIGH — would clamp CN3-1 (TC I2C SCL), breaking selftest mux
+                print(f"    GPIO_SET {pin} HIGH: SKIPPED (I2C bus contention)")
+                continue
             cmd_str = f"GPIO_SET {pin} HIGH" if level == "HIGH" else f"GPIO_CLEAR {pin}"
             resp = dut_cmd(tc, cmd_str, wait=1.0)
             print(f"    {cmd_str}: {resp}")
