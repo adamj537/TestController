@@ -25,8 +25,8 @@ Phase 3 — Monitor ADC inject+readback (CN8-6/7/8)
 
 Phase 4 — Analog switch continuity (CN8-3/5)
   CN8-3 (SDA_Rx) and CN8-5 (SCL_Tx) connect through an analog switch:
-    PD8 LOW  → PB11 → CN8-3,  PB10 → CN8-5  (I2C path)
-    PD8 HIGH → PA0  → CN8-3,  PA1  → CN8-5  (UART path)
+    PD8 HIGH → PB11 → CN8-3,  PB10 → CN8-5  (I2C path — schematic confirmed)
+    PD8 LOW  → PA0  → CN8-3,  PA1  → CN8-5  (UART path)
   Drive source pin HIGH then LOW for each PD8 state, read TIE mux to
   confirm end-to-end continuity through the switch and pogo.
 
@@ -409,8 +409,9 @@ _SW_CHANNELS: list[tuple[tuple[int, int], str, str, str]] = [
     ((1, 13), "SCL", "SCL_Tx", "CN8-5"),
 ]
 
-# PD8 LOW  → I2C path:  PB11=SDA→CN8-3, PB10=SCL→CN8-5
-# PD8 HIGH → UART path: PA0=RX→CN8-3,  PA1=TX→CN8-5
+# PD8 HIGH → PB11=SDA→CN8-3, PB10=SCL→CN8-5  (I2C path)
+# PD8 LOW  → PA0=RX→CN8-3,  PA1=TX→CN8-5    (UART path)
+# Source: schematic — PD8 is analog switch select, HIGH activates PB11/PB10
 #
 # NOTE: PB10 (SCL) cannot be driven HIGH via CN8 — the TC actively clocks
 # I2C SCL via CN3-1 during selftest mux (ADC128D818).  The HIGH assertion for
@@ -419,8 +420,8 @@ _SW_CHANNELS: list[tuple[tuple[int, int], str, str, str]] = [
 # NOTE: CN8-3 and CN8-5 read identically in all scans — likely shorted on the
 # TIE board.  Verify with a continuity test between CN8-3 and CN8-5 pogo pins.
 _SW_STATES: list[tuple[str, dict[str, str]]] = [
-    ("LOW  (PD8=L)", {"SDA": "PB11", "SCL": "PB10"}),   # I2C path
-    ("HIGH (PD8=H)", {"SDA": "PA0",  "SCL": "PA1"}),    # UART path
+    ("HIGH (PD8=H)", {"SDA": "PB11", "SCL": "PB10"}),   # I2C path
+    ("LOW  (PD8=L)", {"SDA": "PA0",  "SCL": "PA1"}),    # UART path
 ]
 
 # PB10 HIGH is blocked by TC I2C bus contention — skip rather than FAIL
@@ -469,7 +470,7 @@ def _sw_drive_and_check(
 
 def phase_analog_switch(tc: TcConsole, r: Results) -> None:
     print("\n── Phase 4: Analog switch continuity (CN8-3/5) ─────────────────")
-    print("  Switch: PD8 LOW → I2C (PB11/PB10);  PD8 HIGH → UART (PA0/PA1)")
+    print("  Switch: PD8 HIGH → I2C (PB11/PB10);  PD8 LOW → UART (PA0/PA1)  [schematic]")
 
     for pd8_level, pin_map in _SW_STATES:
         print(f"\n  Setting PD8 {pd8_level.split()[0]} ...")
