@@ -5,35 +5,36 @@ Tests the U13 TS5A23157 analog switch that routes I2C or UART signals to CN8-3/5
 
 Switch polarity (schematic confirmed):
   PD8 HIGH → I2C path:  PB11 → CN8-3 (SDA_Rx),  PB10 → CN8-5 (SCL_Tx)
-  PD8 LOW  → UART path: PA0  → CN8-3 (SDA_Rx),  PA1  → CN8-5 (SCL_Tx)
+  PD8 LOW  → UART path: PA1  → CN8-3 (SDA_Rx),  PA0  → CN8-5 (SCL_Tx)
 
 CN3 mux keys:
-  CN3-1  TC_SCL / PB10   MUX1 ch04  (1,4)  — live
-  CN3-4  TC_SDA / PB11   MUX1 ch05  (1,5)  — DEAD (HW-011: ESD diode + trace cut)
+  CN3-1  TC_SCL / PB10   MUX1 ch04  (1,4)
+  CN3-4  TC_SDA / PB11   MUX1 ch05  (1,5)
 
 CN8 mux keys:
   CN8-3  SDA_Rx          MUX1 ch11  (1,11)
   CN8-5  SCL_Tx          MUX1 ch13  (1,13)
 
 Phase 2 — PD8=LOW, I2C path inactive (PB11/PB10 route to CN3 only):
-  Drive PB11 HIGH/LOW → CN3-4 follows (DEAD — SKIP); CN8-3 isolated (stays LOW)
+  Drive PB11 HIGH/LOW → CN3-4 follows; CN8-3 isolated (stays LOW)
   Drive PB10 HIGH/LOW → CN3-1 follows; CN8-5 isolated (stays LOW)
   NOTE: CN3-1 shares the TC I2C SCL bus — HIGH reads during selftest mux will
   show TC I2C activity; result is informational.
 
 Phase 3 — PD8=LOW, UART path active (PA0/PA1 route to CN8):
-  Drive PA0 HIGH/LOW → CN8-3 follows
-  Drive PA1 HIGH/LOW → CN8-5 follows
+  Drive PA1 HIGH/LOW → CN8-3 follows
+  Drive PA0 HIGH/LOW → CN8-5 follows
 
 Phase 4 — PD8=HIGH, I2C path active (PB11/PB10 route to both CN3 and CN8):
-  Drive PB11 HIGH → CN8-3 HIGH, CN3-4 HIGH (DEAD — SKIP)
+  Drive PB11 HIGH → CN8-3 HIGH, CN3-4 HIGH
   Drive PB10 HIGH → CN8-5 HIGH, CN3-1 HIGH
-  Drive PB11 LOW  → CN8-3 LOW,  CN3-4 LOW  (DEAD — SKIP)
+  Drive PB11 LOW  → CN8-3 LOW,  CN3-4 LOW
   Drive PB10 LOW  → CN8-5 LOW,  CN3-1 LOW
 
 Usage:
     python3 scripts/test_cn3_cn8_switch.py
     python3 scripts/test_cn3_cn8_switch.py --no-flash
+    python3 scripts/test_cn3_cn8_switch.py --no-cn3
 """
 from __future__ import annotations
 import argparse
@@ -48,12 +49,10 @@ from test_helpers import (Results, tc_cmd, dut_cmd,                # noqa: E402
                            HIGH_MV_MIN, LOW_MV_MAX)
 
 # ── Mux keys ─────────────────────────────────────────────────────────────────
-CN3_1_SCL  = (1,  4)   # PB10 / TC_SCL  — live
-CN3_4_SDA  = (1,  5)   # PB11 / TC_SDA  — DEAD (HW-011)
+CN3_1_SCL  = (1,  4)   # PB10 / TC_SCL
+CN3_4_SDA  = (1,  5)   # PB11 / TC_SDA
 CN8_3_SDA  = (1, 11)   # SDA_Rx via switch
 CN8_5_SCL  = (1, 13)   # SCL_Tx via switch
-
-CN3_4_DEAD = True       # HW-011: MUX1 ch05 ESD diode + trace cut
 
 
 def mv_str(mv: int | None) -> str:
@@ -81,7 +80,7 @@ def check_isolated(r: Results, name: str, scan: dict, key: tuple) -> None:
 
 # ── Phase 2: PD8=LOW — I2C pins drive CN3 only; CN8 isolated ─────────────────
 
-def phase_i2c_to_cn3(tc: TcConsole, r: Results) -> None:
+def phase_i2c_to_cn3(tc: TcConsole, r: Results, cn3: bool) -> None:
     print("\n── Phase 2: PD8=LOW — I2C pins route to CN3, CN8 isolated ─────────────")
     print("  (PD8 already LOW from boot — no explicit set needed)")
 
@@ -90,10 +89,10 @@ def phase_i2c_to_cn3(tc: TcConsole, r: Results) -> None:
     resp = dut_cmd(tc, "GPIO_SET PB11 HIGH", wait=1.0)
     print(f"    DUT: {resp}")
     scan = run_mux_scan(tc, "PB11 HIGH, PD8=L")
-    if CN3_4_DEAD:
-        r.skip("CN3-4 TC_SDA/PB11 → HIGH", "HW-011: MUX1 ch05 dead (trace cut)")
-    else:
+    if cn3:
         check_high(r, "CN3-4 TC_SDA/PB11 → HIGH", scan, CN3_4_SDA)
+    else:
+        r.skip("CN3-4 TC_SDA/PB11 → HIGH", "CN3 pogos not loaded")
     check_isolated(r, "CN8-3 SDA_Rx", scan, CN8_3_SDA)
 
     # ── PB11 LOW ──
@@ -101,10 +100,10 @@ def phase_i2c_to_cn3(tc: TcConsole, r: Results) -> None:
     resp = dut_cmd(tc, "GPIO_CLEAR PB11", wait=1.0)
     print(f"    DUT: {resp}")
     scan = run_mux_scan(tc, "PB11 LOW, PD8=L")
-    if CN3_4_DEAD:
-        r.skip("CN3-4 TC_SDA/PB11 → LOW", "HW-011: MUX1 ch05 dead (trace cut)")
-    else:
+    if cn3:
         check_low(r, "CN3-4 TC_SDA/PB11 → LOW", scan, CN3_4_SDA)
+    else:
+        r.skip("CN3-4 TC_SDA/PB11 → LOW", "CN3 pogos not loaded")
     check_isolated(r, "CN8-3 SDA_Rx", scan, CN8_3_SDA)
 
     # ── PB10 HIGH ──
@@ -112,8 +111,11 @@ def phase_i2c_to_cn3(tc: TcConsole, r: Results) -> None:
     resp = dut_cmd(tc, "GPIO_SET PB10 HIGH", wait=1.0)
     print(f"    DUT: {resp}")
     scan = run_mux_scan(tc, "PB10 HIGH, PD8=L")
-    check_high(r, "CN3-1 TC_SCL/PB10 → HIGH", scan, CN3_1_SCL,
-               "TC I2C SCL active during scan — result informational")
+    if cn3:
+        check_high(r, "CN3-1 TC_SCL/PB10 → HIGH", scan, CN3_1_SCL,
+                   "TC I2C SCL active during scan — result informational")
+    else:
+        r.skip("CN3-1 TC_SCL/PB10 → HIGH", "CN3 pogos not loaded")
     check_isolated(r, "CN8-5 SCL_Tx", scan, CN8_5_SCL)
 
     # ── PB10 LOW ──
@@ -121,7 +123,10 @@ def phase_i2c_to_cn3(tc: TcConsole, r: Results) -> None:
     resp = dut_cmd(tc, "GPIO_CLEAR PB10", wait=1.0)
     print(f"    DUT: {resp}")
     scan = run_mux_scan(tc, "PB10 LOW, PD8=L")
-    check_low(r, "CN3-1 TC_SCL/PB10 → LOW", scan, CN3_1_SCL)
+    if cn3:
+        check_low(r, "CN3-1 TC_SCL/PB10 → LOW", scan, CN3_1_SCL)
+    else:
+        r.skip("CN3-1 TC_SCL/PB10 → LOW", "CN3 pogos not loaded")
     check_isolated(r, "CN8-5 SCL_Tx", scan, CN8_5_SCL)
 
 
@@ -131,8 +136,8 @@ def phase_uart_to_cn8(tc: TcConsole, r: Results) -> None:
     print("\n── Phase 3: PD8=LOW — UART pins drive CN8 ──────────────────────────────")
 
     for pin, key, label in [
-        ("PA0", CN8_3_SDA, "CN8-3 SDA_Rx/PA0"),
-        ("PA1", CN8_5_SCL, "CN8-5 SCL_Tx/PA1"),
+        ("PA1", CN8_3_SDA, "CN8-3 SDA_Rx/PA1"),
+        ("PA0", CN8_5_SCL, "CN8-5 SCL_Tx/PA0"),
     ]:
         print(f"\n  GPIO_SET {pin} HIGH ...")
         resp = dut_cmd(tc, f"GPIO_SET {pin} HIGH", wait=1.0)
@@ -149,7 +154,7 @@ def phase_uart_to_cn8(tc: TcConsole, r: Results) -> None:
 
 # ── Phase 4: PD8=HIGH — I2C pins drive both CN8 and CN3 ─────────────────────
 
-def phase_i2c_to_cn8_and_cn3(tc: TcConsole, r: Results) -> None:
+def phase_i2c_to_cn8_and_cn3(tc: TcConsole, r: Results, cn3: bool) -> None:
     print("\n── Phase 4: PD8=HIGH — I2C pins route to CN8 AND CN3 ───────────────────")
 
     print("  GPIO_SET PD8 HIGH ...")
@@ -163,10 +168,10 @@ def phase_i2c_to_cn8_and_cn3(tc: TcConsole, r: Results) -> None:
     print(f"    DUT: {resp}")
     scan = run_mux_scan(tc, "PB11 HIGH, PD8=H")
     check_high(r, "CN8-3 SDA_Rx/PB11 → HIGH", scan, CN8_3_SDA)
-    if CN3_4_DEAD:
-        r.skip("CN3-4 TC_SDA/PB11 → HIGH", "HW-011: MUX1 ch05 dead (trace cut)")
-    else:
+    if cn3:
         check_high(r, "CN3-4 TC_SDA/PB11 → HIGH", scan, CN3_4_SDA)
+    else:
+        r.skip("CN3-4 TC_SDA/PB11 → HIGH", "CN3 pogos not loaded")
 
     # ── PB10 HIGH ──
     print("\n  GPIO_SET PB10 HIGH ...")
@@ -174,8 +179,11 @@ def phase_i2c_to_cn8_and_cn3(tc: TcConsole, r: Results) -> None:
     print(f"    DUT: {resp}")
     scan = run_mux_scan(tc, "PB10 HIGH, PD8=H")
     check_high(r, "CN8-5 SCL_Tx/PB10 → HIGH", scan, CN8_5_SCL)
-    check_high(r, "CN3-1 TC_SCL/PB10 → HIGH", scan, CN3_1_SCL,
-               "TC I2C SCL active during scan — result informational")
+    if cn3:
+        check_high(r, "CN3-1 TC_SCL/PB10 → HIGH", scan, CN3_1_SCL,
+                   "TC I2C SCL active during scan — result informational")
+    else:
+        r.skip("CN3-1 TC_SCL/PB10 → HIGH", "CN3 pogos not loaded")
 
     # ── PB11 LOW ──
     print("\n  GPIO_CLEAR PB11 ...")
@@ -183,10 +191,10 @@ def phase_i2c_to_cn8_and_cn3(tc: TcConsole, r: Results) -> None:
     print(f"    DUT: {resp}")
     scan = run_mux_scan(tc, "PB11 LOW, PD8=H")
     check_low(r, "CN8-3 SDA_Rx/PB11 → LOW", scan, CN8_3_SDA)
-    if CN3_4_DEAD:
-        r.skip("CN3-4 TC_SDA/PB11 → LOW", "HW-011: MUX1 ch05 dead (trace cut)")
-    else:
+    if cn3:
         check_low(r, "CN3-4 TC_SDA/PB11 → LOW", scan, CN3_4_SDA)
+    else:
+        r.skip("CN3-4 TC_SDA/PB11 → LOW", "CN3 pogos not loaded")
 
     # ── PB10 LOW ──
     print("\n  GPIO_CLEAR PB10 ...")
@@ -194,7 +202,10 @@ def phase_i2c_to_cn8_and_cn3(tc: TcConsole, r: Results) -> None:
     print(f"    DUT: {resp}")
     scan = run_mux_scan(tc, "PB10 LOW, PD8=H")
     check_low(r, "CN8-5 SCL_Tx/PB10 → LOW", scan, CN8_5_SCL)
-    check_low(r, "CN3-1 TC_SCL/PB10 → LOW", scan, CN3_1_SCL)
+    if cn3:
+        check_low(r, "CN3-1 TC_SCL/PB10 → LOW", scan, CN3_1_SCL)
+    else:
+        r.skip("CN3-1 TC_SCL/PB10 → LOW", "CN3 pogos not loaded")
 
     # Leave PD8 LOW (safe default)
     dut_cmd(tc, "GPIO_CLEAR PD8", wait=0.5)
@@ -210,16 +221,19 @@ def main() -> None:
     )
     ap.add_argument("--no-flash", action="store_true",
                     help="Skip SWD flash — DUT already running pfw")
+    ap.add_argument("--no-cn3", action="store_true",
+                    help="Skip CN3 checks — pogos not loaded")
     args = ap.parse_args()
 
     r = Results()
+    cn3 = not args.no_cn3
     with TcConsole() as tc:
         try:
             ok = phase_bring_up(tc, r, "CN3/CN8 switch", do_flash=not args.no_flash)
             if ok:
-                phase_i2c_to_cn3(tc, r)
+                phase_i2c_to_cn3(tc, r, cn3)
                 phase_uart_to_cn8(tc, r)
-                phase_i2c_to_cn8_and_cn3(tc, r)
+                phase_i2c_to_cn8_and_cn3(tc, r, cn3)
         finally:
             teardown(tc)
 

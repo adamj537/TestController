@@ -26,7 +26,7 @@ Phase 3 — Monitor ADC inject+readback (CN8-6/7/8)
 Phase 4 — Analog switch continuity (CN8-3/5)
   CN8-3 (SDA_Rx) and CN8-5 (SCL_Tx) connect through an analog switch:
     PD8 HIGH → PB11 → CN8-3,  PB10 → CN8-5  (I2C path — schematic confirmed)
-    PD8 LOW  → PA0  → CN8-3,  PA1  → CN8-5  (UART path)
+    PD8 LOW  → PA1  → CN8-3,  PA0  → CN8-5  (UART path — schematic confirmed)
   Drive source pin HIGH then LOW for each PD8 state, read TIE mux to
   confirm end-to-end continuity through the switch and pogo.
 
@@ -410,7 +410,7 @@ _SW_CHANNELS: list[tuple[tuple[int, int], str, str, str]] = [
 ]
 
 # PD8 HIGH → PB11=SDA→CN8-3, PB10=SCL→CN8-5  (I2C path)
-# PD8 LOW  → PA0=RX→CN8-3,  PA1=TX→CN8-5    (UART path)
+# PD8 LOW  → PA1=SDA→CN8-3, PA0=SCL→CN8-5   (UART path)
 # Source: schematic — PD8 is analog switch select, HIGH activates PB11/PB10
 #
 # NOTE: PB10 (SCL) cannot be driven HIGH via CN8 — the TC actively clocks
@@ -421,7 +421,7 @@ _SW_CHANNELS: list[tuple[tuple[int, int], str, str, str]] = [
 # TIE board.  Verify with a continuity test between CN8-3 and CN8-5 pogo pins.
 _SW_STATES: list[tuple[str, dict[str, str]]] = [
     ("HIGH (PD8=H)", {"SDA": "PB11", "SCL": "PB10"}),   # I2C path
-    ("LOW  (PD8=L)", {"SDA": "PA0",  "SCL": "PA1"}),    # UART path
+    ("LOW  (PD8=L)", {"SDA": "PA1",  "SCL": "PA0"}),    # UART path
 ]
 
 # PB10 HIGH is blocked by TC I2C bus contention — skip rather than FAIL
