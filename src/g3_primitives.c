@@ -147,6 +147,21 @@ bool g3_ina219_read_current_ma(int *ma_out)
     return true;
 }
 
+/* ── DUT power teardown ──────────────────────────────────────────────────── */
+
+static void dut_power_cut(void)
+{
+    u8_mux_release();  /* Release PB-A (SIG=1) */
+    vdac_disable(0);   /* VDUT1 off */
+    vdac_disable(1);   /* VDUT2 off */
+}
+
+/* Called by tc_statemachine whenever a test run ends (any reason). */
+void tc_sm_on_test_end(void)
+{
+    dut_power_cut();
+}
+
 /* ── g3_critical_abort ───────────────────────────────────────────────────── *
  *
  * Called by the recipe engine on a CRITICAL step failure.
@@ -155,9 +170,7 @@ bool g3_ina219_read_current_ma(int *ma_out)
  */
 void g3_critical_abort(void)
 {
-    u8_mux_release();     /* Release PB-A (SIG=1) immediately */
-    vdac_disable(0);   /* VDUT1 off */
-    vdac_disable(1);   /* VDUT2 off */
+    dut_power_cut();
     printf("[ABORT] CRITICAL step failure — DUT power cut\n");
 }
 
@@ -643,7 +656,7 @@ void run_dut_peripheral_adc_read(const cJSON *params)
     snprintf(cmd, sizeof(cmd), "PERIPHERAL_ADC_READ %s", channel);
     char resp[128] = {0};
     /* 800ms timeout: 160ms conversion + generous margin for post-scan reads */
-    bool ok = dut_cmd(cmd, resp, sizeof(resp), 800);
+    dut_cmd(cmd, resp, sizeof(resp), 800);
 
     int mv = 0;
     /* Parse even if dut_cmd timed out — resp may contain valid partial data

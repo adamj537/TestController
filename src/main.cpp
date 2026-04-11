@@ -22,6 +22,7 @@ extern "C" {
 #include "cmd_wifi.h"
 #include "cmd_ota.h"
 #include "cmd_selftest.h"
+#include "cmd_tie.h"
 #include "cmd_vdac.h"
 #include "cmd_uart.h"
 #include "cmd_swd.h"
@@ -229,6 +230,7 @@ extern "C" void app_main(void)
     register_wifi_commands();
     register_ota_commands();
     register_selftest_commands();
+    register_tie_commands();
     register_vdac_commands();
     register_uart_commands();
     register_swd_commands();
@@ -257,10 +259,11 @@ extern "C" void app_main(void)
      * without requiring a selftest run first. */
     selftest_ina219_init();
 
-    /* OTA health check — runs in background, validates I2C + WiFi + MQTT.
-     * If all pass within 30s, marks partition valid.
-     * If timeout, rolls back to previous partition automatically. */
-    xTaskCreate(ota_health_check_task, "ota_health", 4096, NULL, 3, NULL);
+    /* OTA health check — runs in background; polls WiFi + MQTT for up to 90s.
+     * If both connect in time, marks partition valid (cancels rollback).
+     * Stack kept at 3072: 3 KB DRAM is safe — MQTT internal task needs 7424
+     * contiguous DRAM and is the binding constraint on free DRAM. */
+    xTaskCreate(ota_health_check_task, "ota_health", 3072, NULL, 3, NULL);
 
     /* DUT presence detection — auto-starts on boot.
      * dut_detect_sample() acquires i2c_lock() to avoid bus contention. */

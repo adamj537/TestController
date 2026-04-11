@@ -21,6 +21,9 @@ sdkconfig.esp32-Devkit.old
 version.txt
 src/version.h
 
+# Golden firmware images (local reference copies, not committed)
+golden/
+
 # IDF Component Manager — downloaded at build time, not committed
 managed_components/
 

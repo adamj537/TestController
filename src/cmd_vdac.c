@@ -56,8 +56,9 @@
 
 /* ── Internal state ──────────────────────────────────────────────────────── */
 
-static bool s_timer_ready = false;
-static bool s_enabled[2]  = {false, false};
+static bool s_timer_ready     = false;
+static bool s_enabled[2]      = {false, false};
+static bool s_ch_configured[2] = {false, false};
 
 /* ── LEDC helpers ────────────────────────────────────────────────────────── */
 
@@ -76,9 +77,6 @@ static bool vdac_ledc_init(void)
     return true;
 }
 
-/* ledc_channel_config re-routes the IOMUX to LEDC on each call.
- * gpio_reset_pin() clears any prior ADC or analog claim on the pad (HW-014)
- * so the LEDC driver can take ownership without emitting a warning. */
 bool vdac_set_duty(int ch_idx, int duty_pct)
 {
     /* F-18: DUT over-voltage interlock.
@@ -91,26 +89,33 @@ bool vdac_set_duty(int ch_idx, int duty_pct)
     if (!s_timer_ready && !vdac_ledc_init()) return false;
     ledc_channel_t ch = (ch_idx == 0) ? VDAC_CH1 : VDAC_CH2;
     int gpio          = (ch_idx == 0) ? VDUT1_PWM_GPIO : VDUT2_PWM_GPIO;
-    if (!s_enabled[ch_idx]) {
-        /* First configuration only — clear ADC/analog pad claim (HW-014)
-         * so the LEDC driver can take ownership.  On subsequent duty updates
-         * the pad is already LEDC-owned; calling gpio_reset_pin() would float
-         * the MP2315SGJ-Z feedback pin for ~10-15 µs, causing a voltage spike
-         * (audit F-05). */
-        gpio_reset_pin((gpio_num_t)gpio);
-    }
     uint32_t duty     = (uint32_t)(duty_pct * 4095) / 100;
-    ledc_channel_config_t ch_cfg = {
-        .gpio_num   = gpio,
-        .speed_mode = VDAC_LEDC_MODE,
-        .channel    = ch,
-        .intr_type  = LEDC_INTR_DISABLE,
-        .timer_sel  = VDAC_LEDC_TIMER,
-        .duty       = duty,
-        .hpoint     = 0,
-        .flags      = {.output_invert = 0},
-    };
-    return ledc_channel_config(&ch_cfg) == ESP_OK;
+
+    if (!s_ch_configured[ch_idx]) {
+        /* First call: clear ADC/analog pad claim (HW-014) then run full
+         * ledc_channel_config() to route the IOMUX to LEDC.  Only needed
+         * once — subsequent updates use ledc_set_duty/ledc_update_duty to
+         * avoid re-running IOMUX routing (which emits a spurious GPIO warning
+         * on GPIO1/2 on every call). */
+        gpio_reset_pin((gpio_num_t)gpio);
+        ledc_channel_config_t ch_cfg = {
+            .gpio_num   = gpio,
+            .speed_mode = VDAC_LEDC_MODE,
+            .channel    = ch,
+            .intr_type  = LEDC_INTR_DISABLE,
+            .timer_sel  = VDAC_LEDC_TIMER,
+            .duty       = duty,
+            .hpoint     = 0,
+            .flags      = {.output_invert = 0},
+        };
+        if (ledc_channel_config(&ch_cfg) != ESP_OK) return false;
+        s_ch_configured[ch_idx] = true;
+        return true;
+    }
+
+    /* Subsequent calls: update duty register only — no IOMUX re-routing. */
+    if (ledc_set_duty(VDAC_LEDC_MODE, ch, duty) != ESP_OK) return false;
+    return ledc_update_duty(VDAC_LEDC_MODE, ch) == ESP_OK;
 }
 
 bool vdac_set_enable(int ch_idx, bool enable)
