@@ -101,11 +101,13 @@ def run_mux_read(tc: TcConsole, mux: int, ch: int,
     """Send 'tie read <mux> <ch> <settle_ms>'; return mV or None on error.
 
     settle_ms defaults to 110 ms — one full ADC128D818 scan cycle plus margin.
-    The tc_cmd wait is extended accordingly so the response arrives in time.
+    The tc_cmd wait adds 1.0 s of overhead (not 0.5 s) to absorb TC background
+    task delays (MQTT keepalive, sensor polling) that can push the console
+    response past a shorter deadline on a loaded ESP32.
     """
     tag = f" ({label})" if label else ""
     print(f"  tie read {mux} {ch}{tag} ...")
-    wait = settle_ms / 1000.0 + 0.5
+    wait = settle_ms / 1000.0 + 1.0
     raw = tc_cmd(tc, f"tie read {mux} {ch} {settle_ms}", wait=wait)
     for line in raw.splitlines():
         m = _TIE_RE.match(line.strip())

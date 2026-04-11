@@ -52,7 +52,8 @@ import os
 import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from tc_console import TcConsole  # noqa: E402
+from tc_console import TcConsole                    # noqa: E402
+from test_helpers import run_mux_read               # noqa: E402
 
 # ── Thresholds ────────────────────────────────────────────────────────────────
 VDUT_MV      = 3300
@@ -71,7 +72,7 @@ CN8_OUTPUTS: list[tuple[tuple[int, int], str, str, str]] = [
 ]
 
 # ── CN8 monitor channels: (tie_mux_key, u8_ch, ltc_name, signal, connector) ──
-# tie_mux_key: (mux, ch) for selftest mux pogo contact check
+# tie_mux_key: (mux, ch) for TIE mux channel read
 # u8_ch:       U8 HEF4051 channel for DAC mux injection (mux select <ch> 1)
 # ltc_name:    PERIPHERAL_ADC_READ channel name (LTC2498 on SPI1)
 CN8_MONITORS: list[tuple[tuple[int, int], int, str, str, str]] = [
@@ -150,29 +151,6 @@ def dut_cmd(tc: TcConsole, cmd: str, wait: float = 0.8) -> str:
             continue
         lines.append(s)
     return "\n".join(lines) if lines else "(no response)"
-
-
-# ── Mux scan helpers ──────────────────────────────────────────────────────────
-
-_ROW_RE = re.compile(r'^\s*(\d)\s+(\d+)\s+\d\s+\d\s+\d\s+\d\s+(ERR|[-\d]+)')
-
-
-def run_mux_scan(tc: TcConsole, label: str) -> dict[tuple[int, int], int | None]:
-    """Run selftest mux and return {(mux, ch): mv} for all channels."""
-    print(f"  selftest mux ({label}) ...")
-    # Stop on "scan complete" — appears in "[PASS] MUX: scan complete N read errors"
-    # at end of all four mux banks.  Do NOT stop on "g3-tc|" alone — the command
-    # echo arrives immediately before scan data and would cause early exit.
-    raw = tc_cmd_long(tc, "selftest mux", stop="scan complete", timeout=30.0)
-    result: dict[tuple[int, int], int | None] = {}
-    for line in raw.splitlines():
-        m = _ROW_RE.match(line)
-        if m:
-            key = (int(m.group(1)), int(m.group(2)))
-            result[key] = None if m.group(3) == "ERR" else int(m.group(3))
-    if not result:
-        print(f"  WARNING: selftest mux returned no data ({len(raw)} chars)")
-    return result
 
 
 def mv_str(mv: int | None) -> str:
@@ -309,16 +287,11 @@ def phase_gpio_continuity(tc: TcConsole, r: Results) -> None:
             resp = dut_cmd(tc, cmd_str, wait=1.0)
             print(f"    {cmd_str}: {resp}")
 
-        # Let the last GPIO command settle before scanning
-        time.sleep(0.5)
-        scan = run_mux_scan(tc, f"CN8 outputs {label}")
-
         for mux_key, pin, signal, conn in CN8_OUTPUTS:
-            mv = scan.get(mux_key)
-            ok = mv_check(mv)
+            mv = run_mux_read(tc, *mux_key, label=f"{conn}/{pin} {label}")
             r.check(
                 f"{conn} {signal}/{pin} → {label}",
-                ok,
+                mv_check(mv),
                 mv_str(mv),
             )
 
@@ -352,18 +325,19 @@ def phase_monitors(tc: TcConsole, r: Results) -> None:
     print("  Waiting 500 ms for rails and VREF to stabilise ...")
     time.sleep(0.5)
 
-    # TIE mux snapshot — verifies pogo contact before injection
-    scan = run_mux_scan(tc, "monitors baseline (no injection)")
-    r.check(
-        "VIN#3 monitor pogos readable (no ERR)",
-        all(scan.get(k) is not None for k, _, _, _, _ in CN8_MONITORS),
-        "ERR = TIE mux read failure / no pogo contact",
-    )
+    # TIE mux reads — verify pogo contact before injection
     print(f"\n  {'Connector':<10}  {'Signal':<20}  {'TIE mV':>8}  (baseline)")
     print("  " + "─" * 48)
+    baseline: dict[tuple[int, int], int | None] = {}
     for mux_key, _, _, signal, conn in CN8_MONITORS:
-        mv = scan.get(mux_key)
+        mv = run_mux_read(tc, *mux_key, label=f"{conn} baseline")
+        baseline[mux_key] = mv
         print(f"  {conn:<10}  {signal:<20}  {mv_str(mv):>8}")
+    r.check(
+        "VIN#3 monitor pogos readable (no ERR)",
+        all(baseline.get(k) is not None for k, _, _, _, _ in CN8_MONITORS),
+        "ERR = TIE mux read failure / no pogo contact",
+    )
 
     # Inject+readback per channel
     print()
@@ -412,20 +386,10 @@ _SW_CHANNELS: list[tuple[tuple[int, int], str, str, str]] = [
 # PD8 HIGH → PB11=SDA→CN8-3, PB10=SCL→CN8-5  (I2C path)
 # PD8 LOW  → PA1=SDA→CN8-3, PA0=SCL→CN8-5   (UART path)
 # Source: schematic — PD8 is analog switch select, HIGH activates PB11/PB10
-#
-# NOTE: PB10 (SCL) cannot be driven HIGH via CN8 — the TC actively clocks
-# I2C SCL via CN3-1 during selftest mux (ADC128D818).  The HIGH assertion for
-# PB10 will show ~0 mV due to bus contention and is skipped.
-#
-# NOTE: CN8-3 and CN8-5 read identically in all scans — likely shorted on the
-# TIE board.  Verify with a continuity test between CN8-3 and CN8-5 pogo pins.
 _SW_STATES: list[tuple[str, dict[str, str]]] = [
     ("HIGH (PD8=H)", {"SDA": "PB11", "SCL": "PB10"}),   # I2C path
     ("LOW  (PD8=L)", {"SDA": "PA1",  "SCL": "PA0"}),    # UART path
 ]
-
-# PB10 HIGH is blocked by TC I2C bus contention — skip rather than FAIL
-_SW_SKIP_HIGH: set[str] = {"PB10"}
 
 
 def _sw_drive_and_check(
@@ -434,43 +398,38 @@ def _sw_drive_and_check(
     pin_map: dict[str, str],
     state_label: str,
 ) -> None:
-    """Drive source pins HIGH then LOW; read TIE mux both times."""
-    for level, mv_check in [
-        ("HIGH", lambda mv: mv is not None and mv > HIGH_MV_MIN),
-        ("LOW",  lambda mv: mv is not None and mv < LOW_MV_MAX),
-    ]:
-        print(f"\n  Driving {state_label} → {level} ...")
-        for _, role, signal, conn in _SW_CHANNELS:
-            pin = pin_map[role]
-            if level == "HIGH" and pin in _SW_SKIP_HIGH:
-                # Do NOT drive HIGH — would clamp CN3-1 (TC I2C SCL), breaking selftest mux
-                print(f"    GPIO_SET {pin} HIGH: SKIPPED (I2C bus contention)")
-                continue
-            cmd_str = f"GPIO_SET {pin} HIGH" if level == "HIGH" else f"GPIO_CLEAR {pin}"
-            resp = dut_cmd(tc, cmd_str, wait=1.0)
-            print(f"    {cmd_str}: {resp}")
+    """Drive source pins one at a time HIGH then LOW; read TIE mux per step.
 
-        # Let the last GPIO command settle before scanning
-        time.sleep(0.5)
-        scan = run_mux_scan(tc, f"CN8-3/5 {state_label} {level}")
+    Drive one pin at a time (not all simultaneously) to avoid I2C bus
+    disruption when PB10 (TC_SCL/I2C2_SCL) is held HIGH during a mux read.
+    """
+    for mux_key, role, signal, conn in _SW_CHANNELS:
+        pin = pin_map[role]
 
-        for mux_key, role, signal, conn in _SW_CHANNELS:
-            pin = pin_map[role]
-            mv = scan.get(mux_key)
-            if level == "HIGH" and pin in _SW_SKIP_HIGH:
-                print(f"  [SKIP] {conn} {signal} via {pin} [{state_label}] → HIGH"
-                      f"  (TC I2C bus contention on CN3-1; {mv_str(mv)})")
-                continue
-            r.check(
-                f"{conn} {signal} via {pin} [{state_label}] → {level}",
-                mv_check(mv),
-                mv_str(mv),
-            )
+        print(f"\n  GPIO_SET {pin} HIGH ({state_label}) ...")
+        resp = dut_cmd(tc, f"GPIO_SET {pin} HIGH", wait=1.0)
+        print(f"    {resp}")
+        mv = run_mux_read(tc, *mux_key, label=f"{pin} HIGH, {state_label}")
+        r.check(
+            f"{conn} {signal} via {pin} [{state_label}] → HIGH",
+            mv is not None and mv > HIGH_MV_MIN,
+            mv_str(mv),
+        )
+
+        print(f"\n  GPIO_CLEAR {pin} ({state_label}) ...")
+        resp = dut_cmd(tc, f"GPIO_CLEAR {pin}", wait=1.0)
+        print(f"    {resp}")
+        mv = run_mux_read(tc, *mux_key, label=f"{pin} LOW, {state_label}")
+        r.check(
+            f"{conn} {signal} via {pin} [{state_label}] → LOW",
+            mv is not None and mv < LOW_MV_MAX,
+            mv_str(mv),
+        )
 
 
 def phase_analog_switch(tc: TcConsole, r: Results) -> None:
     print("\n── Phase 4: Analog switch continuity (CN8-3/5) ─────────────────")
-    print("  Switch: PD8 HIGH → I2C (PB11/PB10);  PD8 LOW → UART (PA0/PA1)  [schematic]")
+    print("  PD8 HIGH → I2C (PB11→CN8-3, PB10→CN8-5)  |  PD8 LOW → UART (PA1→CN8-3, PA0→CN8-5)")
 
     for pd8_level, pin_map in _SW_STATES:
         print(f"\n  Setting PD8 {pd8_level.split()[0]} ...")
