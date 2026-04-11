@@ -19,15 +19,15 @@ Phase 2 — DUT GPIO output continuity (CN7-5..14, 16, 18..20).
     PD0  GPS_SPI3_CS      CN7-7   → (2, 11)
     PE8  BT_GPIO2         CN7-8   → (2, 8)
     PE7  BT_GPIO1         CN7-9   → (2, 9)
-    PE3  BT_SPI3_CS       CN7-10  → (2, 6)
+    PE4  BT_SPI3_CS       CN7-10  → (2, 6)
     PD6  BT_USART2_RX     CN7-11  → (2, 7)
     PD5  BT_USART2_TX     CN7-12  → (2, 4)
     PD4  BT_USART2_RTS    CN7-13  → (3, 5)
     PD3  BT_USART2_CTS    CN7-14  → (2, 5)
-    PE14 BT/GPS_SPI3_MOSI CN7-16  → (3, 7)
+    PC12 BT/GPS_SPI3_MOSI CN7-16  → (3, 7)
     PC10 SPI3_SCK/GPS_GPIO1 CN7-18 → (3, 11)
     PB5  GPS_GPIO2        CN7-19  → (3, 14)
-    PE15 BT/GPS_SPI3_MISO CN7-20  → (3, 15)
+    PC11 BT/GPS_SPI3_MISO CN7-20  → (3, 15)
 
   SKIPPED (CMD UART — must not be disturbed):
     PB6  GPS_USART1_TX  → (3, 9)   ← DUT UART TX
@@ -59,15 +59,15 @@ CN7_OUTPUTS: list[tuple[tuple[int, int], str, str, str]] = [
     ((2, 11), "PD0",  "GPS_SPI3_CS",        "CN7-7"),
     ((2, 8),  "PE8",  "BT_GPIO2",           "CN7-8"),
     ((2, 9),  "PE7",  "BT_GPIO1",           "CN7-9"),
-    ((2, 6),  "PE3",  "BT_SPI3_CS",         "CN7-10"),
+    ((2, 6),  "PE4",  "BT_SPI3_CS",         "CN7-10"),
     ((2, 7),  "PD6",  "BT_USART2_RX",       "CN7-11"),
     ((2, 4),  "PD5",  "BT_USART2_TX",       "CN7-12"),
     ((3, 5),  "PD4",  "BT_USART2_RTS",      "CN7-13"),
     ((2, 5),  "PD3",  "BT_USART2_CTS",      "CN7-14"),
-    ((3, 7),  "PE14", "BT/GPS_SPI3_MOSI",   "CN7-16"),
+    ((3, 7),  "PC12", "BT/GPS_SPI3_MOSI",   "CN7-16"),
     ((3, 11), "PC10", "SPI3_SCK/GPS_GPIO1", "CN7-18"),
     ((3, 14), "PB5",  "GPS_GPIO2",          "CN7-19"),
-    ((3, 15), "PE15", "BT/GPS_SPI3_MISO",   "CN7-20"),
+    ((3, 15), "PC11", "BT/GPS_SPI3_MISO",   "CN7-20"),
 ]
 
 

@@ -179,6 +179,8 @@ def phase_bring_up(tc: TcConsole, r: Results, label: str, do_flash: bool = True)
             return False
     else:
         print("  Skipping SWD flash (--no-flash)")
+        print("  Waiting 5 s for DUT to boot ...")
+        time.sleep(5.0)
 
     tc_cmd(tc, "mux release", wait=2.0)
     time.sleep(2.0)
@@ -186,7 +188,7 @@ def phase_bring_up(tc: TcConsole, r: Results, label: str, do_flash: bool = True)
 
     # Heartbeat
     print("  selftest heartbeat ...")
-    raw = tc_cmd_long(tc, "selftest heartbeat", stop="DUT heartbeat", timeout=12.0)
+    raw = tc_cmd_long(tc, "selftest heartbeat", stop="Results:", timeout=12.0)
     if not r.check("DUT heartbeat (pfw running)", "[PASS]" in raw, raw.strip().split("\n")[-1]):
         return False
 
