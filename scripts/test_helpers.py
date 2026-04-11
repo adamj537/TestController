@@ -128,25 +128,28 @@ def phase_bring_up(tc: TcConsole, r: Results, label: str, do_flash: bool = True)
     if not r.check("VDUT1 enabled", f"VDUT1: {VDUT_MV}" in resp, resp.strip()):
         return False
 
-    if do_flash:
-        tc_cmd(tc, "mux select 0 0", wait=0.5)
-        r.check("PB-A asserted", True)
+    # Assert PB-A to latch DUT KEEPALIVE — required with or without flash
+    tc_cmd(tc, "mux select 0 0", wait=0.5)
+    r.check("PB-A asserted", True)
 
+    if do_flash:
         resp = tc_cmd(tc, "swd probe", wait=2.0)
         if not r.check("SWD probe", "g3-tc|" in resp, resp.strip()):
+            tc_cmd(tc, "mux release", wait=1.0)
             return False
 
         print("  Flashing PFW ...")
         raw = tc_cmd_long(tc, "swd flash local --target pfw nopwrcycle",
                           stop="[PASS] swd flash", timeout=60.0)
         if not r.check("SWD flash PFW", "[PASS] swd flash" in raw):
+            tc_cmd(tc, "mux release", wait=1.0)
             return False
-
-        tc_cmd(tc, "mux release", wait=2.0)
-        time.sleep(2.0)
-        r.check("PB-A released", True)
     else:
         print("  Skipping SWD flash (--no-flash)")
+
+    tc_cmd(tc, "mux release", wait=2.0)
+    time.sleep(2.0)
+    r.check("PB-A released", True)
 
     # Heartbeat
     print("  selftest heartbeat ...")
