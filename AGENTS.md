@@ -50,6 +50,10 @@ Do not require a UART adapter when USB CDC is available. Do not require physical
 
 `common/` is a git submodule pointing to `INTenX/tc-firmware-common`. Include paths: `common/include`, `common/hal`, `common/src`, `common/storage`.
 
+### common/ Submodule — extern bridge pattern
+
+`common/` modules (e.g. `tc_statemachine.c`) cannot `#include` headers from `src/`. Bridge by declaring `extern void fn()` in the common module and providing the implementation in a new `src/*.c` file. Examples: `tc_sm_spawn_recipe_task()` → `src/recipe_task.c`; `g3_critical_abort()` → `src/g3_primitives.c`.
+
 ---
 
 ## TCP Console
@@ -60,6 +64,14 @@ python3 -c "import socket; s=socket.socket(); s.connect(('<device-ip>', 4242)); 
 ```
 
 Useful for command interaction and log capture without a serial cable.
+
+### Monitor test traffic
+
+```bash
+bash scripts/monitor_tc.sh   # run from embedded/tester-client/
+```
+
+Streams TC console output until the state machine reaches a terminal state (Pass/Fail/Idle). Wraps `tcp_console.py monitor`. Use this to watch recipe runs started from the UI.
 
 ---
 
