@@ -91,13 +91,40 @@ def dut_cmd(tc: TcConsole, cmd: str, wait: float = 0.8) -> str:
         lines.append(s)
     return "\n".join(lines) if lines else "(no response)"
 
-# ── TIE mux scan ─────────────────────────────────────────────────────────────
+# ── TIE mux read ─────────────────────────────────────────────────────────────
+
+_TIE_RE = re.compile(r"^TIE\s+(\d+)\s+(\d+)\s+(-?\d+)\s+mV")
+
+
+def run_mux_read(tc: TcConsole, mux: int, ch: int,
+                 label: str = "", settle_ms: int = 110) -> int | None:
+    """Send 'tie read <mux> <ch> <settle_ms>'; return mV or None on error.
+
+    settle_ms defaults to 110 ms — one full ADC128D818 scan cycle plus margin.
+    The tc_cmd wait is extended accordingly so the response arrives in time.
+    """
+    tag = f" ({label})" if label else ""
+    print(f"  tie read {mux} {ch}{tag} ...")
+    wait = settle_ms / 1000.0 + 0.5
+    raw = tc_cmd(tc, f"tie read {mux} {ch} {settle_ms}", wait=wait)
+    for line in raw.splitlines():
+        m = _TIE_RE.match(line.strip())
+        if m and int(m.group(1)) == mux and int(m.group(2)) == ch:
+            return int(m.group(3))
+    return None
+
+
+# ── TIE mux full scan (legacy — use run_mux_read for targeted channel reads) ──
 
 _ROW_RE = re.compile(r"^\s*(\d)\s+(\d+)\s+\d\s+\d\s+\d\s+\d\s+(ERR|[-\d]+)")
 
 
 def run_mux_scan(tc: TcConsole, label: str) -> dict[tuple[int, int], int | None]:
-    """Run 'selftest mux'; return {(mux, ch): mv} for all channels. None=ERR."""
+    """Run 'selftest mux'; return {(mux, ch): mv} for all 64 channels. None=ERR.
+
+    NOTE: 'selftest mux' uses a 20ms settle — shorter than the ADC128 scan
+    cycle (~96ms).  Use run_mux_read() for reliable single-channel reads.
+    """
     print(f"  selftest mux ({label}) ...")
     raw = tc_cmd_long(tc, "selftest mux", stop="scan complete", timeout=30.0)
     if "scan complete" not in raw:

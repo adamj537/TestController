@@ -45,7 +45,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from tc_console import TcConsole                                    # noqa: E402
 from test_helpers import (Results, tc_cmd, dut_cmd,                # noqa: E402
-                           run_mux_scan, phase_bring_up, teardown,
+                           run_mux_read, phase_bring_up, teardown,
                            HIGH_MV_MIN, LOW_MV_MAX)
 
 # ── Mux keys ─────────────────────────────────────────────────────────────────
@@ -59,21 +59,18 @@ def mv_str(mv: int | None) -> str:
     return f"{mv} mV" if mv is not None else "ERR"
 
 
-def check_high(r: Results, name: str, scan: dict, key: tuple, detail: str = "") -> None:
-    mv = scan.get(key)
+def check_high(r: Results, name: str, mv: int | None, detail: str = "") -> None:
     ok = mv is not None and mv > HIGH_MV_MIN
     r.check(name, ok, f"{mv_str(mv)}{' — ' + detail if detail else ''}")
 
 
-def check_low(r: Results, name: str, scan: dict, key: tuple) -> None:
-    mv = scan.get(key)
+def check_low(r: Results, name: str, mv: int | None) -> None:
     ok = mv is not None and mv < LOW_MV_MAX
     r.check(name, ok, mv_str(mv))
 
 
-def check_isolated(r: Results, name: str, scan: dict, key: tuple) -> None:
+def check_isolated(r: Results, name: str, mv: int | None) -> None:
     """Verify a channel stays LOW (isolated) while a different pin is driven HIGH."""
-    mv = scan.get(key)
     ok = mv is not None and mv < LOW_MV_MAX
     r.check(name + " (isolated — must stay LOW)", ok, mv_str(mv))
 
@@ -88,46 +85,50 @@ def phase_i2c_to_cn3(tc: TcConsole, r: Results, cn3: bool) -> None:
     print("\n  GPIO_SET PB11 HIGH ...")
     resp = dut_cmd(tc, "GPIO_SET PB11 HIGH", wait=1.0)
     print(f"    DUT: {resp}")
-    scan = run_mux_scan(tc, "PB11 HIGH, PD8=L")
     if cn3:
-        check_high(r, "CN3-4 TC_SDA/PB11 → HIGH", scan, CN3_4_SDA)
+        check_high(r, "CN3-4 TC_SDA/PB11 → HIGH",
+                   run_mux_read(tc, *CN3_4_SDA, label="PB11 HIGH, PD8=L"))
     else:
         r.skip("CN3-4 TC_SDA/PB11 → HIGH", "CN3 pogos not loaded")
-    check_isolated(r, "CN8-3 SDA_Rx", scan, CN8_3_SDA)
+    check_isolated(r, "CN8-3 SDA_Rx",
+                   run_mux_read(tc, *CN8_3_SDA, label="PB11 HIGH, PD8=L isolation"))
 
     # ── PB11 LOW ──
     print("\n  GPIO_CLEAR PB11 ...")
     resp = dut_cmd(tc, "GPIO_CLEAR PB11", wait=1.0)
     print(f"    DUT: {resp}")
-    scan = run_mux_scan(tc, "PB11 LOW, PD8=L")
     if cn3:
-        check_low(r, "CN3-4 TC_SDA/PB11 → LOW", scan, CN3_4_SDA)
+        check_low(r, "CN3-4 TC_SDA/PB11 → LOW",
+                  run_mux_read(tc, *CN3_4_SDA, label="PB11 LOW, PD8=L"))
     else:
         r.skip("CN3-4 TC_SDA/PB11 → LOW", "CN3 pogos not loaded")
-    check_isolated(r, "CN8-3 SDA_Rx", scan, CN8_3_SDA)
+    check_isolated(r, "CN8-3 SDA_Rx",
+                   run_mux_read(tc, *CN8_3_SDA, label="PB11 LOW, PD8=L isolation"))
 
     # ── PB10 HIGH ──
     print("\n  GPIO_SET PB10 HIGH ...")
     resp = dut_cmd(tc, "GPIO_SET PB10 HIGH", wait=1.0)
     print(f"    DUT: {resp}")
-    scan = run_mux_scan(tc, "PB10 HIGH, PD8=L")
     if cn3:
-        check_high(r, "CN3-1 TC_SCL/PB10 → HIGH", scan, CN3_1_SCL,
-                   "TC I2C SCL active during scan — result informational")
+        check_high(r, "CN3-1 TC_SCL/PB10 → HIGH",
+                   run_mux_read(tc, *CN3_1_SCL, label="PB10 HIGH, PD8=L"),
+                   "TC I2C SCL active during read — result informational")
     else:
         r.skip("CN3-1 TC_SCL/PB10 → HIGH", "CN3 pogos not loaded")
-    check_isolated(r, "CN8-5 SCL_Tx", scan, CN8_5_SCL)
+    check_isolated(r, "CN8-5 SCL_Tx",
+                   run_mux_read(tc, *CN8_5_SCL, label="PB10 HIGH, PD8=L isolation"))
 
     # ── PB10 LOW ──
     print("\n  GPIO_CLEAR PB10 ...")
     resp = dut_cmd(tc, "GPIO_CLEAR PB10", wait=1.0)
     print(f"    DUT: {resp}")
-    scan = run_mux_scan(tc, "PB10 LOW, PD8=L")
     if cn3:
-        check_low(r, "CN3-1 TC_SCL/PB10 → LOW", scan, CN3_1_SCL)
+        check_low(r, "CN3-1 TC_SCL/PB10 → LOW",
+                  run_mux_read(tc, *CN3_1_SCL, label="PB10 LOW, PD8=L"))
     else:
         r.skip("CN3-1 TC_SCL/PB10 → LOW", "CN3 pogos not loaded")
-    check_isolated(r, "CN8-5 SCL_Tx", scan, CN8_5_SCL)
+    check_isolated(r, "CN8-5 SCL_Tx",
+                   run_mux_read(tc, *CN8_5_SCL, label="PB10 LOW, PD8=L isolation"))
 
 
 # ── Phase 3: PD8=LOW — UART pins (PA0/PA1) drive CN8 ─────────────────────────
@@ -142,14 +143,14 @@ def phase_uart_to_cn8(tc: TcConsole, r: Results) -> None:
         print(f"\n  GPIO_SET {pin} HIGH ...")
         resp = dut_cmd(tc, f"GPIO_SET {pin} HIGH", wait=1.0)
         print(f"    DUT: {resp}")
-        scan = run_mux_scan(tc, f"{pin} HIGH, PD8=L")
-        check_high(r, f"{label} → HIGH", scan, key)
+        check_high(r, f"{label} → HIGH",
+                   run_mux_read(tc, *key, label=f"{pin} HIGH, PD8=L"))
 
         print(f"\n  GPIO_CLEAR {pin} ...")
         resp = dut_cmd(tc, f"GPIO_CLEAR {pin}", wait=1.0)
         print(f"    DUT: {resp}")
-        scan = run_mux_scan(tc, f"{pin} LOW, PD8=L")
-        check_low(r, f"{label} → LOW", scan, key)
+        check_low(r, f"{label} → LOW",
+                  run_mux_read(tc, *key, label=f"{pin} LOW, PD8=L"))
 
 
 # ── Phase 4: PD8=HIGH — I2C pins drive both CN8 and CN3 ─────────────────────
@@ -166,10 +167,11 @@ def phase_i2c_to_cn8_and_cn3(tc: TcConsole, r: Results, cn3: bool) -> None:
     print("\n  GPIO_SET PB11 HIGH ...")
     resp = dut_cmd(tc, "GPIO_SET PB11 HIGH", wait=1.0)
     print(f"    DUT: {resp}")
-    scan = run_mux_scan(tc, "PB11 HIGH, PD8=H")
-    check_high(r, "CN8-3 SDA_Rx/PB11 → HIGH", scan, CN8_3_SDA)
+    check_high(r, "CN8-3 SDA_Rx/PB11 → HIGH",
+               run_mux_read(tc, *CN8_3_SDA, label="PB11 HIGH, PD8=H"))
     if cn3:
-        check_high(r, "CN3-4 TC_SDA/PB11 → HIGH", scan, CN3_4_SDA)
+        check_high(r, "CN3-4 TC_SDA/PB11 → HIGH",
+                   run_mux_read(tc, *CN3_4_SDA, label="PB11 HIGH, PD8=H"))
     else:
         r.skip("CN3-4 TC_SDA/PB11 → HIGH", "CN3 pogos not loaded")
 
@@ -177,11 +179,12 @@ def phase_i2c_to_cn8_and_cn3(tc: TcConsole, r: Results, cn3: bool) -> None:
     print("\n  GPIO_SET PB10 HIGH ...")
     resp = dut_cmd(tc, "GPIO_SET PB10 HIGH", wait=1.0)
     print(f"    DUT: {resp}")
-    scan = run_mux_scan(tc, "PB10 HIGH, PD8=H")
-    check_high(r, "CN8-5 SCL_Tx/PB10 → HIGH", scan, CN8_5_SCL)
+    check_high(r, "CN8-5 SCL_Tx/PB10 → HIGH",
+               run_mux_read(tc, *CN8_5_SCL, label="PB10 HIGH, PD8=H"))
     if cn3:
-        check_high(r, "CN3-1 TC_SCL/PB10 → HIGH", scan, CN3_1_SCL,
-                   "TC I2C SCL active during scan — result informational")
+        check_high(r, "CN3-1 TC_SCL/PB10 → HIGH",
+                   run_mux_read(tc, *CN3_1_SCL, label="PB10 HIGH, PD8=H"),
+                   "TC I2C SCL active during read — result informational")
     else:
         r.skip("CN3-1 TC_SCL/PB10 → HIGH", "CN3 pogos not loaded")
 
@@ -189,10 +192,11 @@ def phase_i2c_to_cn8_and_cn3(tc: TcConsole, r: Results, cn3: bool) -> None:
     print("\n  GPIO_CLEAR PB11 ...")
     resp = dut_cmd(tc, "GPIO_CLEAR PB11", wait=1.0)
     print(f"    DUT: {resp}")
-    scan = run_mux_scan(tc, "PB11 LOW, PD8=H")
-    check_low(r, "CN8-3 SDA_Rx/PB11 → LOW", scan, CN8_3_SDA)
+    check_low(r, "CN8-3 SDA_Rx/PB11 → LOW",
+              run_mux_read(tc, *CN8_3_SDA, label="PB11 LOW, PD8=H"))
     if cn3:
-        check_low(r, "CN3-4 TC_SDA/PB11 → LOW", scan, CN3_4_SDA)
+        check_low(r, "CN3-4 TC_SDA/PB11 → LOW",
+                  run_mux_read(tc, *CN3_4_SDA, label="PB11 LOW, PD8=H"))
     else:
         r.skip("CN3-4 TC_SDA/PB11 → LOW", "CN3 pogos not loaded")
 
@@ -200,10 +204,11 @@ def phase_i2c_to_cn8_and_cn3(tc: TcConsole, r: Results, cn3: bool) -> None:
     print("\n  GPIO_CLEAR PB10 ...")
     resp = dut_cmd(tc, "GPIO_CLEAR PB10", wait=1.0)
     print(f"    DUT: {resp}")
-    scan = run_mux_scan(tc, "PB10 LOW, PD8=H")
-    check_low(r, "CN8-5 SCL_Tx/PB10 → LOW", scan, CN8_5_SCL)
+    check_low(r, "CN8-5 SCL_Tx/PB10 → LOW",
+              run_mux_read(tc, *CN8_5_SCL, label="PB10 LOW, PD8=H"))
     if cn3:
-        check_low(r, "CN3-1 TC_SCL/PB10 → LOW", scan, CN3_1_SCL)
+        check_low(r, "CN3-1 TC_SCL/PB10 → LOW",
+                  run_mux_read(tc, *CN3_1_SCL, label="PB10 LOW, PD8=H"))
     else:
         r.skip("CN3-1 TC_SCL/PB10 → LOW", "CN3 pogos not loaded")
 

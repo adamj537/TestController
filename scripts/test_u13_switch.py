@@ -20,7 +20,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from tc_console import TcConsole                                    # noqa: E402
 from test_helpers import (Results, dut_cmd,                        # noqa: E402
-                           run_mux_scan, phase_bring_up, teardown,
+                           run_mux_read, phase_bring_up, teardown,
                            HIGH_MV_MIN, LOW_MV_MAX)
 
 CN8_3 = (1, 11)   # SDA_Rx
@@ -31,13 +31,11 @@ def mv_str(mv: int | None) -> str:
     return f"{mv} mV" if mv is not None else "ERR"
 
 
-def check_high(r: Results, name: str, scan: dict, key: tuple) -> None:
-    mv = scan.get(key)
+def check_high(r: Results, name: str, mv: int | None) -> None:
     r.check(name, mv is not None and mv > HIGH_MV_MIN, mv_str(mv))
 
 
-def check_low(r: Results, name: str, scan: dict, key: tuple) -> None:
-    mv = scan.get(key)
+def check_low(r: Results, name: str, mv: int | None) -> None:
     r.check(name, mv is not None and mv < LOW_MV_MAX, mv_str(mv))
 
 
@@ -52,13 +50,11 @@ def phase_uart(tc: TcConsole, r: Results) -> None:
     ]:
         resp = dut_cmd(tc, f"GPIO_SET {pin} HIGH", wait=1.0)
         print(f"\n  GPIO_SET {pin} HIGH → DUT: {resp}")
-        scan = run_mux_scan(tc, f"{pin} HIGH, PD8=L")
-        check_high(r, f"{label} HIGH (UART)", scan, key)
+        check_high(r, f"{label} HIGH (UART)", run_mux_read(tc, *key, label=f"{pin} HIGH, PD8=L"))
 
         resp = dut_cmd(tc, f"GPIO_CLEAR {pin}", wait=1.0)
         print(f"  GPIO_CLEAR {pin}    → DUT: {resp}")
-        scan = run_mux_scan(tc, f"{pin} LOW, PD8=L")
-        check_low(r, f"{label} LOW  (UART)", scan, key)
+        check_low(r, f"{label} LOW  (UART)", run_mux_read(tc, *key, label=f"{pin} LOW, PD8=L"))
 
 
 def phase_i2c(tc: TcConsole, r: Results) -> None:
@@ -75,13 +71,11 @@ def phase_i2c(tc: TcConsole, r: Results) -> None:
     ]:
         resp = dut_cmd(tc, f"GPIO_SET {pin} HIGH", wait=1.0)
         print(f"\n  GPIO_SET {pin} HIGH → DUT: {resp}")
-        scan = run_mux_scan(tc, f"{pin} HIGH, PD8=H")
-        check_high(r, f"{label} HIGH (I2C)", scan, key)
+        check_high(r, f"{label} HIGH (I2C)", run_mux_read(tc, *key, label=f"{pin} HIGH, PD8=H"))
 
         resp = dut_cmd(tc, f"GPIO_CLEAR {pin}", wait=1.0)
         print(f"  GPIO_CLEAR {pin}   → DUT: {resp}")
-        scan = run_mux_scan(tc, f"{pin} LOW, PD8=H")
-        check_low(r, f"{label} LOW  (I2C)", scan, key)
+        check_low(r, f"{label} LOW  (I2C)", run_mux_read(tc, *key, label=f"{pin} LOW, PD8=H"))
 
     dut_cmd(tc, "GPIO_CLEAR PD8", wait=0.5)
 
