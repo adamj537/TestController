@@ -22,6 +22,7 @@ extern "C" {
 #include "cmd_wifi.h"
 #include "cmd_ota.h"
 #include "cmd_selftest.h"
+#include "cmd_tie.h"
 #include "cmd_vdac.h"
 #include "cmd_uart.h"
 #include "cmd_swd.h"
@@ -229,6 +230,7 @@ extern "C" void app_main(void)
     register_wifi_commands();
     register_ota_commands();
     register_selftest_commands();
+    register_tie_commands();
     register_vdac_commands();
     register_uart_commands();
     register_swd_commands();
