@@ -55,20 +55,21 @@ def mv_str(mv: int | None) -> str:
 
 def phase_short_detect(tc: TcConsole, r: Results) -> None:
     print("\n── CN5 inter-pin short detection (MUX1 excluded) ───────────────────────")
-    print(f"  Short threshold: {SHORT_MV_THRESHOLD} mV on any non-driven pin")
-
-    # Pre-drive all output pins LOW so pull-ups/peripheral state don't cause
-    # false SHORT hits on pins that haven't had their own GPIO_SET/CLEAR yet.
-    print("  Pre-driving all CN5 output pins LOW ...")
-    for _, pin, _, _ in CN5_PINS:
-        dut_cmd(tc, f"GPIO_CLEAR {pin}", wait=0.5)
-    # Drain any buffered DUT/TC responses before starting the sweep — the
-    # rapid GPIO_CLEAR burst can leave stale bytes in the socket that cause
-    # the first few tc_cmd_long calls to miss their TIE stop pattern.
-    # _drain(2.0) sleeps 2 s then reads until the socket is silent.
-    tc._drain(2.0)
+    print(f"  Short threshold: {SHORT_MV_THRESHOLD} mV above idle baseline on any non-driven pin")
 
     all_pins = CN5_PINS + [CN5_AUDIO]
+
+    # Measure idle baseline for every pin before driving anything.
+    # Pins with hardware pull-ups (e.g. I2C SCL, BUTTON) naturally sit at
+    # ~2340 mV at boot. Using delta-from-baseline avoids false SHORT hits
+    # on those pins without needing a pre-drive preamble (which caused
+    # socket-drain timing issues with tc_cmd_long).
+    print("  Reading idle baseline ...")
+    baseline: dict[tuple[int, int], int] = {}
+    for mux_key, _, _, conn in all_pins:
+        mv = run_mux_read(tc, *mux_key, label=f"{conn} baseline")
+        baseline[mux_key] = mv if mv is not None else 0
+        print(f"    {conn}: {baseline[mux_key]} mV")
 
     for driven_mux, driven_pin, driven_sig, driven_conn in CN5_PINS:
         print(f"\n  ── Drive {driven_conn} {driven_sig}/{driven_pin} HIGH ──")
@@ -84,19 +85,23 @@ def phase_short_detect(tc: TcConsole, r: Results) -> None:
             dut_cmd(tc, f"GPIO_CLEAR {driven_pin}", wait=0.5)
             continue
 
-        # Check all other pins for unexpected HIGH (short detection)
+        # Check all other pins for voltage ABOVE their idle baseline.
+        # A real short pulls a neighbor up; a pull-up at rest stays at baseline.
         for nbr_mux, nbr_pin, nbr_sig, nbr_conn in all_pins:
             if nbr_mux == driven_mux:
                 continue  # skip self
             mv_nbr = run_mux_read(tc, *nbr_mux, label=f"{nbr_conn} while {driven_pin}=H")
-            no_short = mv_nbr is None or mv_nbr < SHORT_MV_THRESHOLD
+            nbr_base = baseline.get(nbr_mux, 0)
+            delta = (mv_nbr - nbr_base) if mv_nbr is not None else 0
+            no_short = delta < SHORT_MV_THRESHOLD
             if not no_short:
                 print(f"    SHORT: {nbr_conn} {nbr_sig} reads {mv_nbr} mV "
+                      f"(+{delta} above baseline {nbr_base} mV) "
                       f"while {driven_conn} {driven_pin} is HIGH")
             r.check(
                 f"SHORT {driven_conn}→{nbr_conn} ({driven_pin}↔{nbr_pin if nbr_pin != '—' else nbr_sig})",
                 no_short,
-                f"{mv_nbr} mV" if mv_nbr is not None else "ERR",
+                f"{mv_nbr} mV (+{delta})" if mv_nbr is not None else "ERR",
             )
 
         # Drive LOW and verify
