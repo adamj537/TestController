@@ -595,8 +595,11 @@ void tie_mux_gpio_init(void)
 
 void tie_mux_select(int mux_idx, int ch)
 {
-    for (int bit = 0; bit < 4; bit++)
-        gpio_set_level((gpio_num_t)s_mux_gpio[mux_idx][bit], (ch >> bit) & 1);
+    for (int bit = 0; bit < 4; bit++) {
+        gpio_num_t pin = (gpio_num_t)s_mux_gpio[mux_idx][bit];
+        gpio_set_direction(pin, GPIO_MODE_OUTPUT);
+        gpio_set_level(pin, (ch >> bit) & 1);
+    }
 }
 
 bool tie_adc128_read_raw_mv(uint8_t ch, int *mv_out)
