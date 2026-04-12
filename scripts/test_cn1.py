@@ -50,21 +50,11 @@ def phase_rails(tc: TcConsole, r: Results) -> None:
     r.check("VDUT2 enabled", f"VDUT2: {VDUT2_MV}" in resp or str(VDUT2_MV) in resp,
             resp.strip())
 
-    scan = run_mux_scan(tc, "CN1 rails")
-
-    vin_g3 = scan.get(MUX_VIN_G3)
-    vin7   = scan.get(MUX_VIN7)
-
-    r.check(
-        f"VIN_G3 (CN1-1) present",
-        vin_g3 is not None and vin_g3 > RAIL_MIN_MV,
-        f"{vin_g3} mV" if vin_g3 is not None else "ERR",
-    )
-    r.check(
-        f"VIN#7 (CN1-3) present",
-        vin7 is not None and vin7 > RAIL_MIN_MV,
-        f"{vin7} mV" if vin7 is not None else "ERR",
-    )
+    # TIE mux traces for VIN_G3 and VIN#7 are cut on this hardware revision —
+    # voltage dividers required before these rails can be connected to the mux
+    # inputs (planned for next HW rev).
+    r.skip("VIN_G3 (CN1-1) present", "TIE mux trace cut — next HW rev adds voltage divider")
+    r.skip("VIN#7 (CN1-3) present",  "TIE mux trace cut — next HW rev adds voltage divider")
 
     # Turn VDUT2 back off — teardown only does 'vdac off' which covers both
     # channels, but be explicit about state here.

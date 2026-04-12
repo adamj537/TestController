@@ -35,7 +35,7 @@ import time
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from tc_console import TcConsole
 from test_helpers import (
-    Results, tc_cmd, dut_cmd, run_mux_scan,
+    Results, tc_cmd, dut_cmd, run_mux_read,
     phase_bring_up, teardown,
     HIGH_MV_MIN, LOW_MV_MAX,
 )
@@ -64,8 +64,7 @@ def phase_gpio_continuity(tc: TcConsole, r: Results) -> None:
         print(f"  {cmd_str} ...")
         dut_cmd(tc, cmd_str, wait=1.0)
         time.sleep(0.3)
-        scan = run_mux_scan(tc, f"PA15 {level}")
-        mv = scan.get(MUX_FLASH_ENA)
+        mv = run_mux_read(tc, *MUX_FLASH_ENA, label=f"PA15 {level}")
         r.check(
             f"CN2-3 Flashlight_ENA/PA15 → {level}",
             mv_check(mv),
@@ -83,9 +82,8 @@ def phase_branch1_power(tc: TcConsole, r: Results) -> None:
     dut_cmd(tc, "GPIO_SET PD10 HIGH", wait=1.0)
     time.sleep(0.5)   # allow branch regulator to settle
 
-    scan = run_mux_scan(tc, "Branch 1 enabled")
-    vbranch = scan.get(MUX_VBRANCH1)
-    vref    = scan.get(MUX_VREF_DIV)
+    vbranch = run_mux_read(tc, *MUX_VBRANCH1, label="VBranch#1")
+    vref    = run_mux_read(tc, *MUX_VREF_DIV,  label="VREF_DIV")
 
     r.check(
         "CN2-1 VBranch#1 present",
@@ -115,8 +113,7 @@ def phase_lel_sensor(tc: TcConsole, r: Results) -> None:
     # Note: full warm-up takes ~30s; here we just verify power is reaching the sensor
     time.sleep(1.0)
 
-    scan = run_mux_scan(tc, "2611 sensor powered")
-    vout = scan.get(MUX_2611_VOUT)
+    vout = run_mux_read(tc, *MUX_2611_VOUT, label="2611_Vout")
     r.check(
         "CN2-4 2611_Vout present (sensor powered)",
         vout is not None and vout > SENSOR_MIN_MV,

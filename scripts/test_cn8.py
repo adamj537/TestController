@@ -188,9 +188,9 @@ class Results:
 def phase_power_and_flash(tc: TcConsole, r: Results, do_flash: bool) -> bool:
     print("\n── Phase 1: DUT bring-up ────────────────────────────────────────")
 
-    # Pause DUT auto-detect so we own the power rails
-    print("  Pausing DUT auto-start ...")
-    tc_cmd(tc, "dut pause", wait=2.0)
+    # Stop DUT detect task so it doesn't race against TIE mux reads
+    print("  Stopping DUT detect task ...")
+    tc_cmd(tc, "dut stop", wait=2.0)
 
     # VDUT1 at 3300 mV
     print(f"  Enabling VDUT1 at {VDUT_MV} mV ...")
@@ -450,8 +450,8 @@ def teardown(tc: TcConsole) -> None:
     print("\n── Teardown ─────────────────────────────────────────────────────")
     tc_cmd(tc, "mux release", wait=2.0)
     tc_cmd(tc, "vdac off",    wait=2.0)
-    tc_cmd(tc, "dut resume",  wait=2.0)
-    print("  PB-A released, VDUT off, DUT auto-start resumed")
+    tc_cmd(tc, "dut start",   wait=2.0)
+    print("  PB-A released, VDUT off, DUT detect restarted")
 
 
 # ── Main ──────────────────────────────────────────────────────────────────────

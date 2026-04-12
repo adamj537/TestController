@@ -155,7 +155,7 @@ def phase_bring_up(tc: TcConsole, r: Results, label: str, do_flash: bool = True)
     """
     print(f"\n── Phase 1: DUT bring-up ({label}) ─────────────────────────────────────")
 
-    tc_cmd(tc, "dut pause", wait=2.0)
+    tc_cmd(tc, "dut stop", wait=2.0)
 
     resp = tc_cmd(tc, f"vdac_voltage 1 {VDUT_MV}", wait=3.0)
     if not r.check("VDUT1 enabled", f"VDUT1: {VDUT_MV}" in resp, resp.strip()):
@@ -210,5 +210,5 @@ def teardown(tc: TcConsole) -> None:
         pass
     tc_cmd(tc, "mux release", wait=0.5)
     tc_cmd(tc, "vdac off", wait=2.0)
-    tc_cmd(tc, "dut resume", wait=1.0)
-    print("  VDUT off, DUT auto-start resumed")
+    tc_cmd(tc, "dut start", wait=1.0)
+    print("  VDUT off, DUT detect restarted")
