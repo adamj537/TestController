@@ -79,8 +79,13 @@ def build_steps() -> list[dict]:
             "criticality": "REQUIRED",
         })
 
-    # ── Sweep ─────────────────────────────────────────────────────────────────
-    for d_mux, d_ch, d_pin, d_sig, d_conn, d_num in CN7_PINS:
+    # ── Sweep (adjacent ±2 neighbors only) ──────────────────────────────────
+    # Full all-to-all checking requires 257 steps which exceeds firmware
+    # JSON_RECIPE_STEPS_MAX (140) and MQTT buffer (32 KB). Adjacent ±2
+    # catches the vast majority of solder bridge shorts while fitting
+    # within current limits. The Python script (test_cn7_shorts.py) still
+    # checks all pairs via baseline-delta for thorough offline validation.
+    for d_idx, (d_mux, d_ch, d_pin, d_sig, d_conn, d_num) in enumerate(CN7_PINS):
         # Drive HIGH
         steps.append({
             "id":          f"cn7_{d_num}_set_h",
@@ -103,10 +108,11 @@ def build_steps() -> list[dict]:
             "primitive":   "mux_read",
             "criticality": "REQUIRED",
         })
-        # Neighbor no-short checks
-        for n_mux, n_ch, n_pin, n_sig, n_conn, n_num in CN7_PINS:
-            if n_num == d_num:
+        # Adjacent neighbor no-short checks (±2 in pin list order)
+        for n_idx in range(max(0, d_idx - 2), min(len(CN7_PINS), d_idx + 3)):
+            if n_idx == d_idx:
                 continue
+            n_mux, n_ch, n_pin, n_sig, n_conn, n_num = CN7_PINS[n_idx]
             steps.append({
                 "id":          f"cn7_{d_num}_nbr_{n_num}",
                 "label":       f"{n_conn} {n_pin} no short — {d_pin}=H",
@@ -155,7 +161,7 @@ def main() -> None:
         "recipeId":      "g3-cn7-shorting-test",
         "recipeVersion": args.version,
         "name":          "G3-CN7-Shorting-Test",
-        "timeoutMs":     300000,
+        "timeoutMs":     120000,
         "steps":         steps,
     }
 
