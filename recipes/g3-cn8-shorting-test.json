@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "recipeId": "g3-cn8-shorting-test",
-  "recipeVersion": "1.0.1",
+  "recipeVersion": "1.0.2",
   "name": "G3-CN8-Shorting-Test",
   "timeoutMs": 120000,
   "steps": [
