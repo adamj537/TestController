@@ -53,7 +53,7 @@ jobs:
       uses: actions/cache@v4
       with:
         path: ~/.platformio
-        key: ${{ runner.os }}-pio-esp32-${{ hashFiles('platformio.ini') }}
+        key: ${{ runner.os }}-pio-esp32-${{ hashFiles('platformio.ini', 'dependencies.lock') }}
         restore-keys: |
           ${{ runner.os }}-pio-esp32-
 
