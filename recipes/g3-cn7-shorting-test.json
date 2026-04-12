@@ -1,0 +1,3686 @@
+{
+  "schemaVersion": 1,
+  "recipeId": "g3-cn7-shorting-test",
+  "recipeVersion": "1.0.0",
+  "name": "G3-CN7-Shorting-Test",
+  "timeoutMs": 300000,
+  "steps": [
+    {
+      "id": "i2c",
+      "label": "TCC I2C Bus & Rail Check",
+      "enabled": true,
+      "onError": "abort",
+      "primitive": "i2c",
+      "criticality": "CRITICAL"
+    },
+    {
+      "id": "dut_program",
+      "label": "Program PFW via SWD",
+      "params": {
+        "target": "pfw",
+        "verify": true,
+        "timeout_s": 60
+      },
+      "enabled": true,
+      "onError": "abort",
+      "primitive": "dut_program",
+      "criticality": "CRITICAL"
+    },
+    {
+      "id": "power_check",
+      "label": "DUT Power Delivery (3.3V)",
+      "params": {
+        "v_nominal_mv": 3300,
+        "v_tolerance_pct": 5,
+        "i_min_ma": 2,
+        "i_max_ma": 250
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "power_check",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "dut_heartbeat",
+      "label": "DUT Heartbeat (PFW running)",
+      "enabled": true,
+      "onError": "abort",
+      "primitive": "dut_heartbeat",
+      "criticality": "CRITICAL"
+    },
+    {
+      "id": "dut_enter_test",
+      "label": "DUT Enter Test Mode",
+      "enabled": true,
+      "onError": "abort",
+      "primitive": "dut_enter_test",
+      "criticality": "CRITICAL"
+    },
+    {
+      "id": "cn7_init_pb9",
+      "label": "Init CN7-5 PB9 \u2192 OUTPUT LOW",
+      "params": {
+        "pin": "PB9"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_init_pb8",
+      "label": "Init CN7-6 PB8 \u2192 OUTPUT LOW",
+      "params": {
+        "pin": "PB8"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_init_pd0",
+      "label": "Init CN7-7 PD0 \u2192 OUTPUT LOW",
+      "params": {
+        "pin": "PD0"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_init_pe8",
+      "label": "Init CN7-8 PE8 \u2192 OUTPUT LOW",
+      "params": {
+        "pin": "PE8"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_init_pe7",
+      "label": "Init CN7-9 PE7 \u2192 OUTPUT LOW",
+      "params": {
+        "pin": "PE7"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_init_pe4",
+      "label": "Init CN7-10 PE4 \u2192 OUTPUT LOW",
+      "params": {
+        "pin": "PE4"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_init_pd6",
+      "label": "Init CN7-11 PD6 \u2192 OUTPUT LOW",
+      "params": {
+        "pin": "PD6"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_init_pd5",
+      "label": "Init CN7-12 PD5 \u2192 OUTPUT LOW",
+      "params": {
+        "pin": "PD5"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_init_pd4",
+      "label": "Init CN7-13 PD4 \u2192 OUTPUT LOW",
+      "params": {
+        "pin": "PD4"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_init_pd3",
+      "label": "Init CN7-14 PD3 \u2192 OUTPUT LOW",
+      "params": {
+        "pin": "PD3"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_init_pc12",
+      "label": "Init CN7-16 PC12 \u2192 OUTPUT LOW",
+      "params": {
+        "pin": "PC12"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_init_pc10",
+      "label": "Init CN7-18 PC10 \u2192 OUTPUT LOW",
+      "params": {
+        "pin": "PC10"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_init_pb5",
+      "label": "Init CN7-19 PB5 \u2192 OUTPUT LOW",
+      "params": {
+        "pin": "PB5"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_init_pc11",
+      "label": "Init CN7-20 PC11 \u2192 OUTPUT LOW",
+      "params": {
+        "pin": "PC11"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_5_set_h",
+      "label": "Drive CN7-5 BT_GPS_I2C1_SDA/PB9 HIGH",
+      "params": {
+        "pin": "PB9",
+        "level": "HIGH"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_set",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_5_self_h",
+      "label": "CN7-5 PB9 HIGH \u2014 self verify",
+      "params": {
+        "mux": 2,
+        "ch": 12,
+        "min_mv": 2700,
+        "max_mv": 3600,
+        "check_id": "cn7_5_self_h"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_5_nbr_6",
+      "label": "CN7-6 PB8 no short \u2014 PB9=H",
+      "params": {
+        "mux": 2,
+        "ch": 10,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_5_nbr_6"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_5_nbr_7",
+      "label": "CN7-7 PD0 no short \u2014 PB9=H",
+      "params": {
+        "mux": 2,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_5_nbr_7"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_5_nbr_8",
+      "label": "CN7-8 PE8 no short \u2014 PB9=H",
+      "params": {
+        "mux": 2,
+        "ch": 8,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_5_nbr_8"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_5_nbr_9",
+      "label": "CN7-9 PE7 no short \u2014 PB9=H",
+      "params": {
+        "mux": 2,
+        "ch": 9,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_5_nbr_9"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_5_nbr_10",
+      "label": "CN7-10 PE4 no short \u2014 PB9=H",
+      "params": {
+        "mux": 2,
+        "ch": 6,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_5_nbr_10"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_5_nbr_11",
+      "label": "CN7-11 PD6 no short \u2014 PB9=H",
+      "params": {
+        "mux": 2,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_5_nbr_11"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_5_nbr_12",
+      "label": "CN7-12 PD5 no short \u2014 PB9=H",
+      "params": {
+        "mux": 2,
+        "ch": 4,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_5_nbr_12"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_5_nbr_13",
+      "label": "CN7-13 PD4 no short \u2014 PB9=H",
+      "params": {
+        "mux": 3,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_5_nbr_13"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_5_nbr_14",
+      "label": "CN7-14 PD3 no short \u2014 PB9=H",
+      "params": {
+        "mux": 2,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_5_nbr_14"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_5_nbr_16",
+      "label": "CN7-16 PC12 no short \u2014 PB9=H",
+      "params": {
+        "mux": 3,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_5_nbr_16"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_5_nbr_18",
+      "label": "CN7-18 PC10 no short \u2014 PB9=H",
+      "params": {
+        "mux": 3,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_5_nbr_18"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_5_nbr_19",
+      "label": "CN7-19 PB5 no short \u2014 PB9=H",
+      "params": {
+        "mux": 3,
+        "ch": 14,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_5_nbr_19"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_5_nbr_20",
+      "label": "CN7-20 PC11 no short \u2014 PB9=H",
+      "params": {
+        "mux": 3,
+        "ch": 15,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_5_nbr_20"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_5_clr",
+      "label": "Drive CN7-5 BT_GPS_I2C1_SDA/PB9 LOW",
+      "params": {
+        "pin": "PB9"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_5_self_l",
+      "label": "CN7-5 PB9 LOW \u2014 self verify",
+      "params": {
+        "mux": 2,
+        "ch": 12,
+        "min_mv": 0,
+        "max_mv": 300,
+        "check_id": "cn7_5_self_l"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_6_set_h",
+      "label": "Drive CN7-6 BT_GPS_I2C1_SCL/PB8 HIGH",
+      "params": {
+        "pin": "PB8",
+        "level": "HIGH"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_set",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_6_self_h",
+      "label": "CN7-6 PB8 HIGH \u2014 self verify",
+      "params": {
+        "mux": 2,
+        "ch": 10,
+        "min_mv": 2700,
+        "max_mv": 3600,
+        "check_id": "cn7_6_self_h"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_6_nbr_5",
+      "label": "CN7-5 PB9 no short \u2014 PB8=H",
+      "params": {
+        "mux": 2,
+        "ch": 12,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_6_nbr_5"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_6_nbr_7",
+      "label": "CN7-7 PD0 no short \u2014 PB8=H",
+      "params": {
+        "mux": 2,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_6_nbr_7"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_6_nbr_8",
+      "label": "CN7-8 PE8 no short \u2014 PB8=H",
+      "params": {
+        "mux": 2,
+        "ch": 8,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_6_nbr_8"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_6_nbr_9",
+      "label": "CN7-9 PE7 no short \u2014 PB8=H",
+      "params": {
+        "mux": 2,
+        "ch": 9,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_6_nbr_9"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_6_nbr_10",
+      "label": "CN7-10 PE4 no short \u2014 PB8=H",
+      "params": {
+        "mux": 2,
+        "ch": 6,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_6_nbr_10"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_6_nbr_11",
+      "label": "CN7-11 PD6 no short \u2014 PB8=H",
+      "params": {
+        "mux": 2,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_6_nbr_11"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_6_nbr_12",
+      "label": "CN7-12 PD5 no short \u2014 PB8=H",
+      "params": {
+        "mux": 2,
+        "ch": 4,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_6_nbr_12"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_6_nbr_13",
+      "label": "CN7-13 PD4 no short \u2014 PB8=H",
+      "params": {
+        "mux": 3,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_6_nbr_13"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_6_nbr_14",
+      "label": "CN7-14 PD3 no short \u2014 PB8=H",
+      "params": {
+        "mux": 2,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_6_nbr_14"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_6_nbr_16",
+      "label": "CN7-16 PC12 no short \u2014 PB8=H",
+      "params": {
+        "mux": 3,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_6_nbr_16"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_6_nbr_18",
+      "label": "CN7-18 PC10 no short \u2014 PB8=H",
+      "params": {
+        "mux": 3,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_6_nbr_18"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_6_nbr_19",
+      "label": "CN7-19 PB5 no short \u2014 PB8=H",
+      "params": {
+        "mux": 3,
+        "ch": 14,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_6_nbr_19"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_6_nbr_20",
+      "label": "CN7-20 PC11 no short \u2014 PB8=H",
+      "params": {
+        "mux": 3,
+        "ch": 15,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_6_nbr_20"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_6_clr",
+      "label": "Drive CN7-6 BT_GPS_I2C1_SCL/PB8 LOW",
+      "params": {
+        "pin": "PB8"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_6_self_l",
+      "label": "CN7-6 PB8 LOW \u2014 self verify",
+      "params": {
+        "mux": 2,
+        "ch": 10,
+        "min_mv": 0,
+        "max_mv": 300,
+        "check_id": "cn7_6_self_l"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_7_set_h",
+      "label": "Drive CN7-7 GPS_SPI3_CS/PD0 HIGH",
+      "params": {
+        "pin": "PD0",
+        "level": "HIGH"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_set",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_7_self_h",
+      "label": "CN7-7 PD0 HIGH \u2014 self verify",
+      "params": {
+        "mux": 2,
+        "ch": 11,
+        "min_mv": 2700,
+        "max_mv": 3600,
+        "check_id": "cn7_7_self_h"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_7_nbr_5",
+      "label": "CN7-5 PB9 no short \u2014 PD0=H",
+      "params": {
+        "mux": 2,
+        "ch": 12,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_7_nbr_5"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_7_nbr_6",
+      "label": "CN7-6 PB8 no short \u2014 PD0=H",
+      "params": {
+        "mux": 2,
+        "ch": 10,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_7_nbr_6"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_7_nbr_8",
+      "label": "CN7-8 PE8 no short \u2014 PD0=H",
+      "params": {
+        "mux": 2,
+        "ch": 8,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_7_nbr_8"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_7_nbr_9",
+      "label": "CN7-9 PE7 no short \u2014 PD0=H",
+      "params": {
+        "mux": 2,
+        "ch": 9,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_7_nbr_9"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_7_nbr_10",
+      "label": "CN7-10 PE4 no short \u2014 PD0=H",
+      "params": {
+        "mux": 2,
+        "ch": 6,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_7_nbr_10"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_7_nbr_11",
+      "label": "CN7-11 PD6 no short \u2014 PD0=H",
+      "params": {
+        "mux": 2,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_7_nbr_11"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_7_nbr_12",
+      "label": "CN7-12 PD5 no short \u2014 PD0=H",
+      "params": {
+        "mux": 2,
+        "ch": 4,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_7_nbr_12"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_7_nbr_13",
+      "label": "CN7-13 PD4 no short \u2014 PD0=H",
+      "params": {
+        "mux": 3,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_7_nbr_13"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_7_nbr_14",
+      "label": "CN7-14 PD3 no short \u2014 PD0=H",
+      "params": {
+        "mux": 2,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_7_nbr_14"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_7_nbr_16",
+      "label": "CN7-16 PC12 no short \u2014 PD0=H",
+      "params": {
+        "mux": 3,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_7_nbr_16"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_7_nbr_18",
+      "label": "CN7-18 PC10 no short \u2014 PD0=H",
+      "params": {
+        "mux": 3,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_7_nbr_18"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_7_nbr_19",
+      "label": "CN7-19 PB5 no short \u2014 PD0=H",
+      "params": {
+        "mux": 3,
+        "ch": 14,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_7_nbr_19"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_7_nbr_20",
+      "label": "CN7-20 PC11 no short \u2014 PD0=H",
+      "params": {
+        "mux": 3,
+        "ch": 15,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_7_nbr_20"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_7_clr",
+      "label": "Drive CN7-7 GPS_SPI3_CS/PD0 LOW",
+      "params": {
+        "pin": "PD0"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_7_self_l",
+      "label": "CN7-7 PD0 LOW \u2014 self verify",
+      "params": {
+        "mux": 2,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 300,
+        "check_id": "cn7_7_self_l"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_8_set_h",
+      "label": "Drive CN7-8 BT_GPIO2/PE8 HIGH",
+      "params": {
+        "pin": "PE8",
+        "level": "HIGH"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_set",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_8_self_h",
+      "label": "CN7-8 PE8 HIGH \u2014 self verify",
+      "params": {
+        "mux": 2,
+        "ch": 8,
+        "min_mv": 2700,
+        "max_mv": 3600,
+        "check_id": "cn7_8_self_h"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_8_nbr_5",
+      "label": "CN7-5 PB9 no short \u2014 PE8=H",
+      "params": {
+        "mux": 2,
+        "ch": 12,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_8_nbr_5"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_8_nbr_6",
+      "label": "CN7-6 PB8 no short \u2014 PE8=H",
+      "params": {
+        "mux": 2,
+        "ch": 10,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_8_nbr_6"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_8_nbr_7",
+      "label": "CN7-7 PD0 no short \u2014 PE8=H",
+      "params": {
+        "mux": 2,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_8_nbr_7"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_8_nbr_9",
+      "label": "CN7-9 PE7 no short \u2014 PE8=H",
+      "params": {
+        "mux": 2,
+        "ch": 9,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_8_nbr_9"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_8_nbr_10",
+      "label": "CN7-10 PE4 no short \u2014 PE8=H",
+      "params": {
+        "mux": 2,
+        "ch": 6,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_8_nbr_10"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_8_nbr_11",
+      "label": "CN7-11 PD6 no short \u2014 PE8=H",
+      "params": {
+        "mux": 2,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_8_nbr_11"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_8_nbr_12",
+      "label": "CN7-12 PD5 no short \u2014 PE8=H",
+      "params": {
+        "mux": 2,
+        "ch": 4,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_8_nbr_12"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_8_nbr_13",
+      "label": "CN7-13 PD4 no short \u2014 PE8=H",
+      "params": {
+        "mux": 3,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_8_nbr_13"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_8_nbr_14",
+      "label": "CN7-14 PD3 no short \u2014 PE8=H",
+      "params": {
+        "mux": 2,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_8_nbr_14"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_8_nbr_16",
+      "label": "CN7-16 PC12 no short \u2014 PE8=H",
+      "params": {
+        "mux": 3,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_8_nbr_16"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_8_nbr_18",
+      "label": "CN7-18 PC10 no short \u2014 PE8=H",
+      "params": {
+        "mux": 3,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_8_nbr_18"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_8_nbr_19",
+      "label": "CN7-19 PB5 no short \u2014 PE8=H",
+      "params": {
+        "mux": 3,
+        "ch": 14,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_8_nbr_19"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_8_nbr_20",
+      "label": "CN7-20 PC11 no short \u2014 PE8=H",
+      "params": {
+        "mux": 3,
+        "ch": 15,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_8_nbr_20"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_8_clr",
+      "label": "Drive CN7-8 BT_GPIO2/PE8 LOW",
+      "params": {
+        "pin": "PE8"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_8_self_l",
+      "label": "CN7-8 PE8 LOW \u2014 self verify",
+      "params": {
+        "mux": 2,
+        "ch": 8,
+        "min_mv": 0,
+        "max_mv": 300,
+        "check_id": "cn7_8_self_l"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_9_set_h",
+      "label": "Drive CN7-9 BT_GPIO1/PE7 HIGH",
+      "params": {
+        "pin": "PE7",
+        "level": "HIGH"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_set",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_9_self_h",
+      "label": "CN7-9 PE7 HIGH \u2014 self verify",
+      "params": {
+        "mux": 2,
+        "ch": 9,
+        "min_mv": 2700,
+        "max_mv": 3600,
+        "check_id": "cn7_9_self_h"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_9_nbr_5",
+      "label": "CN7-5 PB9 no short \u2014 PE7=H",
+      "params": {
+        "mux": 2,
+        "ch": 12,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_9_nbr_5"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_9_nbr_6",
+      "label": "CN7-6 PB8 no short \u2014 PE7=H",
+      "params": {
+        "mux": 2,
+        "ch": 10,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_9_nbr_6"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_9_nbr_7",
+      "label": "CN7-7 PD0 no short \u2014 PE7=H",
+      "params": {
+        "mux": 2,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_9_nbr_7"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_9_nbr_8",
+      "label": "CN7-8 PE8 no short \u2014 PE7=H",
+      "params": {
+        "mux": 2,
+        "ch": 8,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_9_nbr_8"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_9_nbr_10",
+      "label": "CN7-10 PE4 no short \u2014 PE7=H",
+      "params": {
+        "mux": 2,
+        "ch": 6,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_9_nbr_10"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_9_nbr_11",
+      "label": "CN7-11 PD6 no short \u2014 PE7=H",
+      "params": {
+        "mux": 2,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_9_nbr_11"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_9_nbr_12",
+      "label": "CN7-12 PD5 no short \u2014 PE7=H",
+      "params": {
+        "mux": 2,
+        "ch": 4,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_9_nbr_12"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_9_nbr_13",
+      "label": "CN7-13 PD4 no short \u2014 PE7=H",
+      "params": {
+        "mux": 3,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_9_nbr_13"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_9_nbr_14",
+      "label": "CN7-14 PD3 no short \u2014 PE7=H",
+      "params": {
+        "mux": 2,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_9_nbr_14"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_9_nbr_16",
+      "label": "CN7-16 PC12 no short \u2014 PE7=H",
+      "params": {
+        "mux": 3,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_9_nbr_16"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_9_nbr_18",
+      "label": "CN7-18 PC10 no short \u2014 PE7=H",
+      "params": {
+        "mux": 3,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_9_nbr_18"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_9_nbr_19",
+      "label": "CN7-19 PB5 no short \u2014 PE7=H",
+      "params": {
+        "mux": 3,
+        "ch": 14,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_9_nbr_19"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_9_nbr_20",
+      "label": "CN7-20 PC11 no short \u2014 PE7=H",
+      "params": {
+        "mux": 3,
+        "ch": 15,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_9_nbr_20"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_9_clr",
+      "label": "Drive CN7-9 BT_GPIO1/PE7 LOW",
+      "params": {
+        "pin": "PE7"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_9_self_l",
+      "label": "CN7-9 PE7 LOW \u2014 self verify",
+      "params": {
+        "mux": 2,
+        "ch": 9,
+        "min_mv": 0,
+        "max_mv": 300,
+        "check_id": "cn7_9_self_l"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_10_set_h",
+      "label": "Drive CN7-10 BT_SPI3_CS/PE4 HIGH",
+      "params": {
+        "pin": "PE4",
+        "level": "HIGH"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_set",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_10_self_h",
+      "label": "CN7-10 PE4 HIGH \u2014 self verify",
+      "params": {
+        "mux": 2,
+        "ch": 6,
+        "min_mv": 2700,
+        "max_mv": 3600,
+        "check_id": "cn7_10_self_h"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_10_nbr_5",
+      "label": "CN7-5 PB9 no short \u2014 PE4=H",
+      "params": {
+        "mux": 2,
+        "ch": 12,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_10_nbr_5"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_10_nbr_6",
+      "label": "CN7-6 PB8 no short \u2014 PE4=H",
+      "params": {
+        "mux": 2,
+        "ch": 10,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_10_nbr_6"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_10_nbr_7",
+      "label": "CN7-7 PD0 no short \u2014 PE4=H",
+      "params": {
+        "mux": 2,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_10_nbr_7"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_10_nbr_8",
+      "label": "CN7-8 PE8 no short \u2014 PE4=H",
+      "params": {
+        "mux": 2,
+        "ch": 8,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_10_nbr_8"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_10_nbr_9",
+      "label": "CN7-9 PE7 no short \u2014 PE4=H",
+      "params": {
+        "mux": 2,
+        "ch": 9,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_10_nbr_9"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_10_nbr_11",
+      "label": "CN7-11 PD6 no short \u2014 PE4=H",
+      "params": {
+        "mux": 2,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_10_nbr_11"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_10_nbr_12",
+      "label": "CN7-12 PD5 no short \u2014 PE4=H",
+      "params": {
+        "mux": 2,
+        "ch": 4,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_10_nbr_12"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_10_nbr_13",
+      "label": "CN7-13 PD4 no short \u2014 PE4=H",
+      "params": {
+        "mux": 3,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_10_nbr_13"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_10_nbr_14",
+      "label": "CN7-14 PD3 no short \u2014 PE4=H",
+      "params": {
+        "mux": 2,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_10_nbr_14"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_10_nbr_16",
+      "label": "CN7-16 PC12 no short \u2014 PE4=H",
+      "params": {
+        "mux": 3,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_10_nbr_16"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_10_nbr_18",
+      "label": "CN7-18 PC10 no short \u2014 PE4=H",
+      "params": {
+        "mux": 3,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_10_nbr_18"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_10_nbr_19",
+      "label": "CN7-19 PB5 no short \u2014 PE4=H",
+      "params": {
+        "mux": 3,
+        "ch": 14,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_10_nbr_19"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_10_nbr_20",
+      "label": "CN7-20 PC11 no short \u2014 PE4=H",
+      "params": {
+        "mux": 3,
+        "ch": 15,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_10_nbr_20"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_10_clr",
+      "label": "Drive CN7-10 BT_SPI3_CS/PE4 LOW",
+      "params": {
+        "pin": "PE4"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_10_self_l",
+      "label": "CN7-10 PE4 LOW \u2014 self verify",
+      "params": {
+        "mux": 2,
+        "ch": 6,
+        "min_mv": 0,
+        "max_mv": 300,
+        "check_id": "cn7_10_self_l"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_11_set_h",
+      "label": "Drive CN7-11 BT_USART2_RX/PD6 HIGH",
+      "params": {
+        "pin": "PD6",
+        "level": "HIGH"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_set",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_11_self_h",
+      "label": "CN7-11 PD6 HIGH \u2014 self verify",
+      "params": {
+        "mux": 2,
+        "ch": 7,
+        "min_mv": 2700,
+        "max_mv": 3600,
+        "check_id": "cn7_11_self_h"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_11_nbr_5",
+      "label": "CN7-5 PB9 no short \u2014 PD6=H",
+      "params": {
+        "mux": 2,
+        "ch": 12,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_11_nbr_5"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_11_nbr_6",
+      "label": "CN7-6 PB8 no short \u2014 PD6=H",
+      "params": {
+        "mux": 2,
+        "ch": 10,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_11_nbr_6"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_11_nbr_7",
+      "label": "CN7-7 PD0 no short \u2014 PD6=H",
+      "params": {
+        "mux": 2,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_11_nbr_7"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_11_nbr_8",
+      "label": "CN7-8 PE8 no short \u2014 PD6=H",
+      "params": {
+        "mux": 2,
+        "ch": 8,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_11_nbr_8"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_11_nbr_9",
+      "label": "CN7-9 PE7 no short \u2014 PD6=H",
+      "params": {
+        "mux": 2,
+        "ch": 9,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_11_nbr_9"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_11_nbr_10",
+      "label": "CN7-10 PE4 no short \u2014 PD6=H",
+      "params": {
+        "mux": 2,
+        "ch": 6,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_11_nbr_10"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_11_nbr_12",
+      "label": "CN7-12 PD5 no short \u2014 PD6=H",
+      "params": {
+        "mux": 2,
+        "ch": 4,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_11_nbr_12"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_11_nbr_13",
+      "label": "CN7-13 PD4 no short \u2014 PD6=H",
+      "params": {
+        "mux": 3,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_11_nbr_13"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_11_nbr_14",
+      "label": "CN7-14 PD3 no short \u2014 PD6=H",
+      "params": {
+        "mux": 2,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_11_nbr_14"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_11_nbr_16",
+      "label": "CN7-16 PC12 no short \u2014 PD6=H",
+      "params": {
+        "mux": 3,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_11_nbr_16"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_11_nbr_18",
+      "label": "CN7-18 PC10 no short \u2014 PD6=H",
+      "params": {
+        "mux": 3,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_11_nbr_18"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_11_nbr_19",
+      "label": "CN7-19 PB5 no short \u2014 PD6=H",
+      "params": {
+        "mux": 3,
+        "ch": 14,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_11_nbr_19"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_11_nbr_20",
+      "label": "CN7-20 PC11 no short \u2014 PD6=H",
+      "params": {
+        "mux": 3,
+        "ch": 15,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_11_nbr_20"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_11_clr",
+      "label": "Drive CN7-11 BT_USART2_RX/PD6 LOW",
+      "params": {
+        "pin": "PD6"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_11_self_l",
+      "label": "CN7-11 PD6 LOW \u2014 self verify",
+      "params": {
+        "mux": 2,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 300,
+        "check_id": "cn7_11_self_l"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_12_set_h",
+      "label": "Drive CN7-12 BT_USART2_TX/PD5 HIGH",
+      "params": {
+        "pin": "PD5",
+        "level": "HIGH"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_set",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_12_self_h",
+      "label": "CN7-12 PD5 HIGH \u2014 self verify",
+      "params": {
+        "mux": 2,
+        "ch": 4,
+        "min_mv": 2700,
+        "max_mv": 3600,
+        "check_id": "cn7_12_self_h"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_12_nbr_5",
+      "label": "CN7-5 PB9 no short \u2014 PD5=H",
+      "params": {
+        "mux": 2,
+        "ch": 12,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_12_nbr_5"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_12_nbr_6",
+      "label": "CN7-6 PB8 no short \u2014 PD5=H",
+      "params": {
+        "mux": 2,
+        "ch": 10,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_12_nbr_6"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_12_nbr_7",
+      "label": "CN7-7 PD0 no short \u2014 PD5=H",
+      "params": {
+        "mux": 2,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_12_nbr_7"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_12_nbr_8",
+      "label": "CN7-8 PE8 no short \u2014 PD5=H",
+      "params": {
+        "mux": 2,
+        "ch": 8,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_12_nbr_8"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_12_nbr_9",
+      "label": "CN7-9 PE7 no short \u2014 PD5=H",
+      "params": {
+        "mux": 2,
+        "ch": 9,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_12_nbr_9"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_12_nbr_10",
+      "label": "CN7-10 PE4 no short \u2014 PD5=H",
+      "params": {
+        "mux": 2,
+        "ch": 6,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_12_nbr_10"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_12_nbr_11",
+      "label": "CN7-11 PD6 no short \u2014 PD5=H",
+      "params": {
+        "mux": 2,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_12_nbr_11"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_12_nbr_13",
+      "label": "CN7-13 PD4 no short \u2014 PD5=H",
+      "params": {
+        "mux": 3,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_12_nbr_13"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_12_nbr_14",
+      "label": "CN7-14 PD3 no short \u2014 PD5=H",
+      "params": {
+        "mux": 2,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_12_nbr_14"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_12_nbr_16",
+      "label": "CN7-16 PC12 no short \u2014 PD5=H",
+      "params": {
+        "mux": 3,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_12_nbr_16"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_12_nbr_18",
+      "label": "CN7-18 PC10 no short \u2014 PD5=H",
+      "params": {
+        "mux": 3,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_12_nbr_18"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_12_nbr_19",
+      "label": "CN7-19 PB5 no short \u2014 PD5=H",
+      "params": {
+        "mux": 3,
+        "ch": 14,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_12_nbr_19"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_12_nbr_20",
+      "label": "CN7-20 PC11 no short \u2014 PD5=H",
+      "params": {
+        "mux": 3,
+        "ch": 15,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_12_nbr_20"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_12_clr",
+      "label": "Drive CN7-12 BT_USART2_TX/PD5 LOW",
+      "params": {
+        "pin": "PD5"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_12_self_l",
+      "label": "CN7-12 PD5 LOW \u2014 self verify",
+      "params": {
+        "mux": 2,
+        "ch": 4,
+        "min_mv": 0,
+        "max_mv": 300,
+        "check_id": "cn7_12_self_l"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_13_set_h",
+      "label": "Drive CN7-13 BT_USART2_RTS/PD4 HIGH",
+      "params": {
+        "pin": "PD4",
+        "level": "HIGH"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_set",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_13_self_h",
+      "label": "CN7-13 PD4 HIGH \u2014 self verify",
+      "params": {
+        "mux": 3,
+        "ch": 5,
+        "min_mv": 2700,
+        "max_mv": 3600,
+        "check_id": "cn7_13_self_h"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_13_nbr_5",
+      "label": "CN7-5 PB9 no short \u2014 PD4=H",
+      "params": {
+        "mux": 2,
+        "ch": 12,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_13_nbr_5"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_13_nbr_6",
+      "label": "CN7-6 PB8 no short \u2014 PD4=H",
+      "params": {
+        "mux": 2,
+        "ch": 10,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_13_nbr_6"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_13_nbr_7",
+      "label": "CN7-7 PD0 no short \u2014 PD4=H",
+      "params": {
+        "mux": 2,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_13_nbr_7"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_13_nbr_8",
+      "label": "CN7-8 PE8 no short \u2014 PD4=H",
+      "params": {
+        "mux": 2,
+        "ch": 8,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_13_nbr_8"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_13_nbr_9",
+      "label": "CN7-9 PE7 no short \u2014 PD4=H",
+      "params": {
+        "mux": 2,
+        "ch": 9,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_13_nbr_9"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_13_nbr_10",
+      "label": "CN7-10 PE4 no short \u2014 PD4=H",
+      "params": {
+        "mux": 2,
+        "ch": 6,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_13_nbr_10"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_13_nbr_11",
+      "label": "CN7-11 PD6 no short \u2014 PD4=H",
+      "params": {
+        "mux": 2,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_13_nbr_11"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_13_nbr_12",
+      "label": "CN7-12 PD5 no short \u2014 PD4=H",
+      "params": {
+        "mux": 2,
+        "ch": 4,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_13_nbr_12"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_13_nbr_14",
+      "label": "CN7-14 PD3 no short \u2014 PD4=H",
+      "params": {
+        "mux": 2,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_13_nbr_14"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_13_nbr_16",
+      "label": "CN7-16 PC12 no short \u2014 PD4=H",
+      "params": {
+        "mux": 3,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_13_nbr_16"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_13_nbr_18",
+      "label": "CN7-18 PC10 no short \u2014 PD4=H",
+      "params": {
+        "mux": 3,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_13_nbr_18"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_13_nbr_19",
+      "label": "CN7-19 PB5 no short \u2014 PD4=H",
+      "params": {
+        "mux": 3,
+        "ch": 14,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_13_nbr_19"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_13_nbr_20",
+      "label": "CN7-20 PC11 no short \u2014 PD4=H",
+      "params": {
+        "mux": 3,
+        "ch": 15,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_13_nbr_20"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_13_clr",
+      "label": "Drive CN7-13 BT_USART2_RTS/PD4 LOW",
+      "params": {
+        "pin": "PD4"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_13_self_l",
+      "label": "CN7-13 PD4 LOW \u2014 self verify",
+      "params": {
+        "mux": 3,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 300,
+        "check_id": "cn7_13_self_l"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_14_set_h",
+      "label": "Drive CN7-14 BT_USART2_CTS/PD3 HIGH",
+      "params": {
+        "pin": "PD3",
+        "level": "HIGH"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_set",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_14_self_h",
+      "label": "CN7-14 PD3 HIGH \u2014 self verify",
+      "params": {
+        "mux": 2,
+        "ch": 5,
+        "min_mv": 2700,
+        "max_mv": 3600,
+        "check_id": "cn7_14_self_h"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_14_nbr_5",
+      "label": "CN7-5 PB9 no short \u2014 PD3=H",
+      "params": {
+        "mux": 2,
+        "ch": 12,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_14_nbr_5"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_14_nbr_6",
+      "label": "CN7-6 PB8 no short \u2014 PD3=H",
+      "params": {
+        "mux": 2,
+        "ch": 10,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_14_nbr_6"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_14_nbr_7",
+      "label": "CN7-7 PD0 no short \u2014 PD3=H",
+      "params": {
+        "mux": 2,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_14_nbr_7"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_14_nbr_8",
+      "label": "CN7-8 PE8 no short \u2014 PD3=H",
+      "params": {
+        "mux": 2,
+        "ch": 8,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_14_nbr_8"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_14_nbr_9",
+      "label": "CN7-9 PE7 no short \u2014 PD3=H",
+      "params": {
+        "mux": 2,
+        "ch": 9,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_14_nbr_9"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_14_nbr_10",
+      "label": "CN7-10 PE4 no short \u2014 PD3=H",
+      "params": {
+        "mux": 2,
+        "ch": 6,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_14_nbr_10"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_14_nbr_11",
+      "label": "CN7-11 PD6 no short \u2014 PD3=H",
+      "params": {
+        "mux": 2,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_14_nbr_11"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_14_nbr_12",
+      "label": "CN7-12 PD5 no short \u2014 PD3=H",
+      "params": {
+        "mux": 2,
+        "ch": 4,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_14_nbr_12"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_14_nbr_13",
+      "label": "CN7-13 PD4 no short \u2014 PD3=H",
+      "params": {
+        "mux": 3,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_14_nbr_13"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_14_nbr_16",
+      "label": "CN7-16 PC12 no short \u2014 PD3=H",
+      "params": {
+        "mux": 3,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_14_nbr_16"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_14_nbr_18",
+      "label": "CN7-18 PC10 no short \u2014 PD3=H",
+      "params": {
+        "mux": 3,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_14_nbr_18"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_14_nbr_19",
+      "label": "CN7-19 PB5 no short \u2014 PD3=H",
+      "params": {
+        "mux": 3,
+        "ch": 14,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_14_nbr_19"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_14_nbr_20",
+      "label": "CN7-20 PC11 no short \u2014 PD3=H",
+      "params": {
+        "mux": 3,
+        "ch": 15,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_14_nbr_20"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_14_clr",
+      "label": "Drive CN7-14 BT_USART2_CTS/PD3 LOW",
+      "params": {
+        "pin": "PD3"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_14_self_l",
+      "label": "CN7-14 PD3 LOW \u2014 self verify",
+      "params": {
+        "mux": 2,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 300,
+        "check_id": "cn7_14_self_l"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_16_set_h",
+      "label": "Drive CN7-16 BT_GPS_SPI3_MOSI/PC12 HIGH",
+      "params": {
+        "pin": "PC12",
+        "level": "HIGH"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_set",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_16_self_h",
+      "label": "CN7-16 PC12 HIGH \u2014 self verify",
+      "params": {
+        "mux": 3,
+        "ch": 7,
+        "min_mv": 2700,
+        "max_mv": 3600,
+        "check_id": "cn7_16_self_h"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_16_nbr_5",
+      "label": "CN7-5 PB9 no short \u2014 PC12=H",
+      "params": {
+        "mux": 2,
+        "ch": 12,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_16_nbr_5"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_16_nbr_6",
+      "label": "CN7-6 PB8 no short \u2014 PC12=H",
+      "params": {
+        "mux": 2,
+        "ch": 10,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_16_nbr_6"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_16_nbr_7",
+      "label": "CN7-7 PD0 no short \u2014 PC12=H",
+      "params": {
+        "mux": 2,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_16_nbr_7"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_16_nbr_8",
+      "label": "CN7-8 PE8 no short \u2014 PC12=H",
+      "params": {
+        "mux": 2,
+        "ch": 8,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_16_nbr_8"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_16_nbr_9",
+      "label": "CN7-9 PE7 no short \u2014 PC12=H",
+      "params": {
+        "mux": 2,
+        "ch": 9,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_16_nbr_9"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_16_nbr_10",
+      "label": "CN7-10 PE4 no short \u2014 PC12=H",
+      "params": {
+        "mux": 2,
+        "ch": 6,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_16_nbr_10"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_16_nbr_11",
+      "label": "CN7-11 PD6 no short \u2014 PC12=H",
+      "params": {
+        "mux": 2,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_16_nbr_11"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_16_nbr_12",
+      "label": "CN7-12 PD5 no short \u2014 PC12=H",
+      "params": {
+        "mux": 2,
+        "ch": 4,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_16_nbr_12"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_16_nbr_13",
+      "label": "CN7-13 PD4 no short \u2014 PC12=H",
+      "params": {
+        "mux": 3,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_16_nbr_13"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_16_nbr_14",
+      "label": "CN7-14 PD3 no short \u2014 PC12=H",
+      "params": {
+        "mux": 2,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_16_nbr_14"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_16_nbr_18",
+      "label": "CN7-18 PC10 no short \u2014 PC12=H",
+      "params": {
+        "mux": 3,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_16_nbr_18"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_16_nbr_19",
+      "label": "CN7-19 PB5 no short \u2014 PC12=H",
+      "params": {
+        "mux": 3,
+        "ch": 14,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_16_nbr_19"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_16_nbr_20",
+      "label": "CN7-20 PC11 no short \u2014 PC12=H",
+      "params": {
+        "mux": 3,
+        "ch": 15,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_16_nbr_20"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_16_clr",
+      "label": "Drive CN7-16 BT_GPS_SPI3_MOSI/PC12 LOW",
+      "params": {
+        "pin": "PC12"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_16_self_l",
+      "label": "CN7-16 PC12 LOW \u2014 self verify",
+      "params": {
+        "mux": 3,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 300,
+        "check_id": "cn7_16_self_l"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_18_set_h",
+      "label": "Drive CN7-18 SPI3_SCK_GPS_GPIO1/PC10 HIGH",
+      "params": {
+        "pin": "PC10",
+        "level": "HIGH"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_set",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_18_self_h",
+      "label": "CN7-18 PC10 HIGH \u2014 self verify",
+      "params": {
+        "mux": 3,
+        "ch": 11,
+        "min_mv": 2700,
+        "max_mv": 3600,
+        "check_id": "cn7_18_self_h"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_18_nbr_5",
+      "label": "CN7-5 PB9 no short \u2014 PC10=H",
+      "params": {
+        "mux": 2,
+        "ch": 12,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_18_nbr_5"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_18_nbr_6",
+      "label": "CN7-6 PB8 no short \u2014 PC10=H",
+      "params": {
+        "mux": 2,
+        "ch": 10,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_18_nbr_6"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_18_nbr_7",
+      "label": "CN7-7 PD0 no short \u2014 PC10=H",
+      "params": {
+        "mux": 2,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_18_nbr_7"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_18_nbr_8",
+      "label": "CN7-8 PE8 no short \u2014 PC10=H",
+      "params": {
+        "mux": 2,
+        "ch": 8,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_18_nbr_8"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_18_nbr_9",
+      "label": "CN7-9 PE7 no short \u2014 PC10=H",
+      "params": {
+        "mux": 2,
+        "ch": 9,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_18_nbr_9"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_18_nbr_10",
+      "label": "CN7-10 PE4 no short \u2014 PC10=H",
+      "params": {
+        "mux": 2,
+        "ch": 6,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_18_nbr_10"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_18_nbr_11",
+      "label": "CN7-11 PD6 no short \u2014 PC10=H",
+      "params": {
+        "mux": 2,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_18_nbr_11"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_18_nbr_12",
+      "label": "CN7-12 PD5 no short \u2014 PC10=H",
+      "params": {
+        "mux": 2,
+        "ch": 4,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_18_nbr_12"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_18_nbr_13",
+      "label": "CN7-13 PD4 no short \u2014 PC10=H",
+      "params": {
+        "mux": 3,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_18_nbr_13"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_18_nbr_14",
+      "label": "CN7-14 PD3 no short \u2014 PC10=H",
+      "params": {
+        "mux": 2,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_18_nbr_14"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_18_nbr_16",
+      "label": "CN7-16 PC12 no short \u2014 PC10=H",
+      "params": {
+        "mux": 3,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_18_nbr_16"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_18_nbr_19",
+      "label": "CN7-19 PB5 no short \u2014 PC10=H",
+      "params": {
+        "mux": 3,
+        "ch": 14,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_18_nbr_19"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_18_nbr_20",
+      "label": "CN7-20 PC11 no short \u2014 PC10=H",
+      "params": {
+        "mux": 3,
+        "ch": 15,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_18_nbr_20"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_18_clr",
+      "label": "Drive CN7-18 SPI3_SCK_GPS_GPIO1/PC10 LOW",
+      "params": {
+        "pin": "PC10"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_18_self_l",
+      "label": "CN7-18 PC10 LOW \u2014 self verify",
+      "params": {
+        "mux": 3,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 300,
+        "check_id": "cn7_18_self_l"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_19_set_h",
+      "label": "Drive CN7-19 GPS_GPIO2/PB5 HIGH",
+      "params": {
+        "pin": "PB5",
+        "level": "HIGH"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_set",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_19_self_h",
+      "label": "CN7-19 PB5 HIGH \u2014 self verify",
+      "params": {
+        "mux": 3,
+        "ch": 14,
+        "min_mv": 2700,
+        "max_mv": 3600,
+        "check_id": "cn7_19_self_h"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_19_nbr_5",
+      "label": "CN7-5 PB9 no short \u2014 PB5=H",
+      "params": {
+        "mux": 2,
+        "ch": 12,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_19_nbr_5"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_19_nbr_6",
+      "label": "CN7-6 PB8 no short \u2014 PB5=H",
+      "params": {
+        "mux": 2,
+        "ch": 10,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_19_nbr_6"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_19_nbr_7",
+      "label": "CN7-7 PD0 no short \u2014 PB5=H",
+      "params": {
+        "mux": 2,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_19_nbr_7"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_19_nbr_8",
+      "label": "CN7-8 PE8 no short \u2014 PB5=H",
+      "params": {
+        "mux": 2,
+        "ch": 8,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_19_nbr_8"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_19_nbr_9",
+      "label": "CN7-9 PE7 no short \u2014 PB5=H",
+      "params": {
+        "mux": 2,
+        "ch": 9,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_19_nbr_9"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_19_nbr_10",
+      "label": "CN7-10 PE4 no short \u2014 PB5=H",
+      "params": {
+        "mux": 2,
+        "ch": 6,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_19_nbr_10"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_19_nbr_11",
+      "label": "CN7-11 PD6 no short \u2014 PB5=H",
+      "params": {
+        "mux": 2,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_19_nbr_11"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_19_nbr_12",
+      "label": "CN7-12 PD5 no short \u2014 PB5=H",
+      "params": {
+        "mux": 2,
+        "ch": 4,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_19_nbr_12"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_19_nbr_13",
+      "label": "CN7-13 PD4 no short \u2014 PB5=H",
+      "params": {
+        "mux": 3,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_19_nbr_13"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_19_nbr_14",
+      "label": "CN7-14 PD3 no short \u2014 PB5=H",
+      "params": {
+        "mux": 2,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_19_nbr_14"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_19_nbr_16",
+      "label": "CN7-16 PC12 no short \u2014 PB5=H",
+      "params": {
+        "mux": 3,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_19_nbr_16"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_19_nbr_18",
+      "label": "CN7-18 PC10 no short \u2014 PB5=H",
+      "params": {
+        "mux": 3,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_19_nbr_18"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_19_nbr_20",
+      "label": "CN7-20 PC11 no short \u2014 PB5=H",
+      "params": {
+        "mux": 3,
+        "ch": 15,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_19_nbr_20"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_19_clr",
+      "label": "Drive CN7-19 GPS_GPIO2/PB5 LOW",
+      "params": {
+        "pin": "PB5"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_19_self_l",
+      "label": "CN7-19 PB5 LOW \u2014 self verify",
+      "params": {
+        "mux": 3,
+        "ch": 14,
+        "min_mv": 0,
+        "max_mv": 300,
+        "check_id": "cn7_19_self_l"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_20_set_h",
+      "label": "Drive CN7-20 BT_GPS_SPI3_MISO/PC11 HIGH",
+      "params": {
+        "pin": "PC11",
+        "level": "HIGH"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_set",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_20_self_h",
+      "label": "CN7-20 PC11 HIGH \u2014 self verify",
+      "params": {
+        "mux": 3,
+        "ch": 15,
+        "min_mv": 2700,
+        "max_mv": 3600,
+        "check_id": "cn7_20_self_h"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_20_nbr_5",
+      "label": "CN7-5 PB9 no short \u2014 PC11=H",
+      "params": {
+        "mux": 2,
+        "ch": 12,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_20_nbr_5"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_20_nbr_6",
+      "label": "CN7-6 PB8 no short \u2014 PC11=H",
+      "params": {
+        "mux": 2,
+        "ch": 10,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_20_nbr_6"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_20_nbr_7",
+      "label": "CN7-7 PD0 no short \u2014 PC11=H",
+      "params": {
+        "mux": 2,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_20_nbr_7"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_20_nbr_8",
+      "label": "CN7-8 PE8 no short \u2014 PC11=H",
+      "params": {
+        "mux": 2,
+        "ch": 8,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_20_nbr_8"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_20_nbr_9",
+      "label": "CN7-9 PE7 no short \u2014 PC11=H",
+      "params": {
+        "mux": 2,
+        "ch": 9,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_20_nbr_9"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_20_nbr_10",
+      "label": "CN7-10 PE4 no short \u2014 PC11=H",
+      "params": {
+        "mux": 2,
+        "ch": 6,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_20_nbr_10"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_20_nbr_11",
+      "label": "CN7-11 PD6 no short \u2014 PC11=H",
+      "params": {
+        "mux": 2,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_20_nbr_11"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_20_nbr_12",
+      "label": "CN7-12 PD5 no short \u2014 PC11=H",
+      "params": {
+        "mux": 2,
+        "ch": 4,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_20_nbr_12"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_20_nbr_13",
+      "label": "CN7-13 PD4 no short \u2014 PC11=H",
+      "params": {
+        "mux": 3,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_20_nbr_13"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_20_nbr_14",
+      "label": "CN7-14 PD3 no short \u2014 PC11=H",
+      "params": {
+        "mux": 2,
+        "ch": 5,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_20_nbr_14"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_20_nbr_16",
+      "label": "CN7-16 PC12 no short \u2014 PC11=H",
+      "params": {
+        "mux": 3,
+        "ch": 7,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_20_nbr_16"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_20_nbr_18",
+      "label": "CN7-18 PC10 no short \u2014 PC11=H",
+      "params": {
+        "mux": 3,
+        "ch": 11,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_20_nbr_18"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_20_nbr_19",
+      "label": "CN7-19 PB5 no short \u2014 PC11=H",
+      "params": {
+        "mux": 3,
+        "ch": 14,
+        "min_mv": 0,
+        "max_mv": 500,
+        "check_id": "cn7_20_nbr_19"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_20_clr",
+      "label": "Drive CN7-20 BT_GPS_SPI3_MISO/PC11 LOW",
+      "params": {
+        "pin": "PC11"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn7_20_self_l",
+      "label": "CN7-20 PC11 LOW \u2014 self verify",
+      "params": {
+        "mux": 3,
+        "ch": 15,
+        "min_mv": 0,
+        "max_mv": 300,
+        "check_id": "cn7_20_self_l"
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    }
+  ]
+}
