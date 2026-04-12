@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "recipeId": "g3-cn8-shorting-test",
-  "recipeVersion": "1.0.0",
+  "recipeVersion": "1.0.1",
   "name": "G3-CN8-Shorting-Test",
   "timeoutMs": 120000,
   "steps": [
@@ -55,6 +55,42 @@
       "onError": "abort",
       "primitive": "dut_enter_test",
       "criticality": "CRITICAL"
+    },
+    {
+      "id": "cn8_init_pe9",
+      "label": "Init CN8-11 PE9 → OUTPUT LOW",
+      "params": { "pin": "PE9" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_init_pb13",
+      "label": "Init CN8-9 PB13 → OUTPUT LOW",
+      "params": { "pin": "PB13" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_init_pa9",
+      "label": "Init CN8-12 PA9 → OUTPUT LOW",
+      "params": { "pin": "PA9" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_init_pd15",
+      "label": "Init CN8-10 PD15 → OUTPUT LOW",
+      "params": { "pin": "PD15" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
     },
     {
       "id": "cn8_11_set_h",
