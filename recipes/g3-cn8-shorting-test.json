@@ -1,0 +1,311 @@
+{
+  "recipeId": "g3-cn8-shorting-test",
+  "recipeVersion": "1.0.0",
+  "name": "G3-CN8-Shorting-Test",
+  "timeoutMs": 120000,
+  "steps": [
+    {
+      "id": "i2c",
+      "label": "TCC I2C Bus & Rail Check",
+      "enabled": true,
+      "onError": "abort",
+      "primitive": "i2c",
+      "criticality": "CRITICAL"
+    },
+    {
+      "id": "dut_program",
+      "label": "Program PFW via SWD",
+      "params": {
+        "target": "pfw",
+        "verify": true,
+        "timeout_s": 60
+      },
+      "enabled": true,
+      "onError": "abort",
+      "primitive": "dut_program",
+      "criticality": "CRITICAL"
+    },
+    {
+      "id": "power_check",
+      "label": "DUT Power Delivery (3.3V)",
+      "params": {
+        "v_nominal_mv": 3300,
+        "v_tolerance_pct": 5,
+        "i_min_ma": 2,
+        "i_max_ma": 250
+      },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "power_check",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "dut_heartbeat",
+      "label": "DUT Heartbeat (PFW running)",
+      "enabled": true,
+      "onError": "abort",
+      "primitive": "dut_heartbeat",
+      "criticality": "CRITICAL"
+    },
+    {
+      "id": "dut_enter_test",
+      "label": "DUT Enter Test Mode",
+      "enabled": true,
+      "onError": "abort",
+      "primitive": "dut_enter_test",
+      "criticality": "CRITICAL"
+    },
+    {
+      "id": "cn8_11_set_h",
+      "label": "Drive CN8-11 TC_MODE/PE9 HIGH",
+      "params": { "pin": "PE9", "level": "HIGH" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_set",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_11_self_h",
+      "label": "CN8-11 PE9 HIGH — self verify",
+      "params": { "mux": 2, "ch": 0, "min_mv": 2700, "max_mv": 3600, "check_id": "cn8_11_self_h" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_11_nbr_9",
+      "label": "CN8-9 PB13 no short — PE9=H",
+      "params": { "mux": 2, "ch": 1, "min_mv": 0, "max_mv": 500, "check_id": "cn8_11_nbr_9" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_11_nbr_12",
+      "label": "CN8-12 PA9 no short — PE9=H",
+      "params": { "mux": 2, "ch": 2, "min_mv": 0, "max_mv": 500, "check_id": "cn8_11_nbr_12" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_11_nbr_10",
+      "label": "CN8-10 PD15 no short — PE9=H",
+      "params": { "mux": 2, "ch": 3, "min_mv": 0, "max_mv": 500, "check_id": "cn8_11_nbr_10" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_11_clr",
+      "label": "Drive CN8-11 TC_MODE/PE9 LOW",
+      "params": { "pin": "PE9" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_11_self_l",
+      "label": "CN8-11 PE9 LOW — self verify",
+      "params": { "mux": 2, "ch": 0, "min_mv": 0, "max_mv": 300, "check_id": "cn8_11_self_l" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_9_set_h",
+      "label": "Drive CN8-9 VIN#3_ENA/PB13 HIGH",
+      "params": { "pin": "PB13", "level": "HIGH" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_set",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_9_self_h",
+      "label": "CN8-9 PB13 HIGH — self verify",
+      "params": { "mux": 2, "ch": 1, "min_mv": 2700, "max_mv": 3600, "check_id": "cn8_9_self_h" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_9_nbr_11",
+      "label": "CN8-11 PE9 no short — PB13=H",
+      "params": { "mux": 2, "ch": 0, "min_mv": 0, "max_mv": 500, "check_id": "cn8_9_nbr_11" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_9_nbr_12",
+      "label": "CN8-12 PA9 no short — PB13=H",
+      "params": { "mux": 2, "ch": 2, "min_mv": 0, "max_mv": 500, "check_id": "cn8_9_nbr_12" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_9_nbr_10",
+      "label": "CN8-10 PD15 no short — PB13=H",
+      "params": { "mux": 2, "ch": 3, "min_mv": 0, "max_mv": 500, "check_id": "cn8_9_nbr_10" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_9_clr",
+      "label": "Drive CN8-9 VIN#3_ENA/PB13 LOW",
+      "params": { "pin": "PB13" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_9_self_l",
+      "label": "CN8-9 PB13 LOW — self verify",
+      "params": { "mux": 2, "ch": 1, "min_mv": 0, "max_mv": 300, "check_id": "cn8_9_self_l" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_12_set_h",
+      "label": "Drive CN8-12 SS_ENA_A/PA9 HIGH",
+      "params": { "pin": "PA9", "level": "HIGH" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_set",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_12_self_h",
+      "label": "CN8-12 PA9 HIGH — self verify",
+      "params": { "mux": 2, "ch": 2, "min_mv": 2700, "max_mv": 3600, "check_id": "cn8_12_self_h" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_12_nbr_11",
+      "label": "CN8-11 PE9 no short — PA9=H",
+      "params": { "mux": 2, "ch": 0, "min_mv": 0, "max_mv": 500, "check_id": "cn8_12_nbr_11" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_12_nbr_9",
+      "label": "CN8-9 PB13 no short — PA9=H",
+      "params": { "mux": 2, "ch": 1, "min_mv": 0, "max_mv": 500, "check_id": "cn8_12_nbr_9" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_12_nbr_10",
+      "label": "CN8-10 PD15 no short — PA9=H",
+      "params": { "mux": 2, "ch": 3, "min_mv": 0, "max_mv": 500, "check_id": "cn8_12_nbr_10" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_12_clr",
+      "label": "Drive CN8-12 SS_ENA_A/PA9 LOW",
+      "params": { "pin": "PA9" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_12_self_l",
+      "label": "CN8-12 PA9 LOW — self verify",
+      "params": { "mux": 2, "ch": 2, "min_mv": 0, "max_mv": 300, "check_id": "cn8_12_self_l" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_10_set_h",
+      "label": "Drive CN8-10 SS_ENA_B/PD15 HIGH",
+      "params": { "pin": "PD15", "level": "HIGH" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_set",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_10_self_h",
+      "label": "CN8-10 PD15 HIGH — self verify",
+      "params": { "mux": 2, "ch": 3, "min_mv": 2700, "max_mv": 3600, "check_id": "cn8_10_self_h" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_10_nbr_11",
+      "label": "CN8-11 PE9 no short — PD15=H",
+      "params": { "mux": 2, "ch": 0, "min_mv": 0, "max_mv": 500, "check_id": "cn8_10_nbr_11" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_10_nbr_9",
+      "label": "CN8-9 PB13 no short — PD15=H",
+      "params": { "mux": 2, "ch": 1, "min_mv": 0, "max_mv": 500, "check_id": "cn8_10_nbr_9" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_10_nbr_12",
+      "label": "CN8-12 PA9 no short — PD15=H",
+      "params": { "mux": 2, "ch": 2, "min_mv": 0, "max_mv": 500, "check_id": "cn8_10_nbr_12" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_10_clr",
+      "label": "Drive CN8-10 SS_ENA_B/PD15 LOW",
+      "params": { "pin": "PD15" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "dut_gpio_clear",
+      "criticality": "REQUIRED"
+    },
+    {
+      "id": "cn8_10_self_l",
+      "label": "CN8-10 PD15 LOW — self verify",
+      "params": { "mux": 2, "ch": 3, "min_mv": 0, "max_mv": 300, "check_id": "cn8_10_self_l" },
+      "enabled": true,
+      "onError": "skip",
+      "primitive": "mux_read",
+      "criticality": "REQUIRED"
+    }
+  ]
+}
