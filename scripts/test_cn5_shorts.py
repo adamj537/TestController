@@ -18,7 +18,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from tc_console import TcConsole                                    # noqa: E402
-from test_helpers import (Results, tc_cmd, dut_cmd,                # noqa: E402
+from test_helpers import (Results, dut_cmd,                        # noqa: E402
                            run_mux_read, phase_bring_up, teardown,
                            HIGH_MV_MIN, LOW_MV_MAX)
 
@@ -62,10 +62,11 @@ def phase_short_detect(tc: TcConsole, r: Results) -> None:
     print("  Pre-driving all CN5 output pins LOW ...")
     for _, pin, _, _ in CN5_PINS:
         dut_cmd(tc, f"GPIO_CLEAR {pin}", wait=0.5)
-    # Drain any buffered DUT responses before starting the sweep — rapid
-    # GPIO_CLEAR burst can leave stale bytes in the socket that corrupt the
-    # first few tie read calls.
-    tc_cmd(tc, "mux release", wait=1.5)
+    # Drain any buffered DUT/TC responses before starting the sweep — the
+    # rapid GPIO_CLEAR burst can leave stale bytes in the socket that cause
+    # the first few tc_cmd_long calls to miss their TIE stop pattern.
+    # _drain(2.0) sleeps 2 s then reads until the socket is silent.
+    tc._drain(2.0)
 
     all_pins = CN5_PINS + [CN5_AUDIO]
 
