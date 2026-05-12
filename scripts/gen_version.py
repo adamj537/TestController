@@ -10,17 +10,55 @@ Outputs:
   version.txt     — plain string read by ESP-IDF for the boot-log App version
 """
 
-import subprocess
 import os
+import subprocess
+import sys
 
 Import("env")  # noqa: F821  (PlatformIO SCons injection)
 
 project_dir = env.subst("$PROJECT_DIR")
 
 
+def ensure_common_submodule():
+    common_dir = os.path.join(project_dir, "common")
+    required_dirs = (
+        os.path.join(common_dir, "include"),
+        os.path.join(common_dir, "hal"),
+        os.path.join(common_dir, "src"),
+        os.path.join(common_dir, "storage"),
+    )
+
+    if all(os.path.isdir(path) for path in required_dirs):
+        return
+
+    print("[deps] common/ submodule missing; initializing it via git")
+    result = subprocess.run(
+        ["git", "submodule", "update", "--init", "--recursive", "common"],
+        capture_output=True,
+        text=True,
+        cwd=project_dir,
+    )
+
+    if result.returncode == 0 and all(os.path.isdir(path) for path in required_dirs):
+        return
+
+    if result.stdout:
+        print(result.stdout.strip())
+    if result.stderr:
+        print(result.stderr.strip(), file=sys.stderr)
+
+    raise SystemExit(
+        "[deps] Failed to initialize required common/ submodule. "
+        "Run 'git submodule update --init --recursive common' and retry."
+    )
+
+
 def run(cmd):
     r = subprocess.run(cmd, capture_output=True, text=True, cwd=project_dir)
     return r.stdout.strip()
+
+
+ensure_common_submodule()
 
 
 # --- Read manual semver ---
